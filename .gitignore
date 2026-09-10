@@ -1,0 +1,16 @@
+# Build artifacts — main.js ships with GitHub releases, not with the repository
+node_modules/
+main.js
+main.js.map
+data.json
+.DS_Store
+
+# Vault-only files: they live in the Obsidian vault and are not published
+AGENTS.md
+documentation/
+documentation_rules.md
+expectation.md
+plan.md
+progress_log.md
+log/
+test_data/

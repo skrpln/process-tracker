@@ -1,0 +1,10 @@
+{
+  "id": "process-tracker",
+  "name": "Process Tracker",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Tracker table for habits and processes: rows are tracks, columns are dates. Requires Dataview for track filtering; Templater for evidence templates.",
+  "author": "skrpln",
+  "isDesktopOnly": false,
+  "authorUrl": "https://github.com/skrpln"
+}

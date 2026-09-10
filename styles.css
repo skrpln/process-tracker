@@ -1,0 +1,84 @@
+/* Process Tracker — tracker table styles. Docs: documentation/rendering.md */
+
+.process-tracker {
+	margin: var(--size-4-2) 0;
+}
+
+.process-tracker__scroll {
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.process-tracker__table {
+	border-collapse: collapse;
+	table-layout: fixed;
+	width: auto;
+	margin: 0;
+	font-size: var(--font-ui-small);
+	line-height: 1.2;
+}
+
+.process-tracker__table th,
+.process-tracker__table td {
+	border: 1px solid var(--background-modifier-border);
+	padding: var(--size-2-2);
+	text-align: center;
+	vertical-align: middle;
+}
+
+.process-tracker__corner {
+	background: var(--background-primary);
+}
+
+.process-tracker__track {
+	width: 12em;
+	max-width: 12em;
+	text-align: left;
+	font-weight: var(--font-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	background: var(--background-primary);
+}
+
+.process-tracker__date {
+	width: 2.2em;
+	min-width: 2.2em;
+	color: var(--text-muted);
+	font-weight: var(--font-normal);
+}
+
+.process-tracker__date.is-today,
+.process-tracker__cell.is-today {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.process-tracker__cell {
+	width: 2.2em;
+	min-width: 2.2em;
+}
+
+.process-tracker__cell input[type="checkbox"] {
+	margin: 0;
+	vertical-align: middle;
+}
+
+.process-tracker__empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	padding: var(--size-4-2);
+}
+
+.process-tracker__warnings {
+	margin: var(--size-2-2) 0 0;
+	padding-left: var(--size-4-4);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.process-tracker__error {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	padding: var(--size-4-2);
+}

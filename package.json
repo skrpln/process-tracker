@@ -1,0 +1,37 @@
+{
+  "name": "obsidian-process-tracker",
+  "version": "0.1.0",
+  "description": "Process Tracker — таблица-трекер привычек и процессов для Obsidian",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "node --test test/*.test.ts"
+  },
+  "keywords": [
+    "obsidian",
+    "tracker",
+    "habits"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "0.25.0",
+    "obsidian": "latest",
+    "tslib": "2.8.1",
+    "typescript": "5.7.3"
+  },
+  "author": "skrpln",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skrpln/process-tracker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/skrpln/process-tracker/issues"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}
