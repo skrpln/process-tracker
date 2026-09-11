@@ -1,6 +1,5 @@
 // Process Tracker — filtering and ordering of track cards.
 // Pure module: no Obsidian API, covered by test/select.test.ts.
-// Docs: [[track-selection]]
 
 import type { SortSpec, TrackCard } from "../model/types.ts";
 

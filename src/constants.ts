@@ -1,5 +1,4 @@
 // Process Tracker — shared constants.
-// Docs: [[architecture]]
 
 /** Language of the code block processed by the plugin. */
 export const CODE_BLOCK_LANGUAGE = "process-tracker";

@@ -1,11 +1,12 @@
 // Process Tracker — plugin entry point.
 // Wires the pure layers together: parse -> select -> date grid -> render.
-// Docs: [[architecture]]
 
 import { Plugin } from "obsidian";
+import type { MarkdownPostProcessorContext } from "obsidian";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS } from "./constants.ts";
 import { buildDateColumns } from "./dates/grid.ts";
+import { TrackerRenderChild } from "./render/child.ts";
 import { renderError, renderTracker, renderWarnings } from "./render/table.ts";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
@@ -19,7 +20,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 		this.settings = normalizeSettings(await this.loadData());
 		this.registerMarkdownCodeBlockProcessor(
 			CODE_BLOCK_LANGUAGE,
-			(source, element) => this.renderBlock(source, element),
+			(source, element, context) => this.renderBlock(source, element, context),
 		);
 	}
 
@@ -31,7 +32,11 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 * Renders one code block. State is never cached: the table is rebuilt from
 	 * the metadata cache on every render.
 	 */
-	private renderBlock(source: string, element: HTMLElement): void {
+	private renderBlock(
+		source: string,
+		element: HTMLElement,
+		context: MarkdownPostProcessorContext,
+	): void {
 		element.empty();
 		try {
 			const { options, warnings } = parseCodeBlock(source);
@@ -45,8 +50,13 @@ export default class ProcessTrackerPlugin extends Plugin {
 			const tracks = selectTracks(cards, this.settings.trackTag, options.sort);
 			const columns = buildDateColumns(new Date(), options.days ?? DEFAULT_DAYS);
 
-			renderTracker(element, { tracks, columns, trackTag: this.settings.trackTag });
+			const scroll = renderTracker(element, {
+				tracks,
+				columns,
+				trackTag: this.settings.trackTag,
+			});
 			renderWarnings(element, warnings);
+			if (scroll !== null) context.addChild(new TrackerRenderChild(element, scroll));
 		} catch (error) {
 			renderError(element, error instanceof Error ? error.message : String(error));
 		}

@@ -1,4 +1,4 @@
-// Unit tests for track filtering and ordering. Docs: [[track-selection]]
+// Unit tests for track filtering and ordering.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TrackCard } from "../src/model/types.ts";

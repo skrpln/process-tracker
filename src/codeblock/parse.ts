@@ -1,6 +1,5 @@
 // Process Tracker — parsing of the `process-tracker` code block source.
 // Pure module: no Obsidian API, covered by test/parse.test.ts.
-// Docs: [[codeblock-syntax]]
 
 import { MAX_DAYS } from "../constants.ts";
 import type { SortDirection, SortSpec, TrackerOptions } from "../model/types.ts";

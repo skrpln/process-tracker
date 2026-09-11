@@ -1,6 +1,5 @@
 // Process Tracker — reading track cards out of the Obsidian metadata cache.
 // Adapter module: the only place that knows about the vault.
-// Docs: [[track-selection]]
 
 import { getAllTags } from "obsidian";
 import type { App, TFile } from "obsidian";

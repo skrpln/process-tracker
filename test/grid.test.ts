@@ -1,4 +1,4 @@
-// Unit tests for the date grid. Docs: [[date-grid]]
+// Unit tests for the date grid.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildDateColumns, toIsoDate } from "../src/dates/grid.ts";

@@ -3,9 +3,9 @@
 A tracker table inside a note: rows are tracks, columns are dates. A checked cell means the
 track was done that day, and every check is documented by an evidence note.
 
-> **Status: early development.** Phase 1 of 6 is done — the table renders and reads track
-> cards from the vault. Checkbox interaction, evidence notes, hover popups, a pinned first
-> column and a settings tab are still ahead; see [Roadmap](#roadmap).
+> **Status: early development.** Phases 1-2 of 6 are done — the table renders, reads track
+> cards from the vault, pins the first column and captions the months. Checkbox interaction,
+> evidence notes, hover popups and a settings tab are still ahead; see [Roadmap](#roadmap).
 
 ## Concepts
 
@@ -69,8 +69,8 @@ Both are used by features that arrive in later phases; the table itself renders 
 | Phase | Scope | State |
 | --- | --- | --- |
 | 1 | Code block processor, track cards, basic table | done |
-| 2 | Pinned first column, month labels, horizontal scroll | next |
-| 3 | `track` filtering through Dataview | planned |
+| 2 | Pinned first column, month labels, horizontal scroll | done |
+| 3 | `track` filtering through Dataview | next |
 | 4 | Checking cells, creating evidence notes from a template | planned |
 | 5 | Hover popups for evidence and track cards | planned |
 | 6 | Live updates on vault changes, settings tab | planned |

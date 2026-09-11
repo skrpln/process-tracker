@@ -1,4 +1,4 @@
-// Unit tests for the code block parser. Docs: [[codeblock-syntax]]
+// Unit tests for the code block parser.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { parseCodeBlock, parseSort } from "../src/codeblock/parse.ts";

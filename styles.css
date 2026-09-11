@@ -1,49 +1,97 @@
-/* Process Tracker — tracker table styles. Docs: documentation/rendering.md */
+/* Process Tracker — tracker table styles. */
 
 .process-tracker {
 	margin: var(--size-4-2) 0;
 }
 
+/* The scroll container is also the positioning context of the pinned column. */
 .process-tracker__scroll {
 	overflow-x: auto;
 	overflow-y: hidden;
 }
 
+/*
+ * `separate` instead of `collapse`: collapsed borders are owned by the table and
+ * disappear behind the pinned column while it scrolls. Every cell paints its own
+ * right and bottom border, the table paints the top and left edge.
+ *
+ * `width: max-content` is what makes `table-layout: fixed` obey the colgroup:
+ * with an auto width the browser falls back to content-driven columns and the
+ * track column collapses onto the longest name.
+ */
 .process-tracker__table {
-	border-collapse: collapse;
+	border-collapse: separate;
+	border-spacing: 0;
 	table-layout: fixed;
-	width: auto;
+	width: max-content;
 	margin: 0;
+	border-top: 1px solid var(--background-modifier-border);
+	border-left: 1px solid var(--background-modifier-border);
 	font-size: var(--font-ui-small);
 	line-height: 1.2;
 }
 
 .process-tracker__table th,
 .process-tracker__table td {
-	border: 1px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+	border-bottom: 1px solid var(--background-modifier-border);
 	padding: var(--size-2-2);
-	text-align: center;
 	vertical-align: middle;
-}
-
-.process-tracker__corner {
 	background: var(--background-primary);
 }
 
-.process-tracker__track {
+/* Alignment lives on the cell classes, so the track column can stay left-aligned. */
+.process-tracker__corner,
+.process-tracker__date,
+.process-tracker__cell {
+	text-align: center;
+}
+
+.process-tracker__col-track {
 	width: 12em;
+}
+
+.process-tracker__col-date {
+	width: 2.2em;
+}
+
+/* Pinned first column: stays under the month captions, above the day cells. */
+.process-tracker__corner,
+.process-tracker__track {
+	position: sticky;
+	left: 0;
+	z-index: 2;
+}
+
+.process-tracker__track {
 	max-width: 12em;
 	text-align: left;
 	font-weight: var(--font-normal);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	background: var(--background-primary);
+}
+
+/* Month caption: the cell clips, the label inside it is moved by the render child. */
+.process-tracker__month {
+	position: relative;
+	height: 1.7em;
+	padding: 0;
+	overflow: hidden;
+	color: var(--text-muted);
+	font-weight: var(--font-normal);
+}
+
+.process-tracker__month-label {
+	position: absolute;
+	top: 0;
+	left: 0;
+	line-height: 1.7em;
+	padding: 0 var(--size-2-2);
+	white-space: nowrap;
 }
 
 .process-tracker__date {
-	width: 2.2em;
-	min-width: 2.2em;
 	color: var(--text-muted);
 	font-weight: var(--font-normal);
 }
@@ -52,11 +100,6 @@
 .process-tracker__cell.is-today {
 	color: var(--text-normal);
 	background: var(--background-modifier-hover);
-}
-
-.process-tracker__cell {
-	width: 2.2em;
-	min-width: 2.2em;
 }
 
 .process-tracker__cell input[type="checkbox"] {

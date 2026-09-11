@@ -1,5 +1,4 @@
 // Process Tracker — domain types shared across modules.
-// Docs: [[architecture]]
 
 export type SortDirection = "asc" | "desc";
 

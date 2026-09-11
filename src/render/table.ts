@@ -1,7 +1,7 @@
 // Process Tracker — DOM rendering of the tracker table.
-// Knows nothing about the vault: everything it needs comes as data and callbacks.
-// Docs: [[rendering]]
+// Knows nothing about the vault: everything it needs comes as data.
 
+import { groupByMonth } from "../dates/months.ts";
 import type { DateColumn, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
@@ -12,25 +12,57 @@ export interface TrackerView {
 	trackTag: string;
 }
 
-/** Renders the whole block: table, or an empty-state message. */
-export function renderTracker(container: HTMLElement, view: TrackerView): void {
+/**
+ * Renders the whole block: table, or an empty-state message.
+ * Returns the scrolling element, which the render child needs to follow, or
+ * `null` when there is no table to scroll.
+ */
+export function renderTracker(container: HTMLElement, view: TrackerView): HTMLElement | null {
 	const root = container.createDiv({ cls: "process-tracker" });
 	if (view.tracks.length === 0) {
 		renderEmptyState(root, view.trackTag);
-		return;
+		return null;
 	}
 
 	const scroll = root.createDiv({ cls: "process-tracker__scroll" });
 	const table = scroll.createEl("table", { cls: "process-tracker__table" });
+	renderColumnWidths(table, view.columns.length);
 	renderHead(table, view.columns);
 	renderBody(table, view.tracks, view.columns);
+	return scroll;
+}
+
+/**
+ * Column widths live in a `colgroup`: with `table-layout: fixed` they apply to the
+ * whole table, so the merged month captions cannot stretch a single day column.
+ */
+function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void {
+	const group = table.createEl("colgroup");
+	group.createEl("col", { cls: "process-tracker__col-track" });
+	if (dateColumns > 0) {
+		group.createEl("col", {
+			cls: "process-tracker__col-date",
+			attr: { span: dateColumns },
+		});
+	}
 }
 
 function renderHead(table: HTMLTableElement, columns: DateColumn[]): void {
-	const row = table.createEl("thead").createEl("tr");
-	row.createEl("th", { cls: "process-tracker__corner" });
+	const head = table.createEl("thead");
+
+	const monthRow = head.createEl("tr");
+	monthRow.createEl("th", { cls: "process-tracker__corner", attr: { rowspan: 2 } });
+	for (const group of groupByMonth(columns)) {
+		const cell = monthRow.createEl("th", {
+			cls: "process-tracker__month",
+			attr: { colspan: group.span },
+		});
+		cell.createSpan({ cls: "process-tracker__month-label", text: group.label });
+	}
+
+	const dayRow = head.createEl("tr");
 	for (const column of columns) {
-		const cell = row.createEl("th", {
+		const cell = dayRow.createEl("th", {
 			cls: "process-tracker__date",
 			text: String(column.day),
 			attr: { "data-date": column.iso },

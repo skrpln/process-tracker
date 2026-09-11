@@ -1,6 +1,5 @@
 // Process Tracker — plugin settings.
 // The settings tab arrives in Phase 6; Phase 1 only needs the values.
-// Docs: [[architecture]]
 
 import { DEFAULT_TRACK_TAG } from "./constants.ts";
 

@@ -1,6 +1,5 @@
 // Process Tracker — date columns of the tracker table.
 // Pure module: no Obsidian API, covered by test/grid.test.ts.
-// Docs: [[date-grid]]
 
 import type { DateColumn } from "../model/types.ts";
 
