@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	buildDateColumns,
-	formatDay,
-	formatMonth,
+	formatDayMonth,
 	spansMultipleYears,
 	toIsoDate,
 } from "../src/dates/grid.ts";
@@ -64,17 +63,15 @@ describe("buildDateColumns", () => {
 	});
 });
 
-describe("formatDay / formatMonth", () => {
-	it("pads both lines to two digits", () => {
+describe("formatDayMonth", () => {
+	it("pads both parts to two digits", () => {
 		const [column] = buildDateColumns(new Date(2026, 8, 5), 1);
-		assert.equal(formatDay(column), "05");
-		assert.equal(formatMonth(column), "09");
+		assert.equal(formatDayMonth(column), "05/09");
 	});
 
 	it("keeps two digits as they are", () => {
 		const [column] = buildDateColumns(new Date(2026, 11, 25), 1);
-		assert.equal(formatDay(column), "25");
-		assert.equal(formatMonth(column), "12");
+		assert.equal(formatDayMonth(column), "25/12");
 	});
 });
 

@@ -45,7 +45,7 @@
 }
 
 .process-tracker__col-date {
-	width: 2.4em;
+	width: 2.8em;
 }
 
 /* Captions stand above the table: no grid around them, muted, in the caption face. */
@@ -63,14 +63,8 @@
 	white-space: nowrap;
 }
 
-/*
- * Day over month, no separator. The tight line height keeps both lines together
- * no taller than one row of the table below.
- */
-.process-tracker .process-tracker__table .process-tracker__date-day,
-.process-tracker .process-tracker__table .process-tracker__date-month {
-	display: block;
-	line-height: 0.9;
+.process-tracker .process-tracker__table .process-tracker__date {
+	line-height: 1;
 }
 
 .process-tracker .process-tracker__table thead .is-today {

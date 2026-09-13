@@ -1,7 +1,7 @@
 // Process Tracker — DOM rendering of the tracker table.
 // Knows nothing about the vault: everything it needs comes as data.
 
-import { formatDay, formatMonth, spansMultipleYears } from "../dates/grid.ts";
+import { formatDayMonth, spansMultipleYears } from "../dates/grid.ts";
 import type { DateColumn, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
@@ -53,9 +53,9 @@ function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void 
 }
 
 /**
- * The head carries no grid: captions stand above the table. Each date caption is two
- * lines — day over month — and the corner shows a year only when the table covers
- * more than one; the render child keeps that year in step with scrolling.
+ * The head carries no grid: captions stand above the table. A date caption is one
+ * line, `dd/mm`, and the corner shows a year only when the table covers more than
+ * one; the render child keeps that year in step with scrolling.
  */
 function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement {
 	const row = table.createEl("thead").createEl("tr");
@@ -68,10 +68,9 @@ function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement
 	for (const column of columns) {
 		const cell = row.createEl("th", {
 			cls: "process-tracker__date",
+			text: formatDayMonth(column),
 			attr: { "data-date": column.iso },
 		});
-		cell.createSpan({ cls: "process-tracker__date-day", text: formatDay(column) });
-		cell.createSpan({ cls: "process-tracker__date-month", text: formatMonth(column) });
 		if (column.isToday) cell.addClass("is-today");
 	}
 
