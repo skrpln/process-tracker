@@ -1,7 +1,7 @@
 // Unit tests for visible columns and the year they belong to.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dominantYear, visibleColumnRange } from "../src/render/visible.ts";
+import { captionYear, dominantYear, visibleColumnRange } from "../src/render/visible.ts";
 
 // A 400 px container, 100 px of it covered by the pinned column: 10 columns of 30 px fit.
 const base = { viewWidth: 400, pinnedWidth: 100, columnWidth: 30, total: 50 };
@@ -60,5 +60,25 @@ describe("dominantYear", () => {
 
 	it("keeps the current year when nothing is visible", () => {
 		assert.equal(dominantYear([], 2025), 2025);
+	});
+});
+
+describe("captionYear", () => {
+	it("takes the newest column at the left edge, whatever the majority says", () => {
+		// Ten columns of each year: no majority, but the newest column is in sight.
+		const years = [...Array<number>(10).fill(2026), ...Array<number>(10).fill(2025)];
+		assert.equal(captionYear(years, 2025, true), 2026);
+	});
+
+	it("follows the majority once the table is scrolled", () => {
+		assert.equal(captionYear([2025, 2025, 2025, 2026], 2026, false), 2025);
+	});
+
+	it("keeps the current year on a tie away from the edge", () => {
+		assert.equal(captionYear([2026, 2026, 2025, 2025], 2025, false), 2025);
+	});
+
+	it("keeps the current year when nothing is visible at the edge", () => {
+		assert.equal(captionYear([], 2026, true), 2026);
 	});
 });

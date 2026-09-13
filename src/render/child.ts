@@ -2,7 +2,7 @@
 
 import { MarkdownRenderChild } from "obsidian";
 import type { DateColumn } from "../model/types.ts";
-import { dominantYear, visibleColumnRange } from "./visible.ts";
+import { captionYear, visibleColumnRange } from "./visible.ts";
 
 /**
  * Keeps the year caption above the pinned column in step with horizontal scrolling.
@@ -62,7 +62,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		if (range === null) return;
 
 		const years = this.columns.slice(range.first, range.last + 1).map((column) => column.year);
-		const year = dominantYear(years, this.year);
+		const year = captionYear(years, this.year, this.scroll.scrollLeft <= 0);
 		if (year === this.year) return;
 
 		this.year = year;

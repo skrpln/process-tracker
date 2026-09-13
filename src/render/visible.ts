@@ -39,6 +39,18 @@ export function visibleColumnRange(metrics: ViewportMetrics): ColumnRange | null
 }
 
 /**
+ * The year to show above the pinned column.
+ *
+ * At the left edge of the table the newest column is in sight, and its year is the
+ * answer — otherwise an exact half-and-half split would leave the caption on the
+ * year the reader scrolled away from. Everywhere else the majority rule applies.
+ */
+export function captionYear(years: number[], current: number, atStart: boolean): number {
+	if (atStart && years.length > 0) return years[0];
+	return dominantYear(years, current);
+}
+
+/**
  * The year that owns the visible columns: the one taking strictly more than half
  * of them. Until another year crosses that half, the caption keeps the year it
  * already shows — so the number does not flicker around the boundary.
