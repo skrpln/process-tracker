@@ -2,14 +2,20 @@
 // Knows nothing about the vault: everything it needs comes as data.
 
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
-import type { DateColumn, TrackCard } from "../model/types.ts";
+import { cellState, findEvidence } from "../evidence/state.ts";
+import type { EvidenceIndex } from "../evidence/state.ts";
+import type { DateColumn, Evidence, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
 export interface TrackerView {
 	tracks: TrackCard[];
 	columns: DateColumn[];
+	/** Evidence of the vault; decides the state of every cell. */
+	evidence: EvidenceIndex;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
+	/** Only used by the empty state, to tell an empty vault from an empty filter. */
+	trackFilter: string | null;
 }
 
 /** Elements the render child needs to follow the scrolling table. */
@@ -25,7 +31,7 @@ export interface TrackerElements {
 export function renderTracker(container: HTMLElement, view: TrackerView): TrackerElements | null {
 	const root = container.createDiv({ cls: "process-tracker" });
 	if (view.tracks.length === 0) {
-		renderEmptyState(root, view.trackTag);
+		renderEmptyState(root, view.trackTag, view.trackFilter);
 		return null;
 	}
 
@@ -33,7 +39,7 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	const table = scroll.createEl("table", { cls: "process-tracker__table" });
 	renderColumnWidths(table, view.columns.length);
 	const captionCell = renderHead(table, view.columns);
-	renderBody(table, view.tracks, view.columns);
+	renderBody(table, view);
 	return { scroll, captionCell };
 }
 
@@ -80,12 +86,14 @@ function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement
 	return captionCell;
 }
 
-function renderBody(table: HTMLTableElement, tracks: TrackCard[], columns: DateColumn[]): void {
+function renderBody(table: HTMLTableElement, view: TrackerView): void {
 	const body = table.createEl("tbody");
-	for (const track of tracks) {
+	for (const track of view.tracks) {
 		const row = body.createEl("tr");
 		renderTrackCell(row, track);
-		for (const column of columns) renderCheckCell(row, track, column);
+		for (const column of view.columns) {
+			renderCheckCell(row, track, column, findEvidence(view.evidence, track.path, column.iso));
+		}
 	}
 }
 
@@ -104,28 +112,45 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
 }
 
 /**
- * Phase 1 renders an empty, inert checkbox: cell state and clicks arrive in Phase 4.
- * The click is swallowed so the box cannot show a state the vault does not have.
+ * The box shows what the vault says: checked for `done: true`, unchecked for a draft
+ * or an empty day. The state also goes on the cell as `data-state`, where the stylesheet
+ * picks the draft up and where the click handling of the next phase will read it.
+ *
+ * The click is still swallowed: writing evidence arrives with the interaction, and until
+ * then the box must not show a state no file backs.
  */
-function renderCheckCell(row: HTMLTableRowElement, track: TrackCard, column: DateColumn): void {
+function renderCheckCell(
+	row: HTMLTableRowElement,
+	track: TrackCard,
+	column: DateColumn,
+	evidence: Evidence | null,
+): void {
+	const state = cellState(evidence);
 	const cell = row.createEl("td", {
 		cls: "process-tracker__cell",
-		attr: { "data-date": column.iso, "data-track": track.path },
+		attr: { "data-date": column.iso, "data-track": track.path, "data-state": state },
 	});
 	if (column.isToday) cell.addClass("is-today");
+	if (evidence !== null) cell.setAttr("data-evidence", evidence.path);
 
 	const box = cell.createEl("input", {
 		cls: "task-list-item-checkbox",
 		type: "checkbox",
 	});
+	box.checked = state === "done";
 	box.addEventListener("click", (event: MouseEvent) => event.preventDefault());
 }
 
-function renderEmptyState(root: HTMLElement, trackTag: string): void {
-	root.createDiv({
-		cls: "process-tracker__empty",
-		text: `No track cards found. Tag a note with #${trackTag} to add a track.`,
-	});
+/**
+ * With a `track` filter in the block the tag is rarely what is missing, so the
+ * message names the filter instead of asking for a tag that is probably there.
+ */
+function renderEmptyState(root: HTMLElement, trackTag: string, trackFilter: string | null): void {
+	const text =
+		trackFilter === null
+			? `No track cards found. Tag a note with #${trackTag} to add a track.`
+			: `No track card matches "track: ${trackFilter}".`;
+	root.createDiv({ cls: "process-tracker__empty", text });
 }
 
 /**

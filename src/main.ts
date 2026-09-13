@@ -6,10 +6,13 @@ import type { MarkdownPostProcessorContext } from "obsidian";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS } from "./constants.ts";
 import { buildDateColumns } from "./dates/grid.ts";
+import { collectEvidence } from "./evidence/source.ts";
+import { buildEvidenceIndex } from "./evidence/state.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { renderError, renderTracker, renderWarnings } from "./render/table.ts";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
+import { applyTrackFilter } from "./tracks/dataview.ts";
 import { selectTracks } from "./tracks/select.ts";
 import { collectTrackCards } from "./tracks/source.ts";
 
@@ -40,14 +43,18 @@ export default class ProcessTrackerPlugin extends Plugin {
 		element.empty();
 		try {
 			const { options, warnings } = parseCodeBlock(source);
-			if (options.track !== null) {
-				warnings.push(
-					`Parameter "track" is not implemented yet (Phase 3): showing every card tagged #${this.settings.trackTag}.`,
-				);
-			}
 
+			// The tag filter comes first: the `track` expression then works on a handful
+			// of track cards instead of the whole vault.
 			const cards = collectTrackCards(this.app);
-			const tracks = selectTracks(cards, this.settings.trackTag, options.sort);
+			const tagged = selectTracks(cards, this.settings.trackTag, options.sort);
+			const tracks = applyTrackFilter(
+				this.app,
+				tagged,
+				options.track,
+				context.sourcePath,
+				warnings,
+			);
 			const columns = buildDateColumns({
 				start: options.start,
 				today: new Date(),
@@ -58,7 +65,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 			const elements = renderTracker(element, {
 				tracks,
 				columns,
+				evidence: buildEvidenceIndex(collectEvidence(this.app)),
 				trackTag: this.settings.trackTag,
+				trackFilter: options.track,
 			});
 			renderWarnings(element, warnings);
 

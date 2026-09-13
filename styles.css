@@ -186,6 +186,18 @@
 	vertical-align: middle;
 }
 
+/*
+ * A draft — evidence for the day exists, `done` is false. The box stays unchecked and
+ * takes the accent colour of the theme, so a started day reads apart from an empty one
+ * without another glyph in the cell. Themes draw checkboxes in two ways: through the
+ * variable Obsidian gives them, or with a border of their own, so both are set.
+ */
+.process-tracker .process-tracker__table .process-tracker__cell[data-state="draft"] input[type="checkbox"] {
+	--checkbox-border-color: var(--interactive-accent);
+	--checkbox-border-color-hover: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+}
+
 .process-tracker__empty {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);

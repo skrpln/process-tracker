@@ -6,12 +6,22 @@
 - Code block processor for the `process-tracker` language.
 - Track cards: every note tagged `#process_tracker` becomes a row; `track_name` overrides the
   displayed name.
-- Code block parameters `start`, `days`, `dates` and `sort`; `track` is parsed but not applied
-  yet.
+- Code block parameters `track`, `start`, `days`, `dates` and `sort`.
+- `track` filters the rows with Dataview: a `FROM` source is answered from the index, a
+  `WHERE` condition is evaluated on the track cards that source leaves. The keyword `FROM`
+  may be left out. The plugin tag always applies on top of the filter.
+- A filter that cannot be read never empties the table: the rows stay and a warning under the
+  table names the reason — Dataview missing, a source or a condition Dataview could not read.
 - `start: YYYY-MM-DD` sets the first day of the interval, so a monthly note keeps its own
   window instead of drifting with the calendar.
 - `dates: asc | desc` chooses which end of the interval the table starts from.
 - Table of tracks by dates: today is the first date column, older dates to the right.
+- Cell state read from the evidence notes of the vault: a checked box for `done: true`, an
+  unchecked box outlined in the accent colour for a draft, an empty box for a day without
+  evidence. Nothing is cached — the state is rebuilt from the files on every render.
+- Evidence is recognised by its properties — a link to a track card and a date — however the
+  note was created. When two notes claim the same day, the done one wins.
+- Empty state that names the filter when a `track` filter matched no card.
 - Theme-aware styling through Obsidian CSS variables; checkboxes follow the theme.
 - Pinned first column: track names stay in place while the dates scroll.
 - Date captions above the table, without a grid around them: the day alone, set in the

@@ -14,3 +14,12 @@ export const DEFAULT_TRACK_TAG = "process_tracker";
 
 /** Frontmatter key that overrides the displayed track name. */
 export const TRACK_NAME_KEY = "track_name";
+
+/** Frontmatter key of an evidence note that links to its track card. */
+export const EVIDENCE_TRACK_KEY = "track";
+
+/** Frontmatter key that dates an evidence note, as `YYYY-MM-DD`. */
+export const EVIDENCE_DATE_KEY = "date";
+
+/** Frontmatter key that checks the box: only a true value counts as done. */
+export const EVIDENCE_DONE_KEY = "done";

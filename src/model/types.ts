@@ -36,6 +36,20 @@ export interface TrackCard {
 	mtime: number;
 }
 
+/** An evidence note: one day of one track. */
+export interface Evidence {
+	path: string;
+	/** Path of the track card the `track` property points at. */
+	trackPath: string;
+	/** Local calendar date as `YYYY-MM-DD`. */
+	date: string;
+	/** The `done` property; `false` for a draft. */
+	done: boolean;
+}
+
+/** State of one cell, derived from the evidence behind it ([[expectation]] §7). */
+export type CellState = "empty" | "draft" | "done";
+
 /** One date column of the tracker table. */
 export interface DateColumn {
 	/** Local calendar date as `YYYY-MM-DD`. */

@@ -3,9 +3,10 @@
 A tracker table inside a note: rows are tracks, columns are dates. A checked cell means the
 track was done that day, and every check is documented by an evidence note.
 
-> **Status: early development.** Phases 1-2 of 6 are done — the table renders, reads track
-> cards from the vault and pins the first column. Checkbox interaction,
-> evidence notes, hover popups and a settings tab are still ahead; see [Roadmap](#roadmap).
+> **Status: early development.** Phases 1-3 of 6 are done and Phase 4 is under way — the
+> table renders, filters track cards with Dataview and shows the state of every cell as the
+> evidence notes of the vault describe it. Clicking a cell, hover popups and a settings tab
+> are still ahead; see [Roadmap](#roadmap).
 
 ## Concepts
 
@@ -51,11 +52,17 @@ sort: priority asc
 
 | Parameter | Value | Default |
 | --- | --- | --- |
-| `track` | Track filter in Dataview source syntax. Filtering by the plugin tag is always applied on top of it. | every card tagged `#process_tracker` |
+| `track` | Track filter in Dataview syntax: a `FROM` source, a `WHERE` condition, or both. Filtering by the plugin tag is always applied on top of it. | every card tagged `#process_tracker` |
 | `start` | First day of the interval, `YYYY-MM-DD`. Pins the window in place — a monthly summary keeps showing its own month. | `today`, meaning the interval ends today |
 | `days` | Interval length in days. | 7 |
 | `dates` | Column direction: `desc` puts the newest day next to the track name, `asc` reads 1 → 30. | `desc` |
 | `sort` | `name`, `ctime`, `mtime` or any frontmatter property, plus `asc` / `desc`. | `name asc` |
+
+`track` takes what a Dataview query takes: `FROM "folder"`, `#tag`, `[[link]]`,
+`outgoing([[note]])` and their combinations name the source, `WHERE priority > 2` names a
+condition over the properties of a track card. The keyword `FROM` may be left out, so
+`track: #health or #sport` works. A filter Dataview cannot read is ignored rather than
+obeyed: the table shows every track card and says why underneath.
 
 Unknown parameters and malformed values never break the block: the table falls back to the
 defaults and lists the problems underneath.
@@ -66,7 +73,8 @@ defaults and lists the problems underneath.
 - [Templater](https://github.com/SilentVoid13/Templater) — renders evidence templates, with
   "Trigger Templater on new file creation" enabled.
 
-Both are used by features that arrive in later phases; the table itself renders without them.
+Without Dataview the table still renders — the `track` filter is skipped and a warning shows
+under the table. Templater is used by features that arrive in later phases.
 
 ## Roadmap
 
@@ -74,8 +82,8 @@ Both are used by features that arrive in later phases; the table itself renders 
 | --- | --- | --- |
 | 1 | Code block processor, track cards, basic table | done |
 | 2 | Pinned first column, date captions, horizontal scroll | done |
-| 3 | `track` filtering through Dataview | next |
-| 4 | Checking cells, creating evidence notes from a template | planned |
+| 3 | `track` filtering through Dataview | done |
+| 4 | Cell state from evidence notes, checking cells, creating evidence from a template | in progress |
 | 5 | Hover popups for evidence and track cards | planned |
 | 6 | Live updates on vault changes, settings tab | planned |
 
