@@ -121,8 +121,8 @@ describe("formatDay", () => {
 });
 
 describe("formatMonthYear", () => {
-	it("names the month in English and adds the year", () => {
-		assert.equal(formatMonthYear(back(new Date(2026, 4, 20), 1)[0]), "May 2026");
-		assert.equal(formatMonthYear(back(new Date(2025, 11, 31), 1)[0]), "December 2025");
+	it("names the month in lower case English and adds the year", () => {
+		assert.equal(formatMonthYear(back(new Date(2026, 4, 20), 1)[0]), "may 2026");
+		assert.equal(formatMonthYear(back(new Date(2025, 11, 31), 1)[0]), "december 2025");
 	});
 });

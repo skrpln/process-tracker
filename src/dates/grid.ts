@@ -51,22 +51,22 @@ export function formatDay(column: DateColumn): string {
 }
 
 const MONTH_NAMES = [
-	"January",
-	"February",
-	"March",
-	"April",
-	"May",
-	"June",
-	"July",
-	"August",
-	"September",
-	"October",
-	"November",
-	"December",
+	"january",
+	"february",
+	"march",
+	"april",
+	"may",
+	"june",
+	"july",
+	"august",
+	"september",
+	"october",
+	"november",
+	"december",
 ];
 
 /**
- * Caption above the pinned column: month and year of a column, in English.
+ * Caption above the pinned column: month and year of a column, in English, lower case.
  * The day captions carry no month, so this caption is always shown and follows
  * the scroll — see `captionLabel`.
  */

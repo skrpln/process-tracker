@@ -47,11 +47,11 @@ describe("dominantLabel", () => {
 
 	it("switches as soon as the other one passes half", () => {
 		const visible = (older: number) => [
-			...Array<string>(older).fill("May 2026"),
-			...Array<string>(10 - older).fill("June 2026"),
+			...Array<string>(older).fill("may 2026"),
+			...Array<string>(10 - older).fill("june 2026"),
 		];
-		assert.equal(dominantLabel(visible(5), "June 2026"), "June 2026");
-		assert.equal(dominantLabel(visible(6), "June 2026"), "May 2026");
+		assert.equal(dominantLabel(visible(5), "june 2026"), "june 2026");
+		assert.equal(dominantLabel(visible(6), "june 2026"), "may 2026");
 	});
 
 	it("keeps the current caption when three months share the view", () => {
@@ -59,14 +59,14 @@ describe("dominantLabel", () => {
 	});
 
 	it("keeps the current caption when nothing is visible", () => {
-		assert.equal(dominantLabel([], "May 2026"), "May 2026");
+		assert.equal(dominantLabel([], "may 2026"), "may 2026");
 	});
 });
 
 describe("captionLabel", () => {
 	it("takes the first column at the left edge, whatever the majority says", () => {
-		const labels = [...Array<string>(10).fill("June 2026"), ...Array<string>(10).fill("May 2026")];
-		assert.equal(captionLabel(labels, "May 2026", true), "June 2026");
+		const labels = [...Array<string>(10).fill("june 2026"), ...Array<string>(10).fill("may 2026")];
+		assert.equal(captionLabel(labels, "may 2026", true), "june 2026");
 	});
 
 	it("follows the majority once the table is scrolled", () => {
@@ -78,6 +78,6 @@ describe("captionLabel", () => {
 	});
 
 	it("keeps the current caption when nothing is visible at the edge", () => {
-		assert.equal(captionLabel([], "June 2026", true), "June 2026");
+		assert.equal(captionLabel([], "june 2026", true), "june 2026");
 	});
 });
