@@ -15,7 +15,7 @@
 	 * is tall whatever the theme does to the row.
 	 */
 	--pt-col-date: 2em;
-	--pt-caption-size: calc(var(--font-ui-small) + 3px);
+	--pt-caption-size: calc(var(--font-ui-small) + 4px);
 	/* A condensed grotesque: captions read as a scale, not as running text. */
 	--pt-caption-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
 		var(--font-interface), sans-serif;
