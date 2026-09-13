@@ -16,12 +16,14 @@
 	 */
 	--pt-col-date: 2em;
 	--pt-caption-size: calc(var(--font-ui-small) + 4px);
-	/* A condensed grotesque: captions read as a scale, not as running text. */
-	--pt-caption-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
-		var(--font-interface), sans-serif;
+	/*
+	 * Fonts come from the theme: the body reads as the text of the note, the captions
+	 * as its headings. See the thead rules for what happens in a theme that leaves the
+	 * heading variables alone.
+	 */
+	--pt-caption-weight: var(--h4-weight, var(--font-semibold, 600));
 	margin: var(--size-4-2) 0;
-	/* The table is interface, not prose: it follows the interface font, not the text font. */
-	font-family: var(--font-interface);
+	font-family: var(--font-text);
 }
 
 /* The scroll container is also the positioning context of the pinned column. */
@@ -58,15 +60,26 @@
 	width: var(--pt-col-date);
 }
 
+/*
+ * The head falls back to the interface font, and each caption asks for the theme's
+ * heading font on top of that. Obsidian ships `--h4-font: inherit`, and an undefined
+ * variable makes the declaration invalid at computed-value time — both cases inherit
+ * from this rule, so a theme with no heading font of its own gives captions the
+ * interface face instead of repeating the text face of the cells.
+ */
+.process-tracker .process-tracker__table thead {
+	font-family: var(--font-interface);
+}
+
 /* Captions stand above the table: no grid around them, muted, in the caption face. */
 .process-tracker .process-tracker__table thead th {
 	border: 0;
 	/* No side padding: it would set a floor under the column width. */
 	padding: 0 0 calc(var(--size-2-1) + 2px);
 	background: var(--background-primary);
-	font-family: var(--pt-caption-font);
+	font-family: var(--h4-font);
 	font-size: var(--pt-caption-size);
-	font-weight: var(--font-normal);
+	font-weight: var(--pt-caption-weight);
 	letter-spacing: 0.02em;
 	color: var(--text-muted);
 	text-align: center;
