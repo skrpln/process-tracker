@@ -116,12 +116,12 @@ describe("buildDateColumns — direction", () => {
 describe("formatDayMonth", () => {
 	it("pads both parts to two digits", () => {
 		const [column] = back(new Date(2026, 8, 5), 1);
-		assert.equal(formatDayMonth(column), "05 / 09");
+		assert.equal(formatDayMonth(column), "05/09");
 	});
 
 	it("keeps two digits as they are", () => {
 		const [column] = back(new Date(2026, 11, 25), 1);
-		assert.equal(formatDayMonth(column), "25 / 12");
+		assert.equal(formatDayMonth(column), "25/12");
 	});
 });
 
