@@ -45,13 +45,14 @@
 }
 
 .process-tracker__col-date {
-	width: calc(3.8em - 2px);
+	width: calc(3.8em - 4px);
 }
 
 /* Captions stand above the table: no grid around them, muted, in the caption face. */
 .process-tracker .process-tracker__table thead th {
 	border: 0;
-	padding: 0 var(--size-2-1) calc(var(--size-2-1) + 2px);
+	/* No side padding: it would set a floor under the column width. */
+	padding: 0 0 calc(var(--size-2-1) + 2px);
 	background: var(--background-primary);
 	font-family: var(--pt-caption-font);
 	font-size: var(--pt-caption-size);
