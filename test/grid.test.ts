@@ -1,7 +1,7 @@
 // Unit tests for the date grid.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildDateColumns, toIsoDate } from "../src/dates/grid.ts";
+import { buildDateColumns, formatDayMonth, toIsoDate, yearCaption } from "../src/dates/grid.ts";
 
 describe("toIsoDate", () => {
 	it("formats a local date with padding", () => {
@@ -55,5 +55,31 @@ describe("buildDateColumns", () => {
 
 	it("returns exactly the requested number of columns", () => {
 		assert.equal(buildDateColumns(new Date(2026, 8, 11), 365).length, 365);
+	});
+});
+
+describe("formatDayMonth", () => {
+	it("pads both parts", () => {
+		const [column] = buildDateColumns(new Date(2026, 8, 5), 1);
+		assert.equal(formatDayMonth(column), "05.09");
+	});
+
+	it("keeps two digits as they are", () => {
+		const [column] = buildDateColumns(new Date(2026, 11, 25), 1);
+		assert.equal(formatDayMonth(column), "25.12");
+	});
+});
+
+describe("yearCaption", () => {
+	it("stays empty inside one year", () => {
+		assert.equal(yearCaption(buildDateColumns(new Date(2026, 8, 11), 30)), null);
+	});
+
+	it("shows the year of the newest column when the table crosses a year", () => {
+		assert.equal(yearCaption(buildDateColumns(new Date(2026, 0, 2), 5)), "2026");
+	});
+
+	it("stays empty for an empty grid", () => {
+		assert.equal(yearCaption([]), null);
 	});
 });

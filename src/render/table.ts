@@ -1,7 +1,7 @@
 // Process Tracker — DOM rendering of the tracker table.
 // Knows nothing about the vault: everything it needs comes as data.
 
-import { groupByMonth } from "../dates/months.ts";
+import { formatDayMonth, yearCaption } from "../dates/grid.ts";
 import type { DateColumn, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
@@ -12,16 +12,12 @@ export interface TrackerView {
 	trackTag: string;
 }
 
-/**
- * Renders the whole block: table, or an empty-state message.
- * Returns the scrolling element, which the render child needs to follow, or
- * `null` when there is no table to scroll.
- */
-export function renderTracker(container: HTMLElement, view: TrackerView): HTMLElement | null {
+/** Renders the whole block: table, or an empty-state message. */
+export function renderTracker(container: HTMLElement, view: TrackerView): void {
 	const root = container.createDiv({ cls: "process-tracker" });
 	if (view.tracks.length === 0) {
 		renderEmptyState(root, view.trackTag);
-		return null;
+		return;
 	}
 
 	const scroll = root.createDiv({ cls: "process-tracker__scroll" });
@@ -29,12 +25,11 @@ export function renderTracker(container: HTMLElement, view: TrackerView): HTMLEl
 	renderColumnWidths(table, view.columns.length);
 	renderHead(table, view.columns);
 	renderBody(table, view.tracks, view.columns);
-	return scroll;
 }
 
 /**
  * Column widths live in a `colgroup`: with `table-layout: fixed` they apply to the
- * whole table, so the merged month captions cannot stretch a single day column.
+ * whole table, so a long track name cannot stretch its column.
  */
 function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void {
 	const group = table.createEl("colgroup");
@@ -47,24 +42,23 @@ function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void 
 	}
 }
 
+/**
+ * The head carries no grid: dates stand above the table, and the corner shows the
+ * year only when `dd.mm` alone would be ambiguous.
+ */
 function renderHead(table: HTMLTableElement, columns: DateColumn[]): void {
-	const head = table.createEl("thead");
+	const row = table.createEl("thead").createEl("tr");
 
-	const monthRow = head.createEl("tr");
-	monthRow.createEl("th", { cls: "process-tracker__corner", attr: { rowspan: 2 } });
-	for (const group of groupByMonth(columns)) {
-		const cell = monthRow.createEl("th", {
-			cls: "process-tracker__month",
-			attr: { colspan: group.span },
-		});
-		cell.createSpan({ cls: "process-tracker__month-label", text: group.label });
-	}
+	const year = yearCaption(columns);
+	row.createEl("th", {
+		cls: "process-tracker__year",
+		text: year ?? "",
+	});
 
-	const dayRow = head.createEl("tr");
 	for (const column of columns) {
-		const cell = dayRow.createEl("th", {
+		const cell = row.createEl("th", {
 			cls: "process-tracker__date",
-			text: String(column.day),
+			text: formatDayMonth(column),
 			attr: { "data-date": column.iso },
 		});
 		if (column.isToday) cell.addClass("is-today");

@@ -1,7 +1,17 @@
 /* Process Tracker — tracker table styles. */
 
+/*
+ * Selectors are deliberately two classes deep (`.process-tracker .process-tracker__table th`).
+ * Themes style markdown tables as `.markdown-rendered table th` — one class and two elements —
+ * and would otherwise win over a single-class rule and impose their own font and padding.
+ */
+
 .process-tracker {
+	--pt-border: var(--background-modifier-border);
+	--pt-caption-size: calc(var(--font-ui-small) - 3px);
 	margin: var(--size-4-2) 0;
+	/* The table is interface, not prose: it follows the interface font, not the text font. */
+	font-family: var(--font-interface);
 }
 
 /* The scroll container is also the positioning context of the pinned column. */
@@ -11,40 +21,20 @@
 }
 
 /*
- * `separate` instead of `collapse`: collapsed borders are owned by the table and
- * disappear behind the pinned column while it scrolls. Every cell paints its own
- * right and bottom border, the table paints the top and left edge.
- *
- * `width: max-content` is what makes `table-layout: fixed` obey the colgroup:
- * with an auto width the browser falls back to content-driven columns and the
- * track column collapses onto the longest name.
+ * `border-collapse: separate` because collapsed borders belong to the table and show
+ * through the pinned column while it scrolls. `width: max-content` is what makes
+ * `table-layout: fixed` obey the colgroup — with an auto width the browser silently
+ * falls back to content-driven columns.
  */
-.process-tracker__table {
+.process-tracker .process-tracker__table {
 	border-collapse: separate;
 	border-spacing: 0;
 	table-layout: fixed;
 	width: max-content;
 	margin: 0;
-	border-top: 1px solid var(--background-modifier-border);
-	border-left: 1px solid var(--background-modifier-border);
+	border: 0;
 	font-size: var(--font-ui-small);
 	line-height: 1.2;
-}
-
-.process-tracker__table th,
-.process-tracker__table td {
-	border-right: 1px solid var(--background-modifier-border);
-	border-bottom: 1px solid var(--background-modifier-border);
-	padding: var(--size-2-2);
-	vertical-align: middle;
-	background: var(--background-primary);
-}
-
-/* Alignment lives on the cell classes, so the track column can stay left-aligned. */
-.process-tracker__corner,
-.process-tracker__date,
-.process-tracker__cell {
-	text-align: center;
 }
 
 .process-tracker__col-track {
@@ -52,57 +42,66 @@
 }
 
 .process-tracker__col-date {
-	width: 2.2em;
+	width: 2.8em;
 }
 
-/* Pinned first column: stays under the month captions, above the day cells. */
-.process-tracker__corner,
-.process-tracker__track {
+/* Captions stand above the table: no grid around them, smaller and muted. */
+.process-tracker .process-tracker__table thead th {
+	border: 0;
+	padding: 0 var(--size-2-1) var(--size-2-2);
+	background: var(--background-primary);
+	font-size: var(--pt-caption-size);
+	font-weight: var(--font-normal);
+	color: var(--text-muted);
+	text-align: center;
+	white-space: nowrap;
+}
+
+.process-tracker .process-tracker__table thead .is-today {
+	color: var(--text-normal);
+}
+
+/* The grid belongs to the body only. Each cell paints its right and bottom edge;
+   the first row and the first column add the two missing outer edges. */
+.process-tracker .process-tracker__table tbody th,
+.process-tracker .process-tracker__table tbody td {
+	border-right: 1px solid var(--pt-border);
+	border-bottom: 1px solid var(--pt-border);
+	padding: var(--size-2-2);
+	background: var(--background-primary);
+	text-align: center;
+	vertical-align: middle;
+}
+
+.process-tracker .process-tracker__table tbody tr:first-child > * {
+	border-top: 1px solid var(--pt-border);
+}
+
+.process-tracker .process-tracker__table tbody tr > *:first-child {
+	border-left: 1px solid var(--pt-border);
+}
+
+/* Pinned first column: the year caption above it stays pinned as well. */
+.process-tracker__year,
+.process-tracker .process-tracker__table .process-tracker__track {
 	position: sticky;
 	left: 0;
 	z-index: 2;
 }
 
-.process-tracker__track {
+.process-tracker .process-tracker__table .process-tracker__track {
 	max-width: 12em;
-	text-align: left;
 	font-weight: var(--font-normal);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-/* Month caption: the cell clips, the label inside it is moved by the render child. */
-.process-tracker__month {
-	position: relative;
-	height: 1.7em;
-	padding: 0;
-	overflow: hidden;
-	color: var(--text-muted);
-	font-weight: var(--font-normal);
-}
-
-.process-tracker__month-label {
-	position: absolute;
-	top: 0;
-	left: 0;
-	line-height: 1.7em;
-	padding: 0 var(--size-2-2);
-	white-space: nowrap;
-}
-
-.process-tracker__date {
-	color: var(--text-muted);
-	font-weight: var(--font-normal);
-}
-
-.process-tracker__date.is-today,
-.process-tracker__cell.is-today {
-	color: var(--text-normal);
+.process-tracker .process-tracker__table .process-tracker__cell.is-today {
 	background: var(--background-modifier-hover);
 }
 
-.process-tracker__cell input[type="checkbox"] {
+.process-tracker .process-tracker__table .process-tracker__cell input[type="checkbox"] {
 	margin: 0;
 	vertical-align: middle;
 }

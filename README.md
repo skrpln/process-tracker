@@ -4,7 +4,7 @@ A tracker table inside a note: rows are tracks, columns are dates. A checked cel
 track was done that day, and every check is documented by an evidence note.
 
 > **Status: early development.** Phases 1-2 of 6 are done — the table renders, reads track
-> cards from the vault, pins the first column and captions the months. Checkbox interaction,
+> cards from the vault and pins the first column. Checkbox interaction,
 > evidence notes, hover popups and a settings tab are still ahead; see [Roadmap](#roadmap).
 
 ## Concepts
@@ -69,7 +69,7 @@ Both are used by features that arrive in later phases; the table itself renders 
 | Phase | Scope | State |
 | --- | --- | --- |
 | 1 | Code block processor, track cards, basic table | done |
-| 2 | Pinned first column, month labels, horizontal scroll | done |
+| 2 | Pinned first column, date captions, horizontal scroll | done |
 | 3 | `track` filtering through Dataview | next |
 | 4 | Checking cells, creating evidence notes from a template | planned |
 | 5 | Hover popups for evidence and track cards | planned |

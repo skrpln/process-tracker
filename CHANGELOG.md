@@ -10,6 +10,7 @@
 - Table of tracks by dates: today is the first date column, older dates to the right.
 - Theme-aware styling through Obsidian CSS variables; checkboxes follow the theme.
 - Pinned first column: track names stay in place while the dates scroll.
-- Month captions above the date columns; a caption stays centred in the visible part of its
-  own month while the table scrolls.
+- Date captions in `dd.mm` above the table, without a grid around them; the year appears once
+  above the pinned column, and only when the table covers more than one year.
 - Equal width for every date column, independent of the content.
+- Interface font and interface font sizes, so the table reads as UI rather than as prose.

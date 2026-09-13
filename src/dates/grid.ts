@@ -23,6 +23,24 @@ export function buildDateColumns(today: Date, days: number): DateColumn[] {
 	return columns;
 }
 
+/** Column caption: `dd.mm`, both parts padded. */
+export function formatDayMonth(column: DateColumn): string {
+	const day = String(column.day).padStart(2, "0");
+	const month = String(column.month).padStart(2, "0");
+	return `${day}.${month}`;
+}
+
+/**
+ * Caption above the pinned column: the year of the newest column, but only when the
+ * table covers more than one year. With a single year the `dd.mm` captions are
+ * unambiguous and the corner stays empty.
+ */
+export function yearCaption(columns: DateColumn[]): string | null {
+	if (columns.length === 0) return null;
+	const years = new Set(columns.map((column) => column.year));
+	return years.size > 1 ? String(columns[0].year) : null;
+}
+
 /** Local calendar date as `YYYY-MM-DD` — the format used in evidence frontmatter. */
 export function toIsoDate(date: Date): string {
 	const year = String(date.getFullYear()).padStart(4, "0");
