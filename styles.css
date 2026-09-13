@@ -96,16 +96,20 @@
 }
 
 .process-tracker .process-tracker__table .process-tracker__date,
-.process-tracker .process-tracker__table .process-tracker__period-year {
+.process-tracker .process-tracker__table .process-tracker__period {
 	font-family: var(--pt-day-font);
 	font-weight: var(--font-normal);
+}
+
+/* The month name is set in capitals; the year needs none. */
+.process-tracker .process-tracker__table .process-tracker__period-month {
+	text-transform: uppercase;
 }
 
 .process-tracker .process-tracker__table .process-tracker__date {
 	line-height: 1;
 }
 
-/* The year stands apart from the month, which keeps the heading face. */
 .process-tracker .process-tracker__table .process-tracker__period-year {
 	margin-left: 0.35em;
 }
