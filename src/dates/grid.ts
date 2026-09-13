@@ -74,6 +74,17 @@ export function formatMonthYear(column: DateColumn): string {
 	return `${MONTH_NAMES[column.month - 1] ?? column.month} ${column.year}`;
 }
 
+/**
+ * Splits a caption back into its two parts, which are set in different faces:
+ * the month in the heading font of the theme, the year in the face of the day
+ * captions. Anything without a space stays whole, as the month.
+ */
+export function splitMonthYear(label: string): { month: string; year: string } {
+	const cut = label.lastIndexOf(" ");
+	if (cut === -1) return { month: label, year: "" };
+	return { month: label.slice(0, cut), year: label.slice(cut + 1) };
+}
+
 /** Local calendar date as `YYYY-MM-DD` — the format used in evidence frontmatter. */
 export function toIsoDate(date: Date): string {
 	const year = String(date.getFullYear()).padStart(4, "0");

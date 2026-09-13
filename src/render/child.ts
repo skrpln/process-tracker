@@ -3,6 +3,7 @@
 import { MarkdownRenderChild } from "obsidian";
 import type { DateColumn } from "../model/types.ts";
 import { formatMonthYear } from "../dates/grid.ts";
+import { renderPeriodCaption } from "./table.ts";
 import { captionLabel, squareColumnWidth, visibleColumnRange } from "./visible.ts";
 
 /**
@@ -23,7 +24,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		private readonly columns: DateColumn[],
 	) {
 		super(containerEl);
-		this.label = captionCell.textContent ?? "";
+		this.label = columns[0] === undefined ? "" : formatMonthYear(columns[0]);
 	}
 
 	onload(): void {
@@ -71,7 +72,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		if (label === this.label) return;
 
 		this.label = label;
-		this.captionCell.setText(label);
+		renderPeriodCaption(this.captionCell, label);
 	}
 
 	/**

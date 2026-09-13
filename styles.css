@@ -95,10 +95,19 @@
 	white-space: nowrap;
 }
 
-.process-tracker .process-tracker__table .process-tracker__date {
-	line-height: 1;
+.process-tracker .process-tracker__table .process-tracker__date,
+.process-tracker .process-tracker__table .process-tracker__period-year {
 	font-family: var(--pt-day-font);
 	font-weight: var(--font-normal);
+}
+
+.process-tracker .process-tracker__table .process-tracker__date {
+	line-height: 1;
+}
+
+/* The year stands apart from the month, which keeps the heading face. */
+.process-tracker .process-tracker__table .process-tracker__period-year {
+	margin-left: 0.35em;
 }
 
 /* The grid belongs to the body only. Each cell paints its right and bottom edge;

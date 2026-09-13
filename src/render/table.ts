@@ -1,7 +1,7 @@
 // Process Tracker — DOM rendering of the tracker table.
 // Knows nothing about the vault: everything it needs comes as data.
 
-import { formatDay, formatMonthYear } from "../dates/grid.ts";
+import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import type { DateColumn, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
@@ -65,10 +65,8 @@ function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement
 	const row = table.createEl("thead").createEl("tr");
 
 	const first = columns[0];
-	const captionCell = row.createEl("th", {
-		cls: "process-tracker__period",
-		text: first === undefined ? "" : formatMonthYear(first),
-	});
+	const captionCell = row.createEl("th", { cls: "process-tracker__period" });
+	renderPeriodCaption(captionCell, first === undefined ? "" : formatMonthYear(first));
 
 	for (const column of columns) {
 		const cell = row.createEl("th", {
@@ -128,6 +126,20 @@ function renderEmptyState(root: HTMLElement, trackTag: string): void {
 		cls: "process-tracker__empty",
 		text: `No track cards found. Tag a note with #${trackTag} to add a track.`,
 	});
+}
+
+/**
+ * Writes the corner caption as two parts, so the year can be set in the face of the
+ * day captions while the month keeps the heading face. Used by the render child too,
+ * which rewrites the caption as the table scrolls.
+ */
+export function renderPeriodCaption(cell: HTMLElement, label: string): void {
+	cell.empty();
+	if (label === "") return;
+
+	const { month, year } = splitMonthYear(label);
+	cell.createSpan({ cls: "process-tracker__period-month", text: month });
+	if (year !== "") cell.createSpan({ cls: "process-tracker__period-year", text: year });
 }
 
 /** Parse problems and unsupported parameters, shown under the table. */

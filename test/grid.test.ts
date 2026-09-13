@@ -5,6 +5,7 @@ import {
 	buildDateColumns,
 	formatDay,
 	formatMonthYear,
+	splitMonthYear,
 	toIsoDate,
 } from "../src/dates/grid.ts";
 import type { SortDirection } from "../src/model/types.ts";
@@ -124,5 +125,16 @@ describe("formatMonthYear", () => {
 	it("names the month in lower case English and adds the year", () => {
 		assert.equal(formatMonthYear(back(new Date(2026, 4, 20), 1)[0]), "may 2026");
 		assert.equal(formatMonthYear(back(new Date(2025, 11, 31), 1)[0]), "december 2025");
+	});
+});
+
+describe("splitMonthYear", () => {
+	it("splits a caption into month and year", () => {
+		assert.deepEqual(splitMonthYear("september 2026"), { month: "september", year: "2026" });
+	});
+
+	it("keeps a caption without a year whole", () => {
+		assert.deepEqual(splitMonthYear("september"), { month: "september", year: "" });
+		assert.deepEqual(splitMonthYear(""), { month: "", year: "" });
 	});
 });
