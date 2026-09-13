@@ -8,7 +8,10 @@
 
 .process-tracker {
 	--pt-border: var(--background-modifier-border);
-	--pt-caption-size: calc(var(--font-ui-small) - 3px);
+	--pt-caption-size: var(--font-ui-small);
+	/* A condensed grotesque: captions read as a scale, not as running text. */
+	--pt-caption-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
+		var(--font-interface), sans-serif;
 	margin: var(--size-4-2) 0;
 	/* The table is interface, not prose: it follows the interface font, not the text font. */
 	font-family: var(--font-interface);
@@ -42,19 +45,32 @@
 }
 
 .process-tracker__col-date {
-	width: 2.8em;
+	width: 2.4em;
 }
 
-/* Captions stand above the table: no grid around them, smaller and muted. */
+/* Captions stand above the table: no grid around them, muted, in the caption face. */
 .process-tracker .process-tracker__table thead th {
 	border: 0;
-	padding: 0 var(--size-2-1) var(--size-2-2);
+	padding: 0 var(--size-2-1) var(--size-2-1);
 	background: var(--background-primary);
+	font-family: var(--pt-caption-font);
 	font-size: var(--pt-caption-size);
 	font-weight: var(--font-normal);
+	letter-spacing: 0.02em;
 	color: var(--text-muted);
 	text-align: center;
+	vertical-align: bottom;
 	white-space: nowrap;
+}
+
+/*
+ * Day over month, no separator. The tight line height keeps both lines together
+ * no taller than one row of the table below.
+ */
+.process-tracker .process-tracker__table .process-tracker__date-day,
+.process-tracker .process-tracker__table .process-tracker__date-month {
+	display: block;
+	line-height: 0.9;
 }
 
 .process-tracker .process-tracker__table thead .is-today {

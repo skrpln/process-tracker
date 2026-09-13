@@ -1,7 +1,7 @@
 // Process Tracker — DOM rendering of the tracker table.
 // Knows nothing about the vault: everything it needs comes as data.
 
-import { formatDayMonth, yearCaption } from "../dates/grid.ts";
+import { formatDay, formatMonth, spansMultipleYears } from "../dates/grid.ts";
 import type { DateColumn, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
@@ -12,19 +12,29 @@ export interface TrackerView {
 	trackTag: string;
 }
 
-/** Renders the whole block: table, or an empty-state message. */
-export function renderTracker(container: HTMLElement, view: TrackerView): void {
+/** Elements the render child needs to follow the scrolling table. */
+export interface TrackerElements {
+	scroll: HTMLElement;
+	yearCell: HTMLElement;
+}
+
+/**
+ * Renders the whole block: table, or an empty-state message. Returns the elements
+ * the render child works with, or `null` when there is no table.
+ */
+export function renderTracker(container: HTMLElement, view: TrackerView): TrackerElements | null {
 	const root = container.createDiv({ cls: "process-tracker" });
 	if (view.tracks.length === 0) {
 		renderEmptyState(root, view.trackTag);
-		return;
+		return null;
 	}
 
 	const scroll = root.createDiv({ cls: "process-tracker__scroll" });
 	const table = scroll.createEl("table", { cls: "process-tracker__table" });
 	renderColumnWidths(table, view.columns.length);
-	renderHead(table, view.columns);
+	const yearCell = renderHead(table, view.columns);
 	renderBody(table, view.tracks, view.columns);
+	return { scroll, yearCell };
 }
 
 /**
@@ -43,26 +53,29 @@ function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void 
 }
 
 /**
- * The head carries no grid: dates stand above the table, and the corner shows the
- * year only when `dd.mm` alone would be ambiguous.
+ * The head carries no grid: captions stand above the table. Each date caption is two
+ * lines — day over month — and the corner shows a year only when the table covers
+ * more than one; the render child keeps that year in step with scrolling.
  */
-function renderHead(table: HTMLTableElement, columns: DateColumn[]): void {
+function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement {
 	const row = table.createEl("thead").createEl("tr");
 
-	const year = yearCaption(columns);
-	row.createEl("th", {
+	const yearCell = row.createEl("th", {
 		cls: "process-tracker__year",
-		text: year ?? "",
+		text: spansMultipleYears(columns) ? String(columns[0].year) : "",
 	});
 
 	for (const column of columns) {
 		const cell = row.createEl("th", {
 			cls: "process-tracker__date",
-			text: formatDayMonth(column),
 			attr: { "data-date": column.iso },
 		});
+		cell.createSpan({ cls: "process-tracker__date-day", text: formatDay(column) });
+		cell.createSpan({ cls: "process-tracker__date-month", text: formatMonth(column) });
 		if (column.isToday) cell.addClass("is-today");
 	}
+
+	return yearCell;
 }
 
 function renderBody(table: HTMLTableElement, tracks: TrackCard[], columns: DateColumn[]): void {

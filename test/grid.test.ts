@@ -1,7 +1,13 @@
 // Unit tests for the date grid.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildDateColumns, formatDayMonth, toIsoDate, yearCaption } from "../src/dates/grid.ts";
+import {
+	buildDateColumns,
+	formatDay,
+	formatMonth,
+	spansMultipleYears,
+	toIsoDate,
+} from "../src/dates/grid.ts";
 
 describe("toIsoDate", () => {
 	it("formats a local date with padding", () => {
@@ -58,28 +64,31 @@ describe("buildDateColumns", () => {
 	});
 });
 
-describe("formatDayMonth", () => {
-	it("pads both parts", () => {
+describe("formatDay / formatMonth", () => {
+	it("pads both lines to two digits", () => {
 		const [column] = buildDateColumns(new Date(2026, 8, 5), 1);
-		assert.equal(formatDayMonth(column), "05.09");
+		assert.equal(formatDay(column), "05");
+		assert.equal(formatMonth(column), "09");
 	});
 
 	it("keeps two digits as they are", () => {
 		const [column] = buildDateColumns(new Date(2026, 11, 25), 1);
-		assert.equal(formatDayMonth(column), "25.12");
+		assert.equal(formatDay(column), "25");
+		assert.equal(formatMonth(column), "12");
 	});
 });
 
-describe("yearCaption", () => {
-	it("stays empty inside one year", () => {
-		assert.equal(yearCaption(buildDateColumns(new Date(2026, 8, 11), 30)), null);
+describe("spansMultipleYears", () => {
+	it("is false inside one year", () => {
+		assert.equal(spansMultipleYears(buildDateColumns(new Date(2026, 8, 11), 30)), false);
 	});
 
-	it("shows the year of the newest column when the table crosses a year", () => {
-		assert.equal(yearCaption(buildDateColumns(new Date(2026, 0, 2), 5)), "2026");
+	it("is true for a table that crosses a year, even a short one", () => {
+		// Two days: 01.01.2026 and 31.12.2025.
+		assert.equal(spansMultipleYears(buildDateColumns(new Date(2026, 0, 1), 2)), true);
 	});
 
-	it("stays empty for an empty grid", () => {
-		assert.equal(yearCaption([]), null);
+	it("is false for an empty grid", () => {
+		assert.equal(spansMultipleYears([]), false);
 	});
 });

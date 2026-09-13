@@ -23,22 +23,22 @@ export function buildDateColumns(today: Date, days: number): DateColumn[] {
 	return columns;
 }
 
-/** Column caption: `dd.mm`, both parts padded. */
-export function formatDayMonth(column: DateColumn): string {
-	const day = String(column.day).padStart(2, "0");
-	const month = String(column.month).padStart(2, "0");
-	return `${day}.${month}`;
+/** Upper line of a column caption: day of month, always two digits. */
+export function formatDay(column: DateColumn): string {
+	return String(column.day).padStart(2, "0");
+}
+
+/** Lower line of a column caption: month number, always two digits. */
+export function formatMonth(column: DateColumn): string {
+	return String(column.month).padStart(2, "0");
 }
 
 /**
- * Caption above the pinned column: the year of the newest column, but only when the
- * table covers more than one year. With a single year the `dd.mm` captions are
- * unambiguous and the corner stays empty.
+ * Whether the table needs a year caption at all. Inside a single year the day and
+ * month lines are unambiguous and the corner above the pinned column stays empty.
  */
-export function yearCaption(columns: DateColumn[]): string | null {
-	if (columns.length === 0) return null;
-	const years = new Set(columns.map((column) => column.year));
-	return years.size > 1 ? String(columns[0].year) : null;
+export function spansMultipleYears(columns: DateColumn[]): boolean {
+	return new Set(columns.map((column) => column.year)).size > 1;
 }
 
 /** Local calendar date as `YYYY-MM-DD` — the format used in evidence frontmatter. */
