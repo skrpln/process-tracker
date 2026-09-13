@@ -12,6 +12,8 @@ export interface SortSpec {
 export interface TrackerOptions {
 	/** Dataview filter expression, applied since Phase 3. `null` — not set. */
 	track: string | null;
+	/** Date of the first column. `null` — today, resolved at render time. */
+	start: Date | null;
 	/** Table length in days. `null` — resolve at render time. */
 	days: number | null;
 	sort: SortSpec;

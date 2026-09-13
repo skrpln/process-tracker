@@ -48,7 +48,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 			const cards = collectTrackCards(this.app);
 			const tracks = selectTracks(cards, this.settings.trackTag, options.sort);
-			const columns = buildDateColumns(new Date(), options.days ?? DEFAULT_DAYS);
+			const columns = buildDateColumns(options.start ?? new Date(), options.days ?? DEFAULT_DAYS);
 
 			const elements = renderTracker(element, {
 				tracks,

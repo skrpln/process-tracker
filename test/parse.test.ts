@@ -1,21 +1,27 @@
 // Unit tests for the code block parser.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseCodeBlock, parseSort } from "../src/codeblock/parse.ts";
+import { parseCodeBlock, parseSort, parseStartDate } from "../src/codeblock/parse.ts";
 import { MAX_DAYS } from "../src/constants.ts";
 
 describe("parseCodeBlock", () => {
 	it("returns defaults for an empty block", () => {
 		const { options, warnings } = parseCodeBlock("");
-		assert.deepEqual(options, { track: null, days: null, sort: { field: "name", direction: "asc" } });
+		assert.deepEqual(options, {
+			track: null,
+			start: null,
+			days: null,
+			sort: { field: "name", direction: "asc" },
+		});
 		assert.deepEqual(warnings, []);
 	});
 
-	it("reads all three parameters", () => {
+	it("reads every parameter", () => {
 		const { options, warnings } = parseCodeBlock(
-			'track: FROM "folder"\ndays: 30\nsort: priority asc',
+			'track: FROM "folder"\nstart: 2026-09-01\ndays: 30\nsort: priority asc',
 		);
 		assert.equal(options.track, 'FROM "folder"');
+		assert.deepEqual(options.start, new Date(2026, 8, 1));
 		assert.equal(options.days, 30);
 		assert.deepEqual(options.sort, { field: "priority", direction: "asc" });
 		assert.deepEqual(warnings, []);
@@ -73,6 +79,43 @@ describe("parseCodeBlock", () => {
 		assert.equal(options.track, null);
 		assert.equal(options.days, null);
 		assert.equal(warnings.length, 2);
+	});
+});
+
+describe("parseStartDate", () => {
+	it("reads a calendar date as a local date", () => {
+		assert.deepEqual(parseStartDate("2026-09-01"), new Date(2026, 8, 1));
+	});
+
+	it("treats \"today\" as the default", () => {
+		assert.equal(parseStartDate("today"), null);
+		assert.equal(parseStartDate("TODAY"), null);
+	});
+
+	it("accepts a leap day that exists", () => {
+		assert.deepEqual(parseStartDate("2028-02-29"), new Date(2028, 1, 29));
+	});
+
+	it("rejects a date that does not exist", () => {
+		const warnings: string[] = [];
+		assert.equal(parseStartDate("2027-02-29", warnings), null);
+		assert.equal(parseStartDate("2026-13-01", warnings), null);
+		assert.equal(parseStartDate("2026-09-31", warnings), null);
+		assert.equal(warnings.length, 3);
+	});
+
+	it("rejects other formats", () => {
+		const warnings: string[] = [];
+		for (const value of ["01.09.2026", "2026/09/01", "1 September", "2026-9-1"]) {
+			assert.equal(parseStartDate(value, warnings), null, value);
+		}
+		assert.equal(warnings.length, 4);
+	});
+
+	it("is reported through the block warnings", () => {
+		const { options, warnings } = parseCodeBlock("start: yesterday");
+		assert.equal(options.start, null);
+		assert.equal(warnings.length, 1);
 	});
 });
 

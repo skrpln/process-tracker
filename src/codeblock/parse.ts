@@ -12,13 +12,14 @@ export interface ParseResult {
 
 export const DEFAULT_SORT: SortSpec = { field: "name", direction: "asc" };
 
-const KNOWN_KEYS = ["track", "days", "sort"];
+const KNOWN_KEYS = ["track", "start", "days", "sort"];
 
 /** Parses `key: value` lines of a code block into tracker options. */
 export function parseCodeBlock(source: string): ParseResult {
 	const warnings: string[] = [];
 	const options: TrackerOptions = {
 		track: null,
+		start: null,
 		days: null,
 		sort: { ...DEFAULT_SORT },
 	};
@@ -50,11 +51,38 @@ export function parseCodeBlock(source: string): ParseResult {
 		}
 
 		if (key === "track") options.track = value;
+		if (key === "start") options.start = parseStartDate(value, warnings);
 		if (key === "days") applyDays(options, value, warnings);
 		if (key === "sort") options.sort = parseSort(value, warnings);
 	}
 
 	return { options, warnings };
+}
+
+/**
+ * `start: YYYY-MM-DD` fixes the first column of the table; `start: today` is the
+ * default and means "whatever day it is when the block renders". A note written in
+ * the past keeps its window only with an explicit date.
+ * Returns `null` for today and for anything unreadable.
+ */
+export function parseStartDate(value: string, warnings: string[] = []): Date | null {
+	if (value.toLowerCase() === "today") return null;
+
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+	if (match === null) {
+		warnings.push(`"start: ${value}" is not a date in YYYY-MM-DD form, today is used.`);
+		return null;
+	}
+
+	const [, year, month, day] = match.map(Number);
+	const date = new Date(year, month - 1, day);
+	// Rejects 2027-02-29 and friends: the Date constructor rolls them over silently.
+	if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+		warnings.push(`"start: ${value}" is not a calendar date, today is used.`);
+		return null;
+	}
+
+	return date;
 }
 
 function applyDays(options: TrackerOptions, value: string, warnings: string[]): void {
