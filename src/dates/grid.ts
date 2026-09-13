@@ -23,11 +23,11 @@ export function buildDateColumns(today: Date, days: number): DateColumn[] {
 	return columns;
 }
 
-/** Column caption: `dd/mm`, both parts always two digits. */
+/** Column caption: `dd / mm`, both parts always two digits. */
 export function formatDayMonth(column: DateColumn): string {
 	const day = String(column.day).padStart(2, "0");
 	const month = String(column.month).padStart(2, "0");
-	return `${day}/${month}`;
+	return `${day} / ${month}`;
 }
 
 /**
