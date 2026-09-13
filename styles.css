@@ -9,7 +9,7 @@
 .process-tracker {
 	--pt-border: var(--background-modifier-border);
 	--pt-col-track: 12em;
-	--pt-col-date: calc(3.8em - 4px);
+	--pt-col-date: calc(3.8em - 2px);
 	--pt-caption-size: calc(var(--font-ui-small) + 2px);
 	/* A condensed grotesque: captions read as a scale, not as running text. */
 	--pt-caption-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
