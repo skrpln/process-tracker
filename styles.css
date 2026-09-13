@@ -9,7 +9,9 @@
 .process-tracker {
 	--pt-border: var(--background-modifier-border);
 	--pt-col-track: 12em;
-	--pt-col-date: calc(3.8em - 2px);
+	/* Square cell: the date column is exactly as wide as a row is tall. */
+	--pt-cell-size: 2em;
+	--pt-col-date: var(--pt-cell-size);
 	--pt-caption-size: calc(var(--font-ui-small) + 2px);
 	/* A condensed grotesque: captions read as a scale, not as running text. */
 	--pt-caption-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
@@ -81,12 +83,19 @@
    the first row and the first column add the two missing outer edges. */
 .process-tracker .process-tracker__table tbody th,
 .process-tracker .process-tracker__table tbody td {
+	/* Border-box, so the declared height matches the column width borders and all. */
+	box-sizing: border-box;
+	height: var(--pt-cell-size);
 	border-right: 1px solid var(--pt-border);
 	border-bottom: 1px solid var(--pt-border);
-	padding: var(--size-2-2);
+	padding: 0;
 	background: var(--background-primary);
 	text-align: center;
 	vertical-align: middle;
+}
+
+.process-tracker .process-tracker__table .process-tracker__track {
+	padding: 0 var(--size-2-2);
 }
 
 .process-tracker .process-tracker__table tbody tr:first-child > * {
@@ -97,8 +106,8 @@
 	border-left: 1px solid var(--pt-border);
 }
 
-/* Pinned first column: the year caption above it stays pinned as well. */
-.process-tracker__year,
+/* Pinned first column: the month caption above it stays pinned as well. */
+.process-tracker__period,
 .process-tracker .process-tracker__table .process-tracker__track {
 	position: sticky;
 	left: 0;

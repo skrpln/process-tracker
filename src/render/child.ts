@@ -2,25 +2,26 @@
 
 import { MarkdownRenderChild } from "obsidian";
 import type { DateColumn } from "../model/types.ts";
-import { captionYear, visibleColumnRange } from "./visible.ts";
+import { formatMonthYear } from "../dates/grid.ts";
+import { captionLabel, visibleColumnRange } from "./visible.ts";
 
 /**
- * Keeps the year caption above the pinned column in step with horizontal scrolling.
+ * Keeps the month caption above the pinned column in step with horizontal scrolling.
  * Obsidian unloads the child together with the block, so the listeners and the
  * pending animation frame never outlive the table.
  */
 export class TrackerRenderChild extends MarkdownRenderChild {
 	private frame = 0;
-	private year: number;
+	private label: string;
 
 	constructor(
 		containerEl: HTMLElement,
 		private readonly scroll: HTMLElement,
-		private readonly yearCell: HTMLElement,
+		private readonly captionCell: HTMLElement,
 		private readonly columns: DateColumn[],
 	) {
 		super(containerEl);
-		this.year = columns[0]?.year ?? new Date().getFullYear();
+		this.label = captionCell.textContent ?? "";
 	}
 
 	onload(): void {
@@ -61,12 +62,12 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		});
 		if (range === null) return;
 
-		const years = this.columns.slice(range.first, range.last + 1).map((column) => column.year);
-		const year = captionYear(years, this.year, this.scroll.scrollLeft <= 0);
-		if (year === this.year) return;
+		const labels = this.columns.slice(range.first, range.last + 1).map(formatMonthYear);
+		const label = captionLabel(labels, this.label, this.scroll.scrollLeft <= 0);
+		if (label === this.label) return;
 
-		this.year = year;
-		this.yearCell.setText(String(year));
+		this.label = label;
+		this.captionCell.setText(label);
 	}
 
 	/** The table may live in a popout window, which has its own timers. */

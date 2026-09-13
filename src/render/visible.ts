@@ -39,30 +39,31 @@ export function visibleColumnRange(metrics: ViewportMetrics): ColumnRange | null
 }
 
 /**
- * The year to show above the pinned column.
+ * The caption to show above the pinned column, chosen from the captions of the
+ * visible columns.
  *
- * At the left edge of the table the newest column is in sight, and its year is the
+ * At the left edge of the table the first column is in sight, and its caption is the
  * answer — otherwise an exact half-and-half split would leave the caption on the
- * year the reader scrolled away from. Everywhere else the majority rule applies.
+ * month the reader scrolled away from. Everywhere else the majority rule applies.
  */
-export function captionYear(years: number[], current: number, atStart: boolean): number {
-	if (atStart && years.length > 0) return years[0];
-	return dominantYear(years, current);
+export function captionLabel(labels: string[], current: string, atStart: boolean): string {
+	if (atStart && labels.length > 0) return labels[0];
+	return dominantLabel(labels, current);
 }
 
 /**
- * The year that owns the visible columns: the one taking strictly more than half
- * of them. Until another year crosses that half, the caption keeps the year it
- * already shows — so the number does not flicker around the boundary.
+ * The caption that owns the visible columns: the one taking strictly more than half
+ * of them. Until another one crosses that half, the caption keeps what it already
+ * shows — so it does not flicker around the boundary.
  */
-export function dominantYear(years: number[], current: number): number {
-	if (years.length === 0) return current;
+export function dominantLabel(labels: string[], current: string): string {
+	if (labels.length === 0) return current;
 
-	const counts = new Map<number, number>();
-	for (const year of years) counts.set(year, (counts.get(year) ?? 0) + 1);
+	const counts = new Map<string, number>();
+	for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1);
 
-	for (const [year, count] of counts) {
-		if (count * 2 > years.length) return year;
+	for (const [label, count] of counts) {
+		if (count * 2 > labels.length) return label;
 	}
 	return current;
 }

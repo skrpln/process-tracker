@@ -45,19 +45,33 @@ export function buildDateColumns(spec: GridSpec): DateColumn[] {
 	return spec.order === "asc" ? columns : columns.reverse();
 }
 
-/** Column caption: `dd.mm`, both parts always two digits. */
-export function formatDayMonth(column: DateColumn): string {
-	const day = String(column.day).padStart(2, "0");
-	const month = String(column.month).padStart(2, "0");
-	return `${day}.${month}`;
+/** Column caption: day of month, always two digits. */
+export function formatDay(column: DateColumn): string {
+	return String(column.day).padStart(2, "0");
 }
 
+const MONTH_NAMES = [
+	"January",
+	"February",
+	"March",
+	"April",
+	"May",
+	"June",
+	"July",
+	"August",
+	"September",
+	"October",
+	"November",
+	"December",
+];
+
 /**
- * Whether the table needs a year caption at all. Inside a single year the day and
- * month are unambiguous and the corner above the pinned column stays empty.
+ * Caption above the pinned column: month and year of a column, in English.
+ * The day captions carry no month, so this caption is always shown and follows
+ * the scroll — see `captionLabel`.
  */
-export function spansMultipleYears(columns: DateColumn[]): boolean {
-	return new Set(columns.map((column) => column.year)).size > 1;
+export function formatMonthYear(column: DateColumn): string {
+	return `${MONTH_NAMES[column.month - 1] ?? column.month} ${column.year}`;
 }
 
 /** Local calendar date as `YYYY-MM-DD` — the format used in evidence frontmatter. */

@@ -1,7 +1,7 @@
 // Process Tracker — DOM rendering of the tracker table.
 // Knows nothing about the vault: everything it needs comes as data.
 
-import { formatDayMonth, spansMultipleYears } from "../dates/grid.ts";
+import { formatDay, formatMonthYear } from "../dates/grid.ts";
 import type { DateColumn, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
@@ -15,7 +15,7 @@ export interface TrackerView {
 /** Elements the render child needs to follow the scrolling table. */
 export interface TrackerElements {
 	scroll: HTMLElement;
-	yearCell: HTMLElement;
+	captionCell: HTMLElement;
 }
 
 /**
@@ -32,9 +32,9 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	const scroll = root.createDiv({ cls: "process-tracker__scroll" });
 	const table = scroll.createEl("table", { cls: "process-tracker__table" });
 	renderColumnWidths(table, view.columns.length);
-	const yearCell = renderHead(table, view.columns);
+	const captionCell = renderHead(table, view.columns);
 	renderBody(table, view.tracks, view.columns);
-	return { scroll, yearCell };
+	return { scroll, captionCell };
 }
 
 /**
@@ -57,28 +57,29 @@ function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void 
 }
 
 /**
- * The head carries no grid: captions stand above the table. A date caption is one
- * line, `dd/mm`, and the corner shows a year only when the table covers more than
- * one; the render child keeps that year in step with scrolling.
+ * The head carries no grid: captions stand above the table. A date caption is the
+ * day alone, so the month and the year live in the corner above the pinned column;
+ * the render child keeps that caption in step with scrolling.
  */
 function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement {
 	const row = table.createEl("thead").createEl("tr");
 
-	const yearCell = row.createEl("th", {
-		cls: "process-tracker__year",
-		text: spansMultipleYears(columns) ? String(columns[0].year) : "",
+	const first = columns[0];
+	const captionCell = row.createEl("th", {
+		cls: "process-tracker__period",
+		text: first === undefined ? "" : formatMonthYear(first),
 	});
 
 	for (const column of columns) {
 		const cell = row.createEl("th", {
 			cls: "process-tracker__date",
-			text: formatDayMonth(column),
+			text: formatDay(column),
 			attr: { "data-date": column.iso },
 		});
 		if (column.isToday) cell.addClass("is-today");
 	}
 
-	return yearCell;
+	return captionCell;
 }
 
 function renderBody(table: HTMLTableElement, tracks: TrackCard[], columns: DateColumn[]): void {
