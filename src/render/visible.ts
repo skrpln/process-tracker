@@ -68,6 +68,20 @@ export function dominantLabel(labels: string[], current: string): string {
 	return current;
 }
 
+/**
+ * Width a date column must take to match the height of a row, or `null` when
+ * nothing needs to change: the table is not laid out yet, or the difference is
+ * under half a pixel. Measuring beats declaring — the row height depends on the
+ * theme, the checkbox and whatever a track name does to the line box.
+ */
+export function squareColumnWidth(rowHeight: number, current: number | null): number | null {
+	if (!Number.isFinite(rowHeight) || rowHeight <= 0) return null;
+
+	const width = Math.round(rowHeight * 100) / 100;
+	if (current !== null && Math.abs(width - current) < 0.5) return null;
+	return width;
+}
+
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
 }

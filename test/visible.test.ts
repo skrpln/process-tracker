@@ -1,7 +1,12 @@
 // Unit tests for visible columns and the year they belong to.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { captionLabel, dominantLabel, visibleColumnRange } from "../src/render/visible.ts";
+import {
+	captionLabel,
+	dominantLabel,
+	squareColumnWidth,
+	visibleColumnRange,
+} from "../src/render/visible.ts";
 
 // A 400 px container, 100 px of it covered by the pinned column: 10 columns of 30 px fit.
 const base = { viewWidth: 400, pinnedWidth: 100, columnWidth: 30, total: 50 };
@@ -79,5 +84,27 @@ describe("captionLabel", () => {
 
 	it("keeps the current caption when nothing is visible at the edge", () => {
 		assert.equal(captionLabel([], "june 2026", true), "june 2026");
+	});
+});
+
+describe("squareColumnWidth", () => {
+	it("takes the measured row height on the first pass", () => {
+		assert.equal(squareColumnWidth(26.4, null), 26.4);
+	});
+
+	it("ignores a change under half a pixel", () => {
+		assert.equal(squareColumnWidth(26.4, 26.4), null);
+		assert.equal(squareColumnWidth(26.7, 26.4), null);
+	});
+
+	it("reports a real change, in both directions", () => {
+		assert.equal(squareColumnWidth(31, 26.4), 31);
+		assert.equal(squareColumnWidth(20, 26.4), 20);
+	});
+
+	it("stays silent while the table has no layout yet", () => {
+		assert.equal(squareColumnWidth(0, null), null);
+		assert.equal(squareColumnWidth(Number.NaN, null), null);
+		assert.equal(squareColumnWidth(-5, 26), null);
 	});
 });

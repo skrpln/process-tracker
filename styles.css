@@ -10,12 +10,11 @@
 	--pt-border: var(--background-modifier-border);
 	--pt-col-track: 12em;
 	/*
-	 * Square cell. In pixels on purpose: tied to the theme font it came out square
-	 * in one vault and 5 : 7 in another, because a row is only as short as its
-	 * content allows. Here both sides are pinned to the same number.
+	 * Fallback width only: the render child measures the height of a row and writes
+	 * the same number back into this variable, so a date column is as wide as a row
+	 * is tall whatever the theme does to the row.
 	 */
-	--pt-cell-size: 26px;
-	--pt-col-date: var(--pt-cell-size);
+	--pt-col-date: 2em;
 	--pt-caption-size: calc(var(--font-ui-small) + 2px);
 	/* A condensed grotesque: captions read as a scale, not as running text. */
 	--pt-caption-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
@@ -81,37 +80,18 @@
 
 /* The grid belongs to the body only. Each cell paints its right and bottom edge;
    the first row and the first column add the two missing outer edges. */
-/*
- * Border-box, so the declared height covers the borders as the column width does.
- * `line-height` equal to the height keeps the row exactly that tall: a table cell
- * treats `height` as a minimum, and a theme with roomy line spacing would otherwise
- * stretch the row and break the square.
- */
 .process-tracker .process-tracker__table tbody th,
 .process-tracker .process-tracker__table tbody td {
-	box-sizing: border-box;
-	height: var(--pt-cell-size);
-	line-height: var(--pt-cell-size);
 	border-right: 1px solid var(--pt-border);
-	/* Horizontal rules are inset shadows, not borders: a border would add its pixel
-	   to the row height and the cell would stop being square. Vertical rules stay
-	   borders — they only eat into the column width, which is fixed anyway. */
-	box-shadow: inset 0 -1px 0 var(--pt-border);
-	padding: 0;
+	border-bottom: 1px solid var(--pt-border);
+	padding: var(--size-2-2);
 	background: var(--background-primary);
 	text-align: center;
 	vertical-align: middle;
 }
 
-.process-tracker .process-tracker__table .process-tracker__track {
-	padding: 0 var(--size-2-2);
-}
-
-/* The first row also carries the top edge of the grid. */
 .process-tracker .process-tracker__table tbody tr:first-child > * {
-	box-shadow:
-		inset 0 -1px 0 var(--pt-border),
-		inset 0 1px 0 var(--pt-border);
+	border-top: 1px solid var(--pt-border);
 }
 
 .process-tracker .process-tracker__table tbody tr > *:first-child {
@@ -128,8 +108,7 @@
 
 .process-tracker .process-tracker__table .process-tracker__track {
 	max-width: var(--pt-col-track);
-	/* A double rule tells the pinned column from the grid of days. */
-	border-right: 3px double var(--pt-border);
+	border-right: 1px solid var(--pt-border);
 	font-weight: var(--font-normal);
 	white-space: nowrap;
 	overflow: hidden;
@@ -137,19 +116,23 @@
 }
 
 /*
- * The checkbox is sized from the cell and laid out as a block: as an inline box
- * aligned to the middle it grew the line box past the declared height, and the row
- * came out taller than the column is wide.
+ * The double line: the cell's own 1 px border, a 2 px gap, then a second 1 px line.
+ * Both are drawn as box shadows of equal weight — `border-style: double` renders its
+ * two strokes unevenly on a scaled display, and a pseudo-element would be cut off by
+ * the `overflow: hidden` that keeps long track names in their column.
+ *
+ * Order matters: the first shadow paints on top, so the background-coloured strip
+ * carves the gap out of the line-coloured one underneath.
  */
-.process-tracker .process-tracker__table .process-tracker__cell {
-	line-height: 0;
+.process-tracker .process-tracker__table .process-tracker__track {
+	box-shadow:
+		2px 0 0 0 var(--background-primary),
+		3px 0 0 0 var(--pt-border);
 }
 
 .process-tracker .process-tracker__table .process-tracker__cell input[type="checkbox"] {
-	display: block;
-	width: calc(var(--pt-cell-size) * 0.55);
-	height: calc(var(--pt-cell-size) * 0.55);
-	margin: 0 auto;
+	margin: 0;
+	vertical-align: middle;
 }
 
 .process-tracker__empty {
