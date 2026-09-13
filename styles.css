@@ -8,6 +8,8 @@
 
 .process-tracker {
 	--pt-border: var(--background-modifier-border);
+	--pt-col-track: 12em;
+	--pt-col-date: calc(3.8em - 4px);
 	--pt-caption-size: calc(var(--font-ui-small) + 2px);
 	/* A condensed grotesque: captions read as a scale, not as running text. */
 	--pt-caption-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
@@ -25,15 +27,18 @@
 
 /*
  * `border-collapse: separate` because collapsed borders belong to the table and show
- * through the pinned column while it scrolls. `width: max-content` is what makes
- * `table-layout: fixed` obey the colgroup — with an auto width the browser silently
- * falls back to content-driven columns.
+ * through the pinned column while it scrolls.
+ *
+ * The width is computed, not intrinsic: `table-layout: fixed` obeys the colgroup only
+ * when the table has a width of its own. With `auto` the browser falls back to
+ * content-driven columns; with `max-content` it sizes the table by its content, and
+ * then no rule can make a column narrower than its caption.
  */
 .process-tracker .process-tracker__table {
 	border-collapse: separate;
 	border-spacing: 0;
 	table-layout: fixed;
-	width: max-content;
+	width: calc(var(--pt-col-track) + var(--pt-date-columns, 0) * var(--pt-col-date) + 1px);
 	margin: 0;
 	border: 0;
 	font-size: var(--font-ui-small);
@@ -41,11 +46,11 @@
 }
 
 .process-tracker__col-track {
-	width: 12em;
+	width: var(--pt-col-track);
 }
 
 .process-tracker__col-date {
-	width: calc(3.8em - 4px);
+	width: var(--pt-col-date);
 }
 
 /* Captions stand above the table: no grid around them, muted, in the caption face. */
@@ -101,7 +106,7 @@
 }
 
 .process-tracker .process-tracker__table .process-tracker__track {
-	max-width: 12em;
+	max-width: var(--pt-col-track);
 	font-weight: var(--font-normal);
 	white-space: nowrap;
 	overflow: hidden;

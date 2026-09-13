@@ -38,10 +38,14 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 }
 
 /**
- * Column widths live in a `colgroup`: with `table-layout: fixed` they apply to the
- * whole table, so a long track name cannot stretch its column.
+ * Column widths live in a `colgroup`. They only hold if the table itself has an
+ * explicit width: with `width: max-content` the browser sizes the table by its
+ * content instead, and the captions quietly become a floor under the column width.
+ * The stylesheet computes that width from the number of date columns, which only
+ * the renderer knows.
  */
 function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void {
+	table.style.setProperty("--pt-date-columns", String(dateColumns));
 	const group = table.createEl("colgroup");
 	group.createEl("col", { cls: "process-tracker__col-track" });
 	if (dateColumns > 0) {
