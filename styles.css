@@ -23,7 +23,7 @@
 	 */
 	--pt-caption-weight: var(--h4-weight, var(--font-semibold, 600));
 	--pt-body-size: calc(var(--font-ui-small) + 1px);
-	/* Day captions keep the condensed grotesque of design 2. */
+	/* Day captions: a condensed grotesque, so the dates read as a scale. */
 	--pt-day-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
 		var(--font-interface), sans-serif;
 	margin: var(--size-4-2) 0;
