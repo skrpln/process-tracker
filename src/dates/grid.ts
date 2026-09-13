@@ -1,26 +1,48 @@
 // Process Tracker — date columns of the tracker table.
 // Pure module: no Obsidian API, covered by test/grid.test.ts.
 
-import type { DateColumn } from "../model/types.ts";
+import type { DateColumn, SortDirection } from "../model/types.ts";
+
+export interface GridSpec {
+	/** First day of the interval. `null` — the interval ends today. */
+	start: Date | null;
+	/** The day the table is rendered on; marks the `isToday` column. */
+	today: Date;
+	days: number;
+	/** `desc` — newest column first, `asc` — oldest column first. */
+	order: SortDirection;
+}
 
 /**
- * Builds `days` columns starting from `today` and going back in time:
- * index 0 is today, the further right, the older the date.
+ * Builds the date columns of the table.
+ *
+ * The interval is always `days` long. With an explicit `start` it runs forward from
+ * that day, so a note keeps its own window; without it the interval ends today and
+ * moves with the calendar. `order` decides which end of the interval comes first.
+ *
  * Dates are local: arithmetic runs on calendar components, so DST shifts are safe.
  */
-export function buildDateColumns(today: Date, days: number): DateColumn[] {
+export function buildDateColumns(spec: GridSpec): DateColumn[] {
+	const days = Math.max(0, Math.trunc(spec.days));
+	if (days === 0) return [];
+
+	const first = spec.start ?? addDays(spec.today, -(days - 1));
+	const today = toIsoDate(spec.today);
+
 	const columns: DateColumn[] = [];
-	for (let offset = 0; offset < Math.max(0, Math.trunc(days)); offset++) {
-		const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
+	for (let offset = 0; offset < days; offset++) {
+		const date = addDays(first, offset);
+		const iso = toIsoDate(date);
 		columns.push({
-			iso: toIsoDate(date),
+			iso,
 			day: date.getDate(),
 			month: date.getMonth() + 1,
 			year: date.getFullYear(),
-			isToday: offset === 0,
+			isToday: iso === today,
 		});
 	}
-	return columns;
+
+	return spec.order === "asc" ? columns : columns.reverse();
 }
 
 /** Column caption: `dd / mm`, both parts always two digits. */
@@ -32,7 +54,7 @@ export function formatDayMonth(column: DateColumn): string {
 
 /**
  * Whether the table needs a year caption at all. Inside a single year the day and
- * month lines are unambiguous and the corner above the pinned column stays empty.
+ * month are unambiguous and the corner above the pinned column stays empty.
  */
 export function spansMultipleYears(columns: DateColumn[]): boolean {
 	return new Set(columns.map((column) => column.year)).size > 1;
@@ -44,4 +66,8 @@ export function toIsoDate(date: Date): string {
 	const month = String(date.getMonth() + 1).padStart(2, "0");
 	const day = String(date.getDate()).padStart(2, "0");
 	return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number): Date {
+	return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }

@@ -44,6 +44,7 @@ Add a code block to any note:
 track: FROM "folder"
 start: 2026-09-01
 days: 30
+dates: asc
 sort: priority asc
 ```
 ````
@@ -51,8 +52,9 @@ sort: priority asc
 | Parameter | Value | Default |
 | --- | --- | --- |
 | `track` | Track filter in Dataview source syntax. Filtering by the plugin tag is always applied on top of it. | every card tagged `#process_tracker` |
-| `start` | Date of the first column, `YYYY-MM-DD`. Pins the window in place — a monthly summary keeps showing its own month. | `today` |
-| `days` | Table length in days. | 7 |
+| `start` | First day of the interval, `YYYY-MM-DD`. Pins the window in place — a monthly summary keeps showing its own month. | `today`, meaning the interval ends today |
+| `days` | Interval length in days. | 7 |
+| `dates` | Column direction: `desc` puts the newest day next to the track name, `asc` reads 1 → 30. | `desc` |
 | `sort` | `name`, `ctime`, `mtime` or any frontmatter property, plus `asc` / `desc`. | `name asc` |
 
 Unknown parameters and malformed values never break the block: the table falls back to the

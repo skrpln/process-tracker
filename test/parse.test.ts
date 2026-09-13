@@ -11,6 +11,7 @@ describe("parseCodeBlock", () => {
 			track: null,
 			start: null,
 			days: null,
+			dates: "desc",
 			sort: { field: "name", direction: "asc" },
 		});
 		assert.deepEqual(warnings, []);
@@ -18,10 +19,11 @@ describe("parseCodeBlock", () => {
 
 	it("reads every parameter", () => {
 		const { options, warnings } = parseCodeBlock(
-			'track: FROM "folder"\nstart: 2026-09-01\ndays: 30\nsort: priority asc',
+			'track: FROM "folder"\nstart: 2026-09-01\ndays: 30\ndates: asc\nsort: priority asc',
 		);
 		assert.equal(options.track, 'FROM "folder"');
 		assert.deepEqual(options.start, new Date(2026, 8, 1));
+		assert.equal(options.dates, "asc");
 		assert.equal(options.days, 30);
 		assert.deepEqual(options.sort, { field: "priority", direction: "asc" });
 		assert.deepEqual(warnings, []);
@@ -79,6 +81,23 @@ describe("parseCodeBlock", () => {
 		assert.equal(options.track, null);
 		assert.equal(options.days, null);
 		assert.equal(warnings.length, 2);
+	});
+});
+
+describe("dates", () => {
+	it("defaults to newest first", () => {
+		assert.equal(parseCodeBlock("").options.dates, "desc");
+	});
+
+	it("reads both directions, whatever the case", () => {
+		assert.equal(parseCodeBlock("dates: asc").options.dates, "asc");
+		assert.equal(parseCodeBlock("dates: DESC").options.dates, "desc");
+	});
+
+	it("warns about an unknown direction and keeps the default", () => {
+		const { options, warnings } = parseCodeBlock("dates: forward");
+		assert.equal(options.dates, "desc");
+		assert.equal(warnings.length, 1);
 	});
 });
 

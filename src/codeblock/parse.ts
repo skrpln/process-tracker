@@ -12,7 +12,10 @@ export interface ParseResult {
 
 export const DEFAULT_SORT: SortSpec = { field: "name", direction: "asc" };
 
-const KNOWN_KEYS = ["track", "start", "days", "sort"];
+/** Newest column first: the day just lived through sits next to the track name. */
+export const DEFAULT_DATES: SortDirection = "desc";
+
+const KNOWN_KEYS = ["track", "start", "days", "dates", "sort"];
 
 /** Parses `key: value` lines of a code block into tracker options. */
 export function parseCodeBlock(source: string): ParseResult {
@@ -21,6 +24,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		track: null,
 		start: null,
 		days: null,
+		dates: DEFAULT_DATES,
 		sort: { ...DEFAULT_SORT },
 	};
 	const seen = new Set<string>();
@@ -53,17 +57,29 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "track") options.track = value;
 		if (key === "start") options.start = parseStartDate(value, warnings);
 		if (key === "days") applyDays(options, value, warnings);
+		if (key === "dates") options.dates = parseDirection(value, DEFAULT_DATES, warnings);
 		if (key === "sort") options.sort = parseSort(value, warnings);
 	}
 
 	return { options, warnings };
 }
 
+/** `dates: asc | desc` — the direction of the date columns. */
+export function parseDirection(
+	value: string,
+	fallback: SortDirection,
+	warnings: string[] = [],
+): SortDirection {
+	const direction = value.toLowerCase();
+	if (direction === "asc" || direction === "desc") return direction;
+	warnings.push(`Unknown value "dates: ${value}", "${fallback}" is used.`);
+	return fallback;
+}
+
 /**
- * `start: YYYY-MM-DD` fixes the first column of the table; `start: today` is the
- * default and means "whatever day it is when the block renders". A note written in
- * the past keeps its window only with an explicit date.
- * Returns `null` for today and for anything unreadable.
+ * `start: YYYY-MM-DD` fixes the first day of the tracked interval; `start: today`
+ * is the default and means "the interval ends today", so the window moves with the
+ * calendar. Returns `null` for today and for anything unreadable.
  */
 export function parseStartDate(value: string, warnings: string[] = []): Date | null {
 	if (value.toLowerCase() === "today") return null;
