@@ -23,6 +23,9 @@
 	 */
 	--pt-caption-weight: var(--h4-weight, var(--font-semibold, 600));
 	--pt-body-size: var(--font-ui-small);
+	/* Day captions keep the condensed grotesque of design 2. */
+	--pt-day-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
+		var(--font-interface), sans-serif;
 	margin: var(--size-4-2) 0;
 	font-family: var(--font-text);
 }
@@ -94,6 +97,8 @@
 
 .process-tracker .process-tracker__table .process-tracker__date {
 	line-height: 1;
+	font-family: var(--pt-day-font);
+	font-weight: var(--font-normal);
 }
 
 /* The grid belongs to the body only. Each cell paints its right and bottom edge;
