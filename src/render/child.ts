@@ -6,11 +6,20 @@ import { formatMonthYear } from "../dates/grid.ts";
 import { renderPeriodCaption } from "./table.ts";
 import { captionLabel, squareColumnWidth, visibleColumnRange } from "./visible.ts";
 
+/** The tables the reader has on screen; the plugin repaints their cells through it. */
+export interface LiveTables {
+	add(scroll: HTMLElement): unknown;
+	delete(scroll: HTMLElement): unknown;
+}
+
 /**
  * Runs the two things the table cannot do in CSS alone: keeps a date column as wide
  * as a row is tall, and keeps the month caption above the pinned column in step with
  * horizontal scrolling. Obsidian unloads the child together with the block, so the
  * listeners and the pending animation frame never outlive the table.
+ *
+ * The same lifetime answers the other question — which tables are on screen right now —
+ * so the child announces its table for as long as the block lives.
  */
 export class TrackerRenderChild extends MarkdownRenderChild {
 	private frame = 0;
@@ -22,12 +31,16 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		private readonly scroll: HTMLElement,
 		private readonly captionCell: HTMLElement,
 		private readonly columns: DateColumn[],
+		private readonly tables: LiveTables,
 	) {
 		super(containerEl);
 		this.label = columns[0] === undefined ? "" : formatMonthYear(columns[0]);
 	}
 
 	onload(): void {
+		this.tables.add(this.scroll);
+		this.register(() => this.tables.delete(this.scroll));
+
 		this.registerDomEvent(this.scroll, "scroll", () => this.schedule(), { passive: true });
 
 		const observer = new this.win.ResizeObserver(() => this.schedule());

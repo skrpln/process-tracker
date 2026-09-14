@@ -3,7 +3,9 @@
 
 import { setTooltip } from "obsidian";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
-import { cellState, findEvidence } from "../evidence/state.ts";
+import { planRefresh } from "../evidence/refresh.ts";
+import type { CellRef } from "../evidence/refresh.ts";
+import { cellState, evidenceKey, findEvidence } from "../evidence/state.ts";
 import type { EvidenceIndex } from "../evidence/state.ts";
 import type { CellState, DateColumn, Evidence, TrackCard } from "../model/types.ts";
 
@@ -12,6 +14,9 @@ import type { CellState, DateColumn, Evidence, TrackCard } from "../model/types.
  * in one word what the note is still missing ([[expectation]] §8).
  */
 const DRAFT_TOOLTIP = "Not done";
+
+/** Class of the scrolling container; the wheel handler of the plugin looks for it by name. */
+export const SCROLL_CLASS = "process-tracker__scroll";
 
 /** Everything the table needs; assembled by the plugin entry point. */
 export interface TrackerView {
@@ -42,7 +47,7 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 		return null;
 	}
 
-	const scroll = root.createDiv({ cls: "process-tracker__scroll" });
+	const scroll = root.createDiv({ cls: SCROLL_CLASS });
 	const table = scroll.createEl("table", { cls: "process-tracker__table" });
 	renderColumnWidths(table, view.columns.length);
 	const captionCell = renderHead(table, view.columns);
@@ -166,6 +171,59 @@ export function paintCell(
 
 	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
 	if (box !== null) box.checked = state === "done";
+}
+
+/**
+ * Repaints the cells of one table after an evidence note changed outside it: in another tab,
+ * in a hover popover, by hand. Only the cells that note addresses are touched — the table
+ * keeps its scroll position, its measured column width and everything else it holds.
+ *
+ * The cells showing the note are found by the path the renderer wrote into `data-evidence`,
+ * so nothing about the table has to be remembered between renders; what the found cells must
+ * become is decided by `planRefresh` ([[evidence]]).
+ */
+export function refreshEvidence(
+	root: HTMLElement,
+	path: string,
+	evidence: Evidence | null,
+): void {
+	const claimed = new Map<string, HTMLElement>();
+	const refs: CellRef[] = [];
+	for (const element of cellsOf(root, `[data-evidence=${quote(path)}]`)) {
+		const ref = readCellRef(element);
+		if (ref === null) continue;
+		refs.push(ref);
+		claimed.set(evidenceKey(ref.trackPath, ref.date), element);
+	}
+
+	const plan = planRefresh(evidence, refs);
+	for (const ref of plan.clear) {
+		const cell = claimed.get(evidenceKey(ref.trackPath, ref.date));
+		if (cell !== undefined) paintCell(cell, "empty", null);
+	}
+
+	if (plan.paint === null) return;
+	const { trackPath, date } = plan.paint.cell;
+	const target = cellsOf(root, `[data-track=${quote(trackPath)}][data-date=${quote(date)}]`)[0];
+	// The day may lie outside the columns of this table, or the track outside its rows.
+	if (target !== undefined) paintCell(target, plan.paint.state, plan.paint.evidencePath);
+}
+
+function cellsOf(root: HTMLElement, attributes: string): HTMLElement[] {
+	return Array.from(
+		root.querySelectorAll<HTMLElement>(`.process-tracker__cell${attributes}`),
+	);
+}
+
+function readCellRef(cell: HTMLElement): CellRef | null {
+	const trackPath = cell.dataset.track ?? "";
+	const date = cell.dataset.date ?? "";
+	return trackPath === "" || date === "" ? null : { trackPath, date };
+}
+
+/** A value as a CSS string, so a path with a quote in it cannot break the selector. */
+function quote(value: string): string {
+	return `"${value.replace(/["\\]/g, "\\$&")}"`;
 }
 
 /**

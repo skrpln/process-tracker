@@ -3,10 +3,11 @@
 A tracker table inside a note: rows are tracks, columns are dates. A checked cell means the
 track was done that day, and every check is documented by an evidence note.
 
-> **Status: early development.** Phases 1-5 of 6 are done — the table renders, filters track
+> **Status: early development.** All six phases are done — the table renders, filters track
 > cards with Dataview, shows the state of every cell as the evidence notes describe it, writes
-> that evidence on a click and previews it on hover. Live updates on vault changes and a
-> settings tab are still ahead; see [Roadmap](#roadmap).
+> that evidence on a click, previews it on hover, repaints a cell edited elsewhere in the vault
+> and takes its settings from the settings tab. Next comes the first release; see
+> [Roadmap](#roadmap).
 
 ## Concepts
 
@@ -105,7 +106,7 @@ under the table. Templater is used by features that arrive in later phases.
 | 3 | `track` filtering through Dataview | done |
 | 4 | Cell state from evidence notes, checking cells, creating evidence from a template | done |
 | 5 | Hover popups for evidence and track cards | done |
-| 6 | Live updates on vault changes, settings tab | next |
+| 6 | Cell repaint on vault changes, settings tab, wheel over the table | done |
 
 ## Installation
 

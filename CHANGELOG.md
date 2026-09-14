@@ -46,3 +46,13 @@
   whatever the theme does to row height.
 - A double rule sets the pinned track column apart from the grid of days.
 - Equal width for every date column, independent of the content.
+- Settings tab: the tag that marks a track card and the folder new evidence goes to. A changed
+  setting reaches a table at the next render of its note.
+- Evidence edited outside the table — in another tab, in a hover popover, by hand — repaints
+  its cell. The plugin listens to the metadata cache and paints the cells of the one note that
+  changed; no index is rebuilt and no table is redrawn, so the cost does not grow with the
+  vault. Deleting an evidence note empties its cell.
+- The wheel over the table scrolls the date columns, vertical gestures included: a mouse has
+  one wheel, and over the table it belongs to the days. Works in a canvas card that is focused;
+  a card that is not focused stays with the canvas. Ctrl / Cmd with the wheel is left to the
+  zoom of the canvas and of the note.
