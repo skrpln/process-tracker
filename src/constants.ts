@@ -15,6 +15,9 @@ export const DEFAULT_TRACK_TAG = "process_tracker";
 /** Frontmatter key that overrides the displayed track name. */
 export const TRACK_NAME_KEY = "track_name";
 
+/** Frontmatter key of a track card that links to the template of its evidence. */
+export const TRACK_TEMPLATE_KEY = "template";
+
 /** Frontmatter key of an evidence note that links to its track card. */
 export const EVIDENCE_TRACK_KEY = "track";
 

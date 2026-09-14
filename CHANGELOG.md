@@ -17,10 +17,19 @@
 - `dates: asc | desc` chooses which end of the interval the table starts from.
 - Table of tracks by dates: today is the first date column, older dates to the right.
 - Cell state read from the evidence notes of the vault: a checked box for `done: true`, an
-  unchecked box outlined in the accent colour for a draft, an empty box for a day without
-  evidence. Nothing is cached — the state is rebuilt from the files on every render.
+  unchecked box outlined in the hover colour of the theme for a draft, an empty box for a day
+  without evidence. Nothing is cached — the state is rebuilt from the files on every render.
 - Evidence is recognised by its properties — a link to a track card and a date — however the
   note was created. When two notes claim the same day, the done one wins.
+- Clicking a cell: a plain click starts an evidence note on an empty day and opens the note
+  of a day that has one; a click with the modifier (Cmd on macOS, Ctrl elsewhere) checks the
+  box and takes the mark back. Unchecking asks nothing and keeps the note.
+- New evidence is built on the template the track card names in its `template` property, with
+  `track`, `date` and `done` filled in by the plugin. Everything is written in one pass, so
+  Templater finds the `<% %>` commands of the template intact.
+- Without a template an evidence note is named `{{track}} {{date}}`, lands in the folder from
+  the settings — the vault root by default — and carries the three properties and an empty
+  body. A template a card names but the vault does not have stops the creation with a notice.
 - Empty state that names the filter when a `track` filter matched no card.
 - Theme-aware styling through Obsidian CSS variables; checkboxes follow the theme.
 - Pinned first column: track names stay in place while the dates scroll.

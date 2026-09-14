@@ -4,7 +4,7 @@
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import { cellState, findEvidence } from "../evidence/state.ts";
 import type { EvidenceIndex } from "../evidence/state.ts";
-import type { DateColumn, Evidence, TrackCard } from "../model/types.ts";
+import type { CellState, DateColumn, Evidence, TrackCard } from "../model/types.ts";
 
 /** Everything the table needs; assembled by the plugin entry point. */
 export interface TrackerView {
@@ -114,10 +114,10 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
 /**
  * The box shows what the vault says: checked for `done: true`, unchecked for a draft
  * or an empty day. The state also goes on the cell as `data-state`, where the stylesheet
- * picks the draft up and where the click handling of the next phase will read it.
+ * picks the draft up and where the click handling reads it back — together with
+ * `data-track`, `data-date` and `data-evidence`, which address the cell.
  *
- * The click is still swallowed: writing evidence arrives with the interaction, and until
- * then the box must not show a state no file backs.
+ * The click itself is handled once for the whole table, by `CellClickChild`.
  */
 function renderCheckCell(
 	row: HTMLTableRowElement,
@@ -138,7 +138,24 @@ function renderCheckCell(
 		type: "checkbox",
 	});
 	box.checked = state === "done";
-	box.addEventListener("click", (event: MouseEvent) => event.preventDefault());
+}
+
+/**
+ * Repaints one cell after a click. The table is not rebuilt: the file behind this cell is
+ * the only thing that changed, and a rebuild would throw away the scroll position of the
+ * table the reader is working in.
+ */
+export function paintCell(
+	cell: HTMLElement,
+	state: CellState,
+	evidencePath: string | null,
+): void {
+	cell.setAttr("data-state", state);
+	if (evidencePath === null) cell.removeAttribute("data-evidence");
+	else cell.setAttr("data-evidence", evidencePath);
+
+	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
+	if (box !== null) box.checked = state === "done";
 }
 
 /**

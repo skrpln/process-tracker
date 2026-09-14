@@ -28,7 +28,7 @@ export function toEvidence(app: App, file: TFile): Evidence | null {
 	const date = readDate(frontmatter[EVIDENCE_DATE_KEY]);
 	if (date === null) return null;
 
-	const link = trackLink(cache, frontmatter);
+	const link = frontmatterLink(cache, frontmatter, EVIDENCE_TRACK_KEY);
 	if (link === null) return null;
 
 	// The link is resolved the way Obsidian resolves it in the note itself, so a bare
@@ -45,14 +45,18 @@ export function toEvidence(app: App, file: TFile): Evidence | null {
 }
 
 /**
- * Obsidian parses links inside frontmatter itself and lists them in `frontmatterLinks`
- * (`track.0` for a list item); the raw property value is the fallback for a vault
- * whose cache carries no such list.
+ * The link written in a frontmatter property. Obsidian parses links inside frontmatter
+ * itself and lists them in `frontmatterLinks` (`track.0` for a list item); the raw
+ * property value is the fallback for a vault whose cache carries no such list.
  */
-function trackLink(cache: CachedMetadata, frontmatter: Record<string, unknown>): string | null {
+export function frontmatterLink(
+	cache: CachedMetadata,
+	frontmatter: Record<string, unknown>,
+	key: string,
+): string | null {
 	const own = (cache.frontmatterLinks ?? []).find(
-		(link) => link.key === EVIDENCE_TRACK_KEY || link.key.startsWith(`${EVIDENCE_TRACK_KEY}.`),
+		(link) => link.key === key || link.key.startsWith(`${key}.`),
 	);
 	if (own !== undefined) return readTrackLink(own.link);
-	return readTrackLink(frontmatter[EVIDENCE_TRACK_KEY]);
+	return readTrackLink(frontmatter[key]);
 }

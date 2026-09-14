@@ -1,6 +1,7 @@
 // Process Tracker — filtering and ordering of track cards.
 // Pure module: no Obsidian API, covered by test/select.test.ts.
 
+import { TRACK_NAME_KEY } from "../constants.ts";
 import type { SortSpec, TrackCard } from "../model/types.ts";
 
 /**
@@ -9,6 +10,13 @@ import type { SortSpec, TrackCard } from "../model/types.ts";
  */
 export function selectTracks(cards: TrackCard[], tag: string, sort: SortSpec): TrackCard[] {
 	return cards.filter((card) => hasTag(card, tag)).sort(makeComparator(sort));
+}
+
+/** Name shown in the table: the `track_name` property, or the file name. */
+export function trackDisplayName(frontmatter: Record<string, unknown>, basename: string): string {
+	const override = frontmatter[TRACK_NAME_KEY];
+	if (typeof override === "string" && override.trim() !== "") return override.trim();
+	return basename;
 }
 
 export function normalizeTag(tag: string): string {

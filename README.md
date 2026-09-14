@@ -3,10 +3,10 @@
 A tracker table inside a note: rows are tracks, columns are dates. A checked cell means the
 track was done that day, and every check is documented by an evidence note.
 
-> **Status: early development.** Phases 1-3 of 6 are done and Phase 4 is under way — the
-> table renders, filters track cards with Dataview and shows the state of every cell as the
-> evidence notes of the vault describe it. Clicking a cell, hover popups and a settings tab
-> are still ahead; see [Roadmap](#roadmap).
+> **Status: early development.** Phases 1-4 of 6 are done — the table renders, filters track
+> cards with Dataview, shows the state of every cell as the evidence notes describe it, and
+> a click on a cell writes that evidence. Hover popups, live updates and a settings tab are
+> still ahead; see [Roadmap](#roadmap).
 
 ## Concepts
 
@@ -35,6 +35,22 @@ date: 2026-09-11
 done: true
 ---
 ```
+
+## Interaction
+
+| Cell | Click | Click with Cmd / Ctrl |
+| --- | --- | --- |
+| Empty | start an evidence note, `done: false` | start one with `done: true` |
+| Draft (`done: false`) | open the note in a new tab | check the box |
+| Done (`done: true`) | open the note in a new tab | take the mark back |
+
+Taking a mark back asks nothing and keeps the note; deleting evidence stays a manual job.
+
+A new evidence note follows the template the track card names in its `template` property;
+the plugin fills in `track`, `date` and `done` and leaves the rest of the template, `<% %>`
+commands included, to Templater. Without a template the note is named `{{track}} {{date}}`,
+lands in the folder from the settings — the vault root by default — and carries the three
+properties and an empty body.
 
 ## Usage
 
@@ -83,8 +99,8 @@ under the table. Templater is used by features that arrive in later phases.
 | 1 | Code block processor, track cards, basic table | done |
 | 2 | Pinned first column, date captions, horizontal scroll | done |
 | 3 | `track` filtering through Dataview | done |
-| 4 | Cell state from evidence notes, checking cells, creating evidence from a template | in progress |
-| 5 | Hover popups for evidence and track cards | planned |
+| 4 | Cell state from evidence notes, checking cells, creating evidence from a template | done |
+| 5 | Hover popups for evidence and track cards | next |
 | 6 | Live updates on vault changes, settings tab | planned |
 
 ## Installation

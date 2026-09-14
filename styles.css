@@ -22,7 +22,7 @@
 	 * heading variables alone.
 	 */
 	--pt-caption-weight: var(--h4-weight, var(--font-semibold, 600));
-	--pt-body-size: calc(var(--font-ui-small) + 1px);
+	--pt-body-size: calc(var(--font-ui-small) + 2px);
 	/* Day captions: a condensed grotesque, so the dates read as a scale. */
 	--pt-day-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
 		var(--font-interface), sans-serif;
@@ -187,15 +187,15 @@
 }
 
 /*
- * A draft — evidence for the day exists, `done` is false. The box stays unchecked and
- * takes the accent colour of the theme, so a started day reads apart from an empty one
- * without another glyph in the cell. Themes draw checkboxes in two ways: through the
- * variable Obsidian gives them, or with a border of their own, so both are set.
+ * A draft — evidence for the day exists, `done` is false. The box stays unchecked and takes
+ * the border colour a checkbox of this theme takes under the pointer: the accent colour was
+ * too quiet to see in a dark theme, and the hover colour is the one a theme keeps bright.
+ * Themes draw checkboxes in two ways — through the variable Obsidian gives them, or with a
+ * border of their own — so both are set.
  */
 .process-tracker .process-tracker__table .process-tracker__cell[data-state="draft"] input[type="checkbox"] {
-	--checkbox-border-color: var(--interactive-accent);
-	--checkbox-border-color-hover: var(--interactive-accent);
-	border-color: var(--interactive-accent);
+	--checkbox-border-color: var(--checkbox-border-color-hover);
+	border-color: var(--checkbox-border-color-hover);
 }
 
 .process-tracker__empty {

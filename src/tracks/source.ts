@@ -3,8 +3,8 @@
 
 import { getAllTags } from "obsidian";
 import type { App, TFile } from "obsidian";
-import { TRACK_NAME_KEY } from "../constants.ts";
 import type { TrackCard } from "../model/types.ts";
+import { trackDisplayName } from "./select.ts";
 
 /**
  * Maps every markdown note of the vault to a `TrackCard`.
@@ -25,16 +25,10 @@ export function toTrackCard(app: App, file: TFile): TrackCard {
 	return {
 		path: file.path,
 		basename: file.basename,
-		name: displayName(frontmatter, file.basename),
+		name: trackDisplayName(frontmatter, file.basename),
 		tags,
 		frontmatter,
 		ctime: file.stat.ctime,
 		mtime: file.stat.mtime,
 	};
-}
-
-function displayName(frontmatter: Record<string, unknown>, basename: string): string {
-	const override = frontmatter[TRACK_NAME_KEY];
-	if (typeof override === "string" && override.trim() !== "") return override.trim();
-	return basename;
 }
