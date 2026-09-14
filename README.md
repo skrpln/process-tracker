@@ -1,33 +1,96 @@
 # Process Tracker
 
-A tracker table inside a note: rows are tracks, columns are dates. A checked cell means the
-track was done that day, and every check is documented by an evidence note.
+Process Tracker turns a fenced `process-tracker` code block into a tracker table inside a
+note: rows are tracks, columns are dates, and a checked cell means the track was done that
+day.
 
-> **Status: first release (0.1.0).** The plugin does what it set out to do: the table renders,
-> filters track cards with Dataview, shows the state of every cell as the evidence notes
-> describe it, writes that evidence on a click, previews it on hover, repaints a cell edited
-> elsewhere in the vault and takes its tag and folder from the settings tab. It is not in the
-> community list yet — see [Installation](#installation).
+The plugin keeps no state of its own. Every check is an evidence note in your vault — a note
+that links to the track, names a date and carries a `done` property — so the table is a view
+of what your notes already say, and the history stays in the vault when the table is gone.
 
-## Concepts
+## Features
 
-| Term           | Meaning                                                                                                                     |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Track**      | An activity you follow — one row of the table.                                                                              |
-| **Track card** | A note tagged `#process_tracker`. Its properties configure the track, its body is yours: protocols, links, notes.           |
-| **Evidence**   | A note that documents one day of one track. Its `done` property drives the checkbox — no state is stored inside the plugin. |
+- A table of tracks by dates, with the track column pinned while the dates scroll.
+- Rows chosen by tag and narrowed with Dataview syntax: folders, tags, links, conditions on
+  properties.
+- Three cell states read from the vault: an empty day, a started one, a done one.
+- A click starts an evidence note for a day; a click with the modifier checks the box and
+  takes the mark back.
+- New evidence follows the template its track card names.
+- Hover previews for the evidence behind a cell and for the card behind a track name.
+- Cells follow evidence edited elsewhere — another tab, a hover popover, the note itself.
+- Date columns scroll with the wheel, in a note and in a canvas card.
+- Checkboxes, fonts and colours come from the theme in use.
 
-A track card:
+## Requirements
+
+[Dataview](https://github.com/blacksmithgu/obsidian-dataview) is needed by one parameter,
+`track`, which is written in Dataview syntax. Without Dataview the table still renders: the
+filter is skipped and a warning appears under the table.
+
+## Basic syntax
+
+````markdown
+```process-tracker
+track: #health
+start: 2026-09-01
+days: 30
+dates: asc
+sort: priority desc
+```
+````
+
+Every parameter is optional. An empty block shows each track card of the vault over the last
+seven days. A parameter the plugin cannot read never breaks the block: the table falls back to
+the default and names the problem underneath.
+
+## Options
+
+| Option | Values | Default | Description |
+| --- | --- | --- | --- |
+| `track` | Dataview filter: a source, a condition, or both | every track card | Narrows the rows. |
+| `start` | `YYYY-MM-DD` | today | First day of the interval. |
+| `days` | number | `7` | Length of the interval in days. |
+| `dates` | `desc`, `asc` | `desc` | Column direction. |
+| `sort` | `name`, `ctime`, `mtime` or a property, plus `asc` or `desc` | `name asc` | Row order. |
+
+`track` takes what a Dataview query takes: `FROM "Health"`, `#health or #sport`,
+`[[cleaning]]`, `outgoing([[note]])` name the source, `WHERE priority > 2` states a condition
+over the properties of a track card, and the two can be combined. The keyword `FROM` may be
+left out. Filtering by the plugin tag always applies on top of the filter, so `track` narrows
+the tracks and never reaches outside them. A filter Dataview cannot read is ignored rather
+than obeyed: the table shows every track card and says why underneath.
+
+`start` pins the window in place, so a note about September keeps showing September instead of
+drifting with the calendar. Without it the interval ends today.
+
+`dates: desc` puts today next to the track name and reads into the past; `dates: asc` puts the
+first day of the interval there and reads 1 → 30.
+
+## Track cards
+
+A track is a note tagged `#process_tracker`. Its properties configure the row; its body is
+yours — protocols, links, notes.
 
 ```yaml
 ---
 tags: process_tracker
-template: "[[evidence_template]]"
 track_name: cleaning
+template: "[[evidence template]]"
 ---
 ```
 
-An evidence note:
+| Property | Meaning |
+| --- | --- |
+| `tags` | The tag from the settings. Without it the note is not a track. |
+| `track_name` | Name shown in the first column. The file name is used when it is absent. |
+| `template` | Note that new evidence of this track is built on. |
+
+Take the tag off a card and the row leaves the table; the evidence notes stay where they are.
+
+## Evidence notes
+
+An evidence note documents one day of one track.
 
 ```yaml
 ---
@@ -37,97 +100,82 @@ done: true
 ---
 ```
 
-## Interaction
+A note counts as evidence when it links to a track card and names a date, however it was made
+— by the tracker, by a template, by hand. The `done` property decides the checkbox.
+
+| Cell | What the vault says |
+| --- | --- |
+| Empty box | No evidence for that day. |
+| Box outlined in the hover colour of the theme | Evidence with `done: false`. Hovering it says `Not done`. |
+| Checked box | Evidence with `done: true`. |
+
+When two notes claim the same day, the done one wins.
+
+## Using the table
 
 | Cell | Click | Click with Cmd / Ctrl |
 | --- | --- | --- |
-| Empty | start an evidence note, `done: false` | start one with `done: true` |
-| Draft (`done: false`) | open the note in a new tab | check the box |
-| Done (`done: true`) | open the note in a new tab | take the mark back |
+| Empty | starts an evidence note, `done: false` | starts one with `done: true` |
+| Started | opens the note in a new tab | checks the box |
+| Done | opens the note in a new tab | takes the mark back |
 
-Taking a mark back asks nothing and keeps the note; deleting evidence stays a manual job.
+Taking a mark back asks nothing and keeps the note. Deleting evidence is your own job, and the
+cell empties when the note goes.
 
 Hovering a cell that has evidence previews that note, hovering a track name previews its card;
 an empty cell previews nothing. The popover belongs to the core **Page preview** plugin, which
 lists Process Tracker among its sources — turn it off there if you would rather not have it.
 
-A new evidence note follows the template the track card names in its `template` property;
-the plugin fills in `track`, `date` and `done` and leaves the rest of the template, `<% %>`
-commands included, to Templater. Without a template the note is named `{{track}} {{date}}`,
-lands in the folder from the settings — the vault root by default — and carries the three
-properties and an empty body.
+Edit a `done` property anywhere else — in another tab, in a hover popover, in the note itself
+— and the cell follows at once, without the table being redrawn.
 
-## Usage
+The wheel over the table scrolls the date columns, whichever way you turn it: a mouse has one
+wheel, and over the table it belongs to the days. Move the pointer off the table to scroll the
+note again. In a canvas the columns scroll once the card is focused, and the wheel with Ctrl
+or Cmd is left to the zoom of the board.
 
-Add a code block to any note:
+## Settings
 
-````markdown
-```process-tracker
-track: FROM "folder"
-start: 2026-09-01
-days: 30
-dates: asc
-sort: priority asc
-```
-````
+**Settings → Community plugins → Process Tracker.**
 
-| Parameter | Value | Default |
-| --- | --- | --- |
-| `track` | Track filter in Dataview syntax: a `FROM` source, a `WHERE` condition, or both. Filtering by the plugin tag is always applied on top of it. | every card tagged `#process_tracker` |
-| `start` | First day of the interval, `YYYY-MM-DD`. Pins the window in place — a monthly summary keeps showing its own month. | `today`, meaning the interval ends today |
-| `days` | Interval length in days. | 7 |
-| `dates` | Column direction: `desc` puts the newest day next to the track name, `asc` reads 1 → 30. | `desc` |
-| `sort` | `name`, `ctime`, `mtime` or any frontmatter property, plus `asc` / `desc`. | `name asc` |
+| Setting | Meaning |
+| --- | --- |
+| Track tag | Tag that turns a note into a track card. `process_tracker` by default. |
+| Evidence folder | Folder new evidence notes go to. Empty means the vault root. |
 
-`track` takes what a Dataview query takes: `FROM "folder"`, `#tag`, `[[link]]`,
-`outgoing([[note]])` and their combinations name the source, `WHERE priority > 2` names a
-condition over the properties of a track card. The keyword `FROM` may be left out, so
-`track: #health or #sport` works. A filter Dataview cannot read is ignored rather than
-obeyed: the table shows every track card and says why underneath.
+A changed setting reaches a table the next time its note renders — reopen the note, or switch
+between Reading mode and Live Preview.
 
-Unknown parameters and malformed values never break the block: the table falls back to the
-defaults and lists the problems underneath.
+A new evidence note is named `{{track}} {{date}}` and carries `track`, `date` and `done`. When
+the track card names a `template`, the note is built on that template and the plugin fills the
+three properties in.
 
-## Requirements
-
-- [Dataview](https://github.com/blacksmithgu/obsidian-dataview) — evaluates the `track` filter.
-- [Templater](https://github.com/SilentVoid13/Templater) — renders evidence templates, with
-  "Trigger Templater on new file creation" enabled.
-
-Without Dataview the table still renders — the `track` filter is skipped and a warning shows
-under the table. Without Templater a new evidence note keeps the `<% %>` commands of its
-template as plain text; a track card with no `template` property needs neither plugin.
-
-## Roadmap
-
-| Phase | Scope | State |
-| --- | --- | --- |
-| 1 | Code block processor, track cards, basic table | done |
-| 2 | Pinned first column, date captions, horizontal scroll | done |
-| 3 | `track` filtering through Dataview | done |
-| 4 | Cell state from evidence notes, checking cells, creating evidence from a template | done |
-| 5 | Hover popups for evidence and track cards | done |
-| 6 | Cell repaint on vault changes, settings tab, wheel over the table | done |
+Templates pair well with [Templater](https://github.com/SilentVoid13/Templater) if you want
+more control than one folder for everything: with "Trigger Templater on new file creation"
+enabled, a command like `tp.file.move` in the template sends the evidence of each track to its
+own folder. This is a convenience, not a dependency — the folder setting and a plain template
+work on their own.
 
 ## Installation
 
-Until the plugin is in the community list, install it manually: download `main.js`,
-`manifest.json` and `styles.css` from a [release](../../releases) into
-`<vault>/.obsidian/plugins/process-tracker/`, then enable **Process Tracker** in
-Settings → Community plugins.
+The plugin is not in the community list yet, so install it by hand:
 
-## Development
+1. Download `main.js`, `manifest.json` and `styles.css` from a
+   [release](https://github.com/skrpln/process-tracker/releases).
+2. Put them in `<vault>/.obsidian/plugins/process-tracker/`.
+3. Enable **Process Tracker** in Settings → Community plugins.
 
-```bash
-npm install
-npm run dev    # esbuild in watch mode
-npm run build  # type check + minified bundle
-npm test       # unit tests
-```
+## Support
 
-Tests run on the Node test runner (Node 22.6+), which executes TypeScript directly — the
-project has no test framework and no runtime dependencies.
+Please report bugs through [GitHub Issues](https://github.com/skrpln/process-tracker/issues).
+Useful bug reports include:
+
+- Obsidian version and operating system.
+- Plugin version.
+- Whether the issue happens in Reading mode, Live Preview, a canvas or a hover preview.
+- A small `process-tracker` code block that reproduces the issue.
+- Console errors, if any.
 
 ## License
 
-[MIT](LICENSE)
+MIT. See [LICENSE](LICENSE).
