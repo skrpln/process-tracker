@@ -3,19 +3,19 @@
 A tracker table inside a note: rows are tracks, columns are dates. A checked cell means the
 track was done that day, and every check is documented by an evidence note.
 
-> **Status: early development.** All six phases are done — the table renders, filters track
-> cards with Dataview, shows the state of every cell as the evidence notes describe it, writes
-> that evidence on a click, previews it on hover, repaints a cell edited elsewhere in the vault
-> and takes its settings from the settings tab. Next comes the first release; see
-> [Roadmap](#roadmap).
+> **Status: first release (0.1.0).** The plugin does what it set out to do: the table renders,
+> filters track cards with Dataview, shows the state of every cell as the evidence notes
+> describe it, writes that evidence on a click, previews it on hover, repaints a cell edited
+> elsewhere in the vault and takes its tag and folder from the settings tab. It is not in the
+> community list yet — see [Installation](#installation).
 
 ## Concepts
 
-| Term | Meaning |
-| --- | --- |
-| **Track** | An activity you follow — one row of the table. |
-| **Track card** | A note tagged `#process_tracker`. Its properties configure the track, its body is yours: protocols, links, notes. |
-| **Evidence** | A note that documents one day of one track. Its `done` property drives the checkbox — no state is stored inside the plugin. |
+| Term           | Meaning                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Track**      | An activity you follow — one row of the table.                                                                              |
+| **Track card** | A note tagged `#process_tracker`. Its properties configure the track, its body is yours: protocols, links, notes.           |
+| **Evidence**   | A note that documents one day of one track. Its `done` property drives the checkbox — no state is stored inside the plugin. |
 
 A track card:
 
@@ -95,7 +95,8 @@ defaults and lists the problems underneath.
   "Trigger Templater on new file creation" enabled.
 
 Without Dataview the table still renders — the `track` filter is skipped and a warning shows
-under the table. Templater is used by features that arrive in later phases.
+under the table. Without Templater a new evidence note keeps the `<% %>` commands of its
+template as plain text; a track card with no `template` property needs neither plugin.
 
 ## Roadmap
 
