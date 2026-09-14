@@ -3,6 +3,9 @@
 /** Language of the code block processed by the plugin. */
 export const CODE_BLOCK_LANGUAGE = "process-tracker";
 
+/** Name the plugin registers with the core Page preview plugin, for hover previews. */
+export const HOVER_SOURCE = "process-tracker";
+
 /** Number of date columns used when `days` is not set and no evidence exists yet. */
 export const DEFAULT_DAYS = 7;
 

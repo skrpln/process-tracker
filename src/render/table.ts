@@ -1,10 +1,17 @@
 // Process Tracker — DOM rendering of the tracker table.
 // Knows nothing about the vault: everything it needs comes as data.
 
+import { setTooltip } from "obsidian";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import { cellState, findEvidence } from "../evidence/state.ts";
 import type { EvidenceIndex } from "../evidence/state.ts";
 import type { CellState, DateColumn, Evidence, TrackCard } from "../model/types.ts";
+
+/**
+ * Note of a draft, shown on hover. The preview beside it shows the note itself; this says
+ * in one word what the note is still missing ([[expectation]] §8).
+ */
+const DRAFT_TOOLTIP = "Not done";
 
 /** Everything the table needs; assembled by the plugin entry point. */
 export interface TrackerView {
@@ -138,6 +145,7 @@ function renderCheckCell(
 		type: "checkbox",
 	});
 	box.checked = state === "done";
+	if (state === "draft") setTooltip(cell, DRAFT_TOOLTIP);
 }
 
 /**
@@ -153,6 +161,8 @@ export function paintCell(
 	cell.setAttr("data-state", state);
 	if (evidencePath === null) cell.removeAttribute("data-evidence");
 	else cell.setAttr("data-evidence", evidencePath);
+
+	setTooltip(cell, state === "draft" ? DRAFT_TOOLTIP : "");
 
 	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
 	if (box !== null) box.checked = state === "done";

@@ -4,15 +4,15 @@
 import { Notice, Plugin } from "obsidian";
 import type { MarkdownPostProcessorContext, TFile } from "obsidian";
 import { parseCodeBlock } from "./codeblock/parse.ts";
-import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS } from "./constants.ts";
+import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
 import { buildDateColumns } from "./dates/grid.ts";
 import { cellAction } from "./evidence/actions.ts";
 import { collectEvidence } from "./evidence/source.ts";
 import { buildEvidenceIndex, findEvidence } from "./evidence/state.ts";
 import { createEvidence, setEvidenceDone } from "./evidence/write.ts";
 import { TrackerRenderChild } from "./render/child.ts";
-import { CellClickChild } from "./render/clicks.ts";
-import type { CellTarget } from "./render/clicks.ts";
+import { CellPointerChild } from "./render/pointer.ts";
+import type { CellTarget } from "./render/pointer.ts";
 import { paintCell, renderError, renderTracker, renderWarnings } from "./render/table.ts";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
@@ -25,6 +25,14 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = normalizeSettings(await this.loadData());
+
+		// Makes the table a source of hover previews for the core Page preview plugin, and
+		// gives the reader a switch for it in its settings.
+		this.registerHoverLinkSource(HOVER_SOURCE, {
+			display: "Process Tracker",
+			defaultMod: false,
+		});
+
 		this.registerMarkdownCodeBlockProcessor(
 			CODE_BLOCK_LANGUAGE,
 			(source, element, context) => this.renderBlock(source, element, context),
@@ -81,9 +89,15 @@ export default class ProcessTrackerPlugin extends Plugin {
 					new TrackerRenderChild(element, elements.scroll, elements.captionCell, columns),
 				);
 				context.addChild(
-					new CellClickChild(element, elements.scroll, (target, mod) => {
-						void this.runCellAction(target, mod);
-					}),
+					new CellPointerChild(
+						element,
+						elements.scroll,
+						this.app,
+						context.sourcePath,
+						(target, mod) => {
+							void this.runCellAction(target, mod);
+						},
+					),
 				);
 			}
 		} catch (error) {

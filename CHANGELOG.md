@@ -30,6 +30,11 @@
 - Without a template an evidence note is named `{{track}} {{date}}`, lands in the folder from
   the settings — the vault root by default — and carries the three properties and an empty
   body. A template a card names but the vault does not have stops the creation with a notice.
+- Hover previews: the evidence note behind a cell, the card behind a track name. The popover
+  is the one the core Page preview plugin draws, so it follows the reader's own settings and
+  is editable wherever Obsidian makes it editable. An empty cell previews nothing.
+- Hovering a draft also says `Not done`: the preview shows the note, the tooltip names what
+  the note is still missing.
 - Empty state that names the filter when a `track` filter matched no card.
 - Theme-aware styling through Obsidian CSS variables; checkboxes follow the theme.
 - Pinned first column: track names stay in place while the dates scroll.
