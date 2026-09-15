@@ -3,11 +3,6 @@
 A tracker for [Obsidian](https://obsidian.md) whose checkmarks are notes. A `process-tracker` code block becomes a table: rows are your tracks — a habit, a practice, a long project — columns are days, and a checked box means the day is done.
 
 Every check is a separate note in your vault, where you can write what you did, how it went, links, photos, the protocol you followed. Hover the cell and the note opens in a preview you can read and edit on the spot, without leaving the table.
-## Installation
-
-**From Obsidian.** Open **Settings → Community plugins → Browse**, search for **Process Tracker**, install it and enable it.
-
-**By hand.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/skrpln/process-tracker/releases/latest), put the three files in `<vault>/.obsidian/plugins/process-tracker/`, then open **Settings → Community plugins**, reload the list of installed plugins and enable **Process Tracker**.
 
 ## Getting started
 
