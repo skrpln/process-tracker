@@ -78,8 +78,11 @@
 /* Captions stand above the table: no grid around them, muted, in the caption face. */
 .process-tracker .process-tracker__table thead th {
 	border: 0;
-	/* No side padding: it would set a floor under the column width. */
-	padding: 0 0 calc(var(--size-2-1) + 2px);
+	/*
+	 * No side padding: it would set a floor under the column width. The padding
+	 * underneath lifts the captions off the grid; the last pixel is set by eye.
+	 */
+	padding: 0 0 calc(var(--size-2-1) + 3px);
 	background: var(--background-primary);
 	font-family: var(--h4-font);
 	font-size: var(--pt-caption-size);
