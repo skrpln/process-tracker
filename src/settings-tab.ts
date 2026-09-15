@@ -27,7 +27,10 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 
 		new Setting(this.containerEl)
 			.setName("Track tag")
-			.setDesc("Tag that turns a note into a track card, written without the leading #.")
+			.setDesc(
+				"Only notes with this tag become tracks. The # is optional, and nested " +
+					"tags count: process_tracker/health matches process_tracker.",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder(DEFAULT_SETTINGS.trackTag)
@@ -39,9 +42,9 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(this.containerEl)
-			.setName("Evidence folder")
+			.setName("Entry folder")
 			.setDesc(
-				"Folder for new evidence notes. Empty means the vault root; a template that " +
+				"Folder for new entry notes. Empty means the vault root; a template that " +
 					"moves the note decides for itself.",
 			)
 			.addText((text) =>
