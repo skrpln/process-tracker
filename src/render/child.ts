@@ -113,6 +113,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		if (rowHeight <= 0) return;
 
 		this.measured = true;
+		this.matchFrameShape(dates);
 
 		const width = columnWidth(
 			{ rowHeight, checkbox: this.checkboxClaim(), caption: this.captionClaim() },
@@ -122,6 +123,29 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 
 		this.columnWidth = width;
 		dates.style.setProperty("--pt-col-date", `${width}px`);
+	}
+
+	/**
+	 * Cuts the scrolling window to the shape the theme gave the table inside it. Only the
+	 * corner radii are copied: the window has to clip its content, and clipping is all
+	 * the shape it needs ([[rendering]]).
+	 */
+	private matchFrameShape(dates: HTMLElement): void {
+		const style = this.win.getComputedStyle(dates);
+		// The computed value of a corner can carry two radii, `16px 8px`, for an ellipse.
+		// The window takes the first of them: a circle is the shape themes actually draw.
+		const corners = [
+			style.borderTopLeftRadius,
+			style.borderTopRightRadius,
+			style.borderBottomRightRadius,
+			style.borderBottomLeftRadius,
+		].map((corner) => corner.trim().split(/\s+/)[0]);
+
+		if (corners.every((corner) => Number.parseFloat(corner) === 0)) {
+			this.scroll.style.removeProperty("--pt-frame-radius");
+			return;
+		}
+		this.scroll.style.setProperty("--pt-frame-radius", corners.join(" "));
 	}
 
 	/**

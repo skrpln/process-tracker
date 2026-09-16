@@ -60,11 +60,20 @@ body.theme-light .process-tracker {
 	flex: 0 0 var(--pt-col-track);
 }
 
+/*
+ * The frame is cut to the shape of the table inside it. A theme that rounds the corners
+ * of a table rounds the left half of the tracker by itself — that half is a table — while
+ * the right half is a window with a table scrolling inside, and a window clips by its own
+ * shape, not by the shape of what it holds. So the render child reads the corners the
+ * theme gave the table and cuts the window the same way; a theme that rounds nothing
+ * leaves the fallback, and the window stays square.
+ */
 .process-tracker__scroll {
 	flex: 1 1 auto;
 	min-width: 0;
 	overflow-x: auto;
 	overflow-y: hidden;
+	border-radius: var(--pt-frame-radius, 0);
 }
 
 /*
@@ -101,8 +110,16 @@ body.theme-light .process-tracker {
 	width: var(--pt-col-track);
 }
 
+/*
+ * The width of the dates table is also stated as a minimum. A theme may force a width on
+ * every table of the vault — Ultra Lobster asks for `calc(100% - 32px) !important` — and
+ * a table narrower than its columns is squeezed by the browser at the last column, which
+ * then loses its checkbox to an ellipsis. `min-width` is not part of that bargain: the
+ * theme may make the table wider, never narrower than the columns need.
+ */
 .process-tracker .process-tracker__dates {
 	width: calc(var(--pt-date-columns, 0) * var(--pt-col-date) + 1px);
+	min-width: calc(var(--pt-date-columns, 0) * var(--pt-col-date) + 1px);
 }
 
 .process-tracker__col-date {
