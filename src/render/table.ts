@@ -32,13 +32,27 @@ export interface TrackerView {
 
 /** Elements the render child needs to follow the scrolling table. */
 export interface TrackerElements {
+	/** Both tables together: the pointer works over the whole thing. */
+	frame: HTMLElement;
+	/** The part that scrolls — the date columns and nothing else. */
 	scroll: HTMLElement;
 	captionCell: HTMLElement;
 }
 
 /**
- * Renders the whole block: table, or an empty-state message. Returns the elements
+ * Renders the whole block: the tracker, or an empty-state message. Returns the elements
  * the render child works with, or `null` when there is no table.
+ *
+ * The tracker is drawn as two tables side by side: the track names on the left, the date
+ * columns in a scrolling frame on the right. One table with a pinned first column looks
+ * the same until it scrolls — and then the date cells travel underneath the names, where
+ * only an opaque colour can hide them. A theme is free to take that colour away, and a
+ * theme built on transparency has none to give. Two tables have nothing to hide: the
+ * columns live in their own zone and never reach the names ([[rendering]]).
+ *
+ * Both halves stay real `<table>` elements, so a theme dresses the tracker the way it
+ * dresses every other table of the vault. What the two tables cannot agree on by
+ * themselves — the height of a row — the render child measures and sets for both.
  */
 export function renderTracker(container: HTMLElement, view: TrackerView): TrackerElements | null {
 	const root = container.createDiv({ cls: "process-tracker" });
@@ -47,12 +61,23 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 		return null;
 	}
 
-	const scroll = root.createDiv({ cls: SCROLL_CLASS });
-	const table = scroll.createEl("table", { cls: "process-tracker__table" });
-	renderColumnWidths(table, view.columns.length);
-	const captionCell = renderHead(table, view.columns);
-	renderBody(table, view);
-	return { scroll, captionCell };
+	const frame = root.createDiv({ cls: "process-tracker__frame" });
+
+	const names = frame.createEl("table", {
+		cls: "process-tracker__table process-tracker__names",
+	});
+	const captionCell = renderNamesHead(names, view.columns[0]);
+	renderNamesBody(names, view.tracks);
+
+	const scroll = frame.createDiv({ cls: SCROLL_CLASS });
+	const dates = scroll.createEl("table", {
+		cls: "process-tracker__table process-tracker__dates",
+	});
+	renderColumnWidths(dates, view.columns.length);
+	renderDatesHead(dates, view.columns);
+	renderDatesBody(dates, view);
+
+	return { frame, scroll, captionCell };
 }
 
 /**
@@ -64,28 +89,39 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
  */
 function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void {
 	table.style.setProperty("--pt-date-columns", String(dateColumns));
-	const group = table.createEl("colgroup");
-	group.createEl("col", { cls: "process-tracker__col-track" });
-	if (dateColumns > 0) {
-		group.createEl("col", {
-			cls: "process-tracker__col-date",
-			attr: { span: dateColumns },
-		});
-	}
+	if (dateColumns === 0) return;
+
+	table.createEl("colgroup").createEl("col", {
+		cls: "process-tracker__col-date",
+		attr: { span: dateColumns },
+	});
 }
 
 /**
- * The head carries no grid: captions stand above the table. A date caption is the
- * day alone, so the month and the year live in the corner above the pinned column;
- * the render child keeps that caption in step with scrolling.
+ * The corner caption: the month and the year of the columns in sight. It stands above
+ * the track names, out of the scrolling frame, so nothing can carry it away — the
+ * render child only rewrites its text as the columns go by.
  */
-function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement {
+function renderNamesHead(table: HTMLTableElement, first: DateColumn | undefined): HTMLElement {
+	const cell = table
+		.createEl("thead")
+		.createEl("tr")
+		.createEl("th", { cls: "process-tracker__period" });
+	renderPeriodCaption(cell, first === undefined ? "" : formatMonthYear(first));
+	return cell;
+}
+
+function renderNamesBody(table: HTMLTableElement, tracks: TrackCard[]): void {
+	const body = table.createEl("tbody");
+	for (const track of tracks) renderTrackCell(body.createEl("tr"), track);
+}
+
+/**
+ * The head of the scrolling table carries no grid: captions stand above the columns,
+ * and a caption is the day alone — the month and the year belong to the corner.
+ */
+function renderDatesHead(table: HTMLTableElement, columns: DateColumn[]): void {
 	const row = table.createEl("thead").createEl("tr");
-
-	const first = columns[0];
-	const captionCell = row.createEl("th", { cls: "process-tracker__period" });
-	renderPeriodCaption(captionCell, first === undefined ? "" : formatMonthYear(first));
-
 	for (const column of columns) {
 		const cell = row.createEl("th", {
 			cls: "process-tracker__date",
@@ -94,15 +130,12 @@ function renderHead(table: HTMLTableElement, columns: DateColumn[]): HTMLElement
 		});
 		if (column.isToday) cell.addClass("is-today");
 	}
-
-	return captionCell;
 }
 
-function renderBody(table: HTMLTableElement, view: TrackerView): void {
+function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	const body = table.createEl("tbody");
 	for (const track of view.tracks) {
 		const row = body.createEl("tr");
-		renderTrackCell(row, track);
 		for (const column of view.columns) {
 			renderCheckCell(row, track, column, findEvidence(view.evidence, track.path, column.iso));
 		}

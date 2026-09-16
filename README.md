@@ -99,9 +99,17 @@ Please open an [issue](https://github.com/skrpln/process-tracker/issues). It hel
 
 - your Obsidian version and operating system;
 - the plugin version;
+- **the theme you use** — please name it even when the problem looks unrelated to looks;
 - where it happened: Reading mode, Live Preview, a canvas, a hover preview;
 - a small `process-tracker` block that shows the problem;
 - console errors, if there were any.
+
+The theme matters more than it sounds. The tracker is a real table inside your note, so
+every rule a theme writes for tables reaches it — paddings, borders, backgrounds, fonts,
+even the width of a checkbox. Most of that is welcome: the tracker is meant to look like
+the rest of your vault, and it should differ from theme to theme. But a rule now and then
+lands somewhere it hurts, and knowing the theme is what turns a screenshot into a fixable
+report. A screenshot of the table helps too.
 
 ## License
 

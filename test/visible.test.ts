@@ -4,12 +4,12 @@ import { describe, it } from "node:test";
 import {
 	captionLabel,
 	dominantLabel,
-	squareColumnWidth,
+	columnWidth,
 	visibleColumnRange,
 } from "../src/render/visible.ts";
 
-// A 400 px container, 100 px of it covered by the pinned column: 10 columns of 30 px fit.
-const base = { viewWidth: 400, pinnedWidth: 100, columnWidth: 30, total: 50 };
+// A 300 px frame: 10 columns of 30 px fit into it.
+const base = { viewWidth: 300, columnWidth: 30, total: 50 };
 
 describe("visibleColumnRange", () => {
 	it("starts at the first column when nothing is scrolled", () => {
@@ -29,8 +29,8 @@ describe("visibleColumnRange", () => {
 		assert.deepEqual(range, { first: 49, last: 49 });
 	});
 
-	it("returns nothing when the pinned column covers the whole view", () => {
-		assert.equal(visibleColumnRange({ ...base, scrollLeft: 0, pinnedWidth: 400 }), null);
+	it("returns nothing when the frame has no width to show columns in", () => {
+		assert.equal(visibleColumnRange({ ...base, scrollLeft: 0, viewWidth: 0 }), null);
 	});
 
 	it("returns nothing for an unmeasured or empty table", () => {
@@ -87,24 +87,45 @@ describe("captionLabel", () => {
 	});
 });
 
-describe("squareColumnWidth", () => {
-	it("takes the measured row height on the first pass", () => {
-		assert.equal(squareColumnWidth(26.4, null), 26.4);
+describe("columnWidth", () => {
+	const square = { rowHeight: 26.4, checkbox: 20, caption: 22 };
+
+	it("takes the height of a row when nothing else is wider", () => {
+		assert.equal(columnWidth(square, null), 26.4);
+	});
+
+	it("widens the column for a checkbox the theme stretched", () => {
+		assert.equal(columnWidth({ ...square, checkbox: 58 }, null), 58);
+	});
+
+	it("widens the column for a caption the theme padded", () => {
+		assert.equal(columnWidth({ ...square, caption: 66 }, null), 66);
+	});
+
+	it("never goes below the height of a row", () => {
+		assert.equal(columnWidth({ rowHeight: 26.4, checkbox: 8, caption: 10 }, null), 26.4);
 	});
 
 	it("ignores a change under half a pixel", () => {
-		assert.equal(squareColumnWidth(26.4, 26.4), null);
-		assert.equal(squareColumnWidth(26.7, 26.4), null);
+		assert.equal(columnWidth(square, 26.4), null);
+		assert.equal(columnWidth({ ...square, rowHeight: 26.7 }, 26.4), null);
 	});
 
 	it("reports a real change, in both directions", () => {
-		assert.equal(squareColumnWidth(31, 26.4), 31);
-		assert.equal(squareColumnWidth(20, 26.4), 20);
+		assert.equal(columnWidth({ ...square, rowHeight: 31 }, 26.4), 31);
+		assert.equal(columnWidth({ ...square, rowHeight: 20, caption: 8 }, 26.4), 20);
 	});
 
 	it("stays silent while the table has no layout yet", () => {
-		assert.equal(squareColumnWidth(0, null), null);
-		assert.equal(squareColumnWidth(Number.NaN, null), null);
-		assert.equal(squareColumnWidth(-5, 26), null);
+		assert.equal(columnWidth({ rowHeight: 0, checkbox: 0, caption: 0 }, null), null);
+		assert.equal(
+			columnWidth({ rowHeight: Number.NaN, checkbox: Number.NaN, caption: Number.NaN }, null),
+			null,
+		);
+		assert.equal(columnWidth({ rowHeight: -5, checkbox: -2, caption: -1 }, 26), null);
+	});
+
+	it("ignores a measurement that has not arrived yet", () => {
+		assert.equal(columnWidth({ rowHeight: 26.4, checkbox: 0, caption: Number.NaN }, null), 26.4);
 	});
 });

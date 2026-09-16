@@ -4,7 +4,7 @@ import { MarkdownRenderChild } from "obsidian";
 import type { DateColumn } from "../model/types.ts";
 import { formatMonthYear } from "../dates/grid.ts";
 import { renderPeriodCaption } from "./table.ts";
-import { captionLabel, squareColumnWidth, visibleColumnRange } from "./visible.ts";
+import { captionLabel, columnWidth, visibleColumnRange } from "./visible.ts";
 
 /** The tables the reader has on screen; the plugin repaints their cells through it. */
 export interface LiveTables {
@@ -22,12 +22,17 @@ export interface LiveTables {
  * so the child announces its table for as long as the block lives.
  */
 export class TrackerRenderChild extends MarkdownRenderChild {
-	private frame = 0;
+	/** Handle of the animation frame an update is waiting for; 0 when none is. */
+	private pending = 0;
 	private label: string;
 	private columnWidth: number | null = null;
+	/** Set once the table has a layout to measure; cleared whenever its size changes. */
+	private measured = false;
 
 	constructor(
 		containerEl: HTMLElement,
+		/** Both tables: the names on the left, the scrolling columns on the right. */
+		private readonly frame: HTMLElement,
 		private readonly scroll: HTMLElement,
 		private readonly captionCell: HTMLElement,
 		private readonly columns: DateColumn[],
@@ -43,38 +48,41 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 
 		this.registerDomEvent(this.scroll, "scroll", () => this.schedule(), { passive: true });
 
-		const observer = new this.win.ResizeObserver(() => this.schedule());
-		observer.observe(this.scroll);
+		// A resize is the moment the theme may have changed under the table: fonts,
+		// padding, the size of a checkbox. Everything measured is measured again.
+		const observer = new this.win.ResizeObserver(() => {
+			this.measured = false;
+			this.schedule();
+		});
+		observer.observe(this.frame);
 		this.register(() => observer.disconnect());
 
 		this.schedule();
 	}
 
 	onunload(): void {
-		if (this.frame !== 0) this.win.cancelAnimationFrame(this.frame);
-		this.frame = 0;
+		if (this.pending !== 0) this.win.cancelAnimationFrame(this.pending);
+		this.pending = 0;
 	}
 
 	/** At most one update per frame, however many scroll events arrive. */
 	private schedule(): void {
-		if (this.frame !== 0) return;
-		this.frame = this.win.requestAnimationFrame(() => {
-			this.frame = 0;
+		if (this.pending !== 0) return;
+		this.pending = this.win.requestAnimationFrame(() => {
+			this.pending = 0;
 			this.update();
 		});
 	}
 
 	private update(): void {
-		this.matchColumnToRow();
+		if (!this.measured) this.measure();
 
-		const pinned = this.scroll.querySelector<HTMLElement>(".process-tracker__track");
 		const date = this.scroll.querySelector<HTMLElement>(".process-tracker__date");
-		if (pinned === null || date === null) return;
+		if (date === null) return;
 
 		const range = visibleColumnRange({
 			scrollLeft: this.scroll.scrollLeft,
 			viewWidth: this.scroll.clientWidth,
-			pinnedWidth: pinned.getBoundingClientRect().width,
 			columnWidth: date.getBoundingClientRect().width,
 			total: this.columns.length,
 		});
@@ -89,23 +97,102 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	/**
-	 * A date column takes the height of a row as its width. The height comes from the
-	 * theme — font, line spacing, checkbox — so it is measured, never assumed.
+	 * Everything the tracker has to ask the theme about, asked once per layout: how tall
+	 * a row is, how tall the head is, and how wide a date column must be. The answers
+	 * come from the rendered tables, never from an assumption — a theme decides the size
+	 * of a checkbox, the padding of a cell and the face of a caption ([[rendering]]).
 	 */
-	private matchColumnToRow(): void {
-		// Not the first row: it also carries the top edge of the grid and stands a
-		// pixel taller than every row below it.
-		const row =
-			this.scroll.querySelector<HTMLElement>("tbody tr:nth-child(2)") ??
-			this.scroll.querySelector<HTMLElement>("tbody tr");
-		const table = this.scroll.querySelector<HTMLElement>(".process-tracker__table");
-		if (row === null || table === null) return;
+	private measure(): void {
+		const dates = this.scroll.querySelector<HTMLElement>(".process-tracker__dates");
+		const names = this.frame.querySelector<HTMLElement>(".process-tracker__names");
+		if (dates === null || names === null) return;
 
-		const width = squareColumnWidth(row.getBoundingClientRect().height, this.columnWidth);
+		const rowHeight = this.matchHeights("tbody tr", "--pt-row-height");
+		this.matchHeights("thead tr", "--pt-head-height");
+		// No layout yet: the block is rendered off screen, or the note is still opening.
+		if (rowHeight <= 0) return;
+
+		this.measured = true;
+
+		const width = columnWidth(
+			{ rowHeight, checkbox: this.checkboxClaim(), caption: this.captionClaim() },
+			this.columnWidth,
+		);
 		if (width === null) return;
 
 		this.columnWidth = width;
-		table.style.setProperty("--pt-col-date", `${width}px`);
+		dates.style.setProperty("--pt-col-date", `${width}px`);
+	}
+
+	/**
+	 * Gives the rows of both tables one height: the larger of the two.
+	 *
+	 * Side by side, the tables know nothing of each other — a row of track names and a
+	 * row of checkboxes are measured by the theme separately, and half a pixel of
+	 * difference sends the two halves of the tracker out of step. So the height is
+	 * measured with nothing imposed, and then imposed on both.
+	 */
+	private matchHeights(rows: string, variable: string): number {
+		this.frame.style.removeProperty(variable);
+
+		let tallest = 0;
+		for (const row of Array.from(this.frame.querySelectorAll<HTMLElement>(rows))) {
+			tallest = Math.max(tallest, row.getBoundingClientRect().height);
+		}
+		if (tallest <= 0) return 0;
+
+		this.frame.style.setProperty(variable, `${Math.ceil(tallest * 100) / 100}px`);
+		return tallest;
+	}
+
+	/** The checkbox of a cell with the padding and borders around it. */
+	private checkboxClaim(): number {
+		const cell = this.scroll.querySelector<HTMLElement>(".process-tracker__cell");
+		if (cell === null) return 0;
+
+		const box = cell.querySelector<HTMLElement>('input[type="checkbox"]');
+		const width = box === null ? 0 : box.getBoundingClientRect().width;
+		return width === 0 ? 0 : width + this.sideRoom(cell);
+	}
+
+	/**
+	 * The widest day caption with the padding and borders around it.
+	 *
+	 * Every caption is measured, not the first one: digits are not equal in width, and
+	 * a column cut to the width of `16` clips `09` — Obsidian ends an overflowing
+	 * caption with an ellipsis, and the reader loses the date.
+	 *
+	 * The text is measured with a range rather than by the width of its cell: a cell
+	 * already too narrow clips the text, and its own width would then confirm that
+	 * everything fits.
+	 */
+	private captionClaim(): number {
+		const captions = Array.from(
+			this.scroll.querySelectorAll<HTMLElement>(".process-tracker__date"),
+		);
+		if (captions.length === 0) return 0;
+
+		const range = this.scroll.ownerDocument.createRange();
+		let widest = 0;
+		for (const caption of captions) {
+			range.selectNodeContents(caption);
+			widest = Math.max(widest, range.getBoundingClientRect().width);
+		}
+		range.detach();
+
+		return widest === 0 ? 0 : widest + this.sideRoom(captions[0]);
+	}
+
+	/** Everything a cell spends sideways before its content starts: padding, borders. */
+	private sideRoom(cell: HTMLElement): number {
+		const style = this.win.getComputedStyle(cell);
+		const values = [
+			style.paddingLeft,
+			style.paddingRight,
+			style.borderLeftWidth,
+			style.borderRightWidth,
+		];
+		return values.reduce((total, value) => total + (Number.parseFloat(value) || 0), 0);
 	}
 
 	/** The table may live in a popout window, which has its own timers. */

@@ -4,10 +4,8 @@
 export interface ViewportMetrics {
 	/** Horizontal scroll offset of the container. */
 	scrollLeft: number;
-	/** Inner width of the container. */
+	/** Inner width of the container: all of it shows date columns. */
 	viewWidth: number;
-	/** Width of the pinned first column, which covers the left edge of the view. */
-	pinnedWidth: number;
 	/** Width of one date column; they are all equal. */
 	columnWidth: number;
 	/** How many date columns the table has. */
@@ -20,21 +18,16 @@ export interface ColumnRange {
 }
 
 /**
- * Indices of the date columns that show up in the visible strip, the pinned column
- * excluded. A column counts as visible as soon as any part of it is in sight.
- * Returns `null` when there is nothing to look at.
+ * Indices of the date columns in sight. A column counts as visible as soon as any part
+ * of it shows. Returns `null` when there is nothing to look at.
  */
 export function visibleColumnRange(metrics: ViewportMetrics): ColumnRange | null {
-	const { scrollLeft, viewWidth, pinnedWidth, columnWidth, total } = metrics;
-	if (columnWidth <= 0 || total <= 0) return null;
+	const { scrollLeft, viewWidth, columnWidth, total } = metrics;
+	if (columnWidth <= 0 || total <= 0 || viewWidth <= 0) return null;
 
-	const stripWidth = viewWidth - pinnedWidth;
-	if (stripWidth <= 0) return null;
-
-	// Column i covers [i * columnWidth, (i + 1) * columnWidth) once the pinned
-	// column is subtracted from both the columns and the viewport.
+	// Column i covers [i * columnWidth, (i + 1) * columnWidth) of the scrolling frame.
 	const first = clamp(Math.floor(scrollLeft / columnWidth), 0, total - 1);
-	const last = clamp(Math.ceil((scrollLeft + stripWidth) / columnWidth) - 1, first, total - 1);
+	const last = clamp(Math.ceil((scrollLeft + viewWidth) / columnWidth) - 1, first, total - 1);
 	return { first, last };
 }
 
@@ -68,16 +61,37 @@ export function dominantLabel(labels: string[], current: string): string {
 	return current;
 }
 
-/**
- * Width a date column must take to match the height of a row, or `null` when
- * nothing needs to change: the table is not laid out yet, or the difference is
- * under half a pixel. Measuring beats declaring — the row height depends on the
- * theme, the checkbox and whatever a track name does to the line box.
- */
-export function squareColumnWidth(rowHeight: number, current: number | null): number | null {
-	if (!Number.isFinite(rowHeight) || rowHeight <= 0) return null;
+/** What a date column has to hold, measured on the table the theme has laid out. */
+export interface ColumnMetrics {
+	/** Height of a row: the width that makes the cell square. */
+	rowHeight: number;
+	/** Checkbox of a cell, with the padding and borders the theme gives the cell. */
+	checkbox: number;
+	/** Day caption of the head, with the padding and borders of its cell. */
+	caption: number;
+}
 
-	const width = Math.round(rowHeight * 100) / 100;
+/**
+ * Width a date column must take, or `null` when nothing needs to change: the table is
+ * not laid out yet, or the difference is under half a pixel.
+ *
+ * The square is the aim, not the rule. A theme decides the size of a checkbox and the
+ * padding of a cell, and both live inside the column: Terminal, for one, gives a
+ * checkbox six and a half character widths, and Ultra Lobster pads a cell by twenty
+ * pixels on each side. So the column takes the largest of the three claims on it —
+ * a cell may be wider than it is tall, never narrower, and nothing inside it is cut.
+ *
+ * Fitting the caption is also what keeps it readable: Obsidian clips an overflowing
+ * caption with an ellipsis (`thead > tr > th { text-overflow: ellipsis }`), and a
+ * column wide enough for the caption never lets that rule fire.
+ */
+export function columnWidth(metrics: ColumnMetrics, current: number | null): number | null {
+	const claims = [metrics.rowHeight, metrics.checkbox, metrics.caption].filter(
+		(value) => Number.isFinite(value) && value > 0,
+	);
+	if (claims.length === 0) return null;
+
+	const width = Math.round(Math.max(...claims) * 100) / 100;
 	if (current !== null && Math.abs(width - current) < 0.5) return null;
 	return width;
 }

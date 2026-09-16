@@ -35,7 +35,8 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 
 	constructor(
 		containerEl: HTMLElement,
-		private readonly scroll: HTMLElement,
+		/** Both tables of the tracker: the cells scroll, the track names do not. */
+		private readonly frame: HTMLElement,
 		private readonly app: App,
 		private readonly sourcePath: string,
 		private readonly onClick: (target: CellTarget, mod: boolean) => void,
@@ -44,7 +45,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	}
 
 	onload(): void {
-		this.registerDomEvent(this.scroll, "click", (event: MouseEvent) => {
+		this.registerDomEvent(this.frame, "click", (event: MouseEvent) => {
 			const target = readCell(event.target);
 			if (target === null) return;
 
@@ -54,7 +55,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 			this.onClick(target, Keymap.isModifier(event, "Mod"));
 		});
 
-		this.registerDomEvent(this.scroll, "mouseover", (event: MouseEvent) => {
+		this.registerDomEvent(this.frame, "mouseover", (event: MouseEvent) => {
 			const target = readHover(event.target);
 			if (target !== null) this.preview(target, event);
 		});

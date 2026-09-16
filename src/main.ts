@@ -110,6 +110,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 				context.addChild(
 						new TrackerRenderChild(
 						element,
+						elements.frame,
 						elements.scroll,
 						elements.captionCell,
 						columns,
@@ -119,7 +120,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 				context.addChild(
 					new CellPointerChild(
 						element,
-						elements.scroll,
+						elements.frame,
 						this.app,
 						context.sourcePath,
 						(target, mod) => {
@@ -170,7 +171,10 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 		const doc = (event.currentTarget ?? event.target) as Document;
 		const top = doc.elementFromPoint?.(event.clientX, event.clientY) ?? null;
-		const scroll = top === null ? null : top.closest<HTMLElement>(`.${SCROLL_CLASS}`);
+		// Over the track names too: they are a table of their own now, outside the
+		// scrolling frame, and the wheel over them still belongs to the columns.
+		const frame = top === null ? null : top.closest<HTMLElement>(".process-tracker__frame");
+		const scroll = frame === null ? null : frame.querySelector<HTMLElement>(`.${SCROLL_CLASS}`);
 		if (scroll === null) return;
 
 		event.preventDefault();
