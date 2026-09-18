@@ -125,9 +125,11 @@ function renderDatesHead(table: HTMLTableElement, columns: DateColumn[]): void {
 	for (const column of columns) {
 		const cell = row.createEl("th", {
 			cls: "process-tracker__date",
-			text: formatDay(column),
 			attr: { "data-date": column.iso },
 		});
+		// The number sits in an element of its own, so it can be centred on the cell
+		// whatever alignment and padding a theme gives the cell ([[rendering]]).
+		cell.createSpan({ cls: "process-tracker__day", text: formatDay(column) });
 		if (column.isToday) cell.addClass("is-today");
 	}
 }
@@ -178,7 +180,9 @@ function renderCheckCell(
 	if (column.isToday) cell.addClass("is-today");
 	if (evidence !== null) cell.setAttr("data-evidence", evidence.path);
 
-	const box = cell.createEl("input", {
+	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
+	// so centring it never has to argue with the way a theme styles a checkbox.
+	const box = cell.createDiv({ cls: "process-tracker__mark" }).createEl("input", {
 		cls: "task-list-item-checkbox",
 		type: "checkbox",
 	});

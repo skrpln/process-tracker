@@ -61,19 +61,20 @@ body.theme-light .process-tracker {
 }
 
 /*
- * The frame is cut to the shape of the table inside it. A theme that rounds the corners
- * of a table rounds the left half of the tracker by itself — that half is a table — while
- * the right half is a window with a table scrolling inside, and a window clips by its own
- * shape, not by the shape of what it holds. So the render child reads the corners the
- * theme gave the table and cuts the window the same way; a theme that rounds nothing
- * leaves the fallback, and the window stays square.
+ * The window is cut to the card the theme draws for the table inside it. A theme that
+ * rounds a table rounds the left half of the tracker by itself — that half is a table —
+ * while the right half is a window with a table scrolling inside, and a window clips by
+ * its own box. The box is not the card either: the margins a theme gives a table live
+ * inside the window. So the render child writes a clip path — the table's border box,
+ * inset by its margins, with its corner radii — and a theme that neither rounds nor
+ * sets tables off leaves the window as it is.
  */
 .process-tracker__scroll {
 	flex: 1 1 auto;
 	min-width: 0;
 	overflow-x: auto;
 	overflow-y: hidden;
-	border-radius: var(--pt-frame-radius, 0);
+	clip-path: var(--pt-frame-clip, none);
 }
 
 /*
@@ -233,6 +234,43 @@ body.theme-light .process-tracker {
 .process-tracker .process-tracker__table .process-tracker__cell input[type="checkbox"] {
 	margin: 0;
 	vertical-align: middle;
+}
+
+/*
+ * The checkbox and the day number are centred on their cell by wrappers of our own.
+ * A theme may align table cells to the left — Ultra Lobster does, with `!important` —
+ * and pad them unevenly at the ends of a row. The wrappers ignore the alignment: a flex
+ * box centres the checkbox, a block with its own `text-align` centres the number. What
+ * uneven padding takes away the render child measures and hands back as a shift, for
+ * the first cell of a row, the last one and the ones between.
+ */
+.process-tracker .process-tracker__dates .process-tracker__mark {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	translate: var(--pt-shift-mid, 0px) 0;
+}
+
+.process-tracker .process-tracker__dates td:first-child > .process-tracker__mark {
+	translate: var(--pt-shift-first, 0px) 0;
+}
+
+.process-tracker .process-tracker__dates td:last-child > .process-tracker__mark {
+	translate: var(--pt-shift-last, 0px) 0;
+}
+
+.process-tracker .process-tracker__dates .process-tracker__day {
+	display: block;
+	text-align: center;
+	translate: var(--pt-day-shift-mid, 0px) 0;
+}
+
+.process-tracker .process-tracker__dates th:first-child > .process-tracker__day {
+	translate: var(--pt-day-shift-first, 0px) 0;
+}
+
+.process-tracker .process-tracker__dates th:last-child > .process-tracker__day {
+	translate: var(--pt-day-shift-last, 0px) 0;
 }
 
 /*

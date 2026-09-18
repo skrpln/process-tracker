@@ -114,6 +114,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 
 		this.measured = true;
 		this.matchFrameShape(dates);
+		this.centreContent(dates);
 
 		const width = columnWidth(
 			{ rowHeight, checkbox: this.checkboxClaim(), caption: this.captionClaim() },
@@ -126,12 +127,18 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	/**
-	 * Cuts the scrolling window to the shape the theme gave the table inside it. Only the
-	 * corner radii are copied: the window has to clip its content, and clipping is all
-	 * the shape it needs ([[rendering]]).
+	 * Cuts the scrolling window to the card the theme draws for the table inside it.
+	 *
+	 * A window clips by its own box, and that box is not the card: a theme may set the
+	 * table off with margins — Ultra Lobster gives every table `1.5em` above and below and
+	 * `12px` at the sides — and the margins live inside the window. Rounding the window
+	 * itself put its corners a line above and below the card, and at the height of the
+	 * card the columns were still cut by a straight edge. So the window is clipped to the
+	 * table's own border box, inset by the margins, with the table's corner radii.
 	 */
 	private matchFrameShape(dates: HTMLElement): void {
 		const style = this.win.getComputedStyle(dates);
+		const inset = [style.marginTop, style.marginRight, style.marginBottom, style.marginLeft];
 		// The computed value of a corner can carry two radii, `16px 8px`, for an ellipse.
 		// The window takes the first of them: a circle is the shape themes actually draw.
 		const corners = [
@@ -141,11 +148,46 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 			style.borderBottomLeftRadius,
 		].map((corner) => corner.trim().split(/\s+/)[0]);
 
-		if (corners.every((corner) => Number.parseFloat(corner) === 0)) {
-			this.scroll.style.removeProperty("--pt-frame-radius");
+		if ([...inset, ...corners].every((value) => Number.parseFloat(value) === 0)) {
+			this.scroll.style.removeProperty("--pt-frame-clip");
 			return;
 		}
-		this.scroll.style.setProperty("--pt-frame-radius", corners.join(" "));
+		this.scroll.style.setProperty(
+			"--pt-frame-clip",
+			`inset(${inset.join(" ")} round ${corners.join(" ")})`,
+		);
+	}
+
+	/**
+	 * Puts the checkbox and the day number in the middle of their cell.
+	 *
+	 * A theme may pad the cells of a row unevenly: Ultra Lobster gives the last cell two
+	 * pixels on the left and twenty on the right, the first cell ten and two. Content is
+	 * laid out between the paddings, so an uneven pair pushes it sideways, and the last
+	 * checkbox stood under the edge of its caption instead of under its middle. The
+	 * stylesheet centres the content between the paddings; what the uneven pair takes
+	 * away is measured here and handed back as a shift — for the first cell of a row, the
+	 * last one, and one in between, the three places themes write such rules for.
+	 */
+	private centreContent(dates: HTMLElement): void {
+		const shift = (cell: Element | undefined): string => {
+			if (cell === undefined) return "0px";
+			const style = this.win.getComputedStyle(cell);
+			const left = px(style.paddingLeft) + px(style.borderLeftWidth);
+			const right = px(style.paddingRight) + px(style.borderRightWidth);
+			return `${(right - left) / 2}px`;
+		};
+
+		const groups: [string, string][] = [
+			["tbody tr", "--pt-shift"],
+			["thead tr", "--pt-day-shift"],
+		];
+		for (const [selector, variable] of groups) {
+			const cells = Array.from(dates.querySelector(selector)?.children ?? []);
+			dates.style.setProperty(`${variable}-first`, shift(cells[0]));
+			dates.style.setProperty(`${variable}-mid`, shift(cells[1] ?? cells[0]));
+			dates.style.setProperty(`${variable}-last`, shift(cells[cells.length - 1]));
+		}
 	}
 
 	/**
@@ -171,12 +213,12 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 
 	/** The checkbox of a cell with the padding and borders around it. */
 	private checkboxClaim(): number {
-		const cell = this.scroll.querySelector<HTMLElement>(".process-tracker__cell");
-		if (cell === null) return 0;
+		const cells = this.sample(".process-tracker__cell");
+		if (cells.length === 0) return 0;
 
-		const box = cell.querySelector<HTMLElement>('input[type="checkbox"]');
+		const box = cells[0].querySelector<HTMLElement>('input[type="checkbox"]');
 		const width = box === null ? 0 : box.getBoundingClientRect().width;
-		return width === 0 ? 0 : width + this.sideRoom(cell);
+		return width === 0 ? 0 : width + this.widestSideRoom(cells);
 	}
 
 	/**
@@ -199,12 +241,33 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		const range = this.scroll.ownerDocument.createRange();
 		let widest = 0;
 		for (const caption of captions) {
-			range.selectNodeContents(caption);
+			// The text, not its wrapper: the wrapper is a block as wide as the cell, and
+			// measuring it would only confirm the width the column already has.
+			range.selectNodeContents(caption.querySelector(".process-tracker__day") ?? caption);
 			widest = Math.max(widest, range.getBoundingClientRect().width);
 		}
 		range.detach();
 
-		return widest === 0 ? 0 : widest + this.sideRoom(captions[0]);
+		return widest === 0 ? 0 : widest + this.widestSideRoom(this.sample(".process-tracker__date"));
+	}
+
+	/**
+	 * The first cell of a kind, the second and the last — the three places a theme puts a
+	 * padding of its own. Ultra Lobster pads the last cell of a row by twenty pixels on
+	 * the right and the first by ten on the left, while every cell between them gets
+	 * eight; measuring the first cell alone left the last column too narrow for its
+	 * checkbox, and Obsidian ended it with an ellipsis.
+	 *
+	 * Three cells, not all of them: every column shares one width, so the widest claim
+	 * decides, and a table of three thousand days must not be walked to find it.
+	 */
+	private sample(selector: string): HTMLElement[] {
+		const all = Array.from(this.scroll.querySelectorAll<HTMLElement>(selector));
+		return all.length <= 3 ? all : [all[0], all[1], all[all.length - 1]];
+	}
+
+	private widestSideRoom(cells: HTMLElement[]): number {
+		return cells.reduce((widest, cell) => Math.max(widest, this.sideRoom(cell)), 0);
 	}
 
 	/** Everything a cell spends sideways before its content starts: padding, borders. */
@@ -216,11 +279,16 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 			style.borderLeftWidth,
 			style.borderRightWidth,
 		];
-		return values.reduce((total, value) => total + (Number.parseFloat(value) || 0), 0);
+		return values.reduce((total, value) => total + px(value), 0);
 	}
 
 	/** The table may live in a popout window, which has its own timers. */
 	private get win(): Window & typeof globalThis {
 		return this.scroll.ownerDocument.defaultView ?? window;
 	}
+}
+
+/** A computed length in pixels; anything unreadable counts as nothing. */
+function px(value: string): number {
+	return Number.parseFloat(value) || 0;
 }
