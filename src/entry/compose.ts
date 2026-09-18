@@ -1,9 +1,9 @@
-// Process Tracker — the name and the text of a new evidence note.
+// Process Tracker — the name and the text of a new entry note.
 // Pure module: no Obsidian API, covered by test/compose.test.ts.
 
-import { EVIDENCE_DATE_KEY, EVIDENCE_DONE_KEY, EVIDENCE_TRACK_KEY } from "../constants.ts";
+import { ENTRY_DATE_KEY, ENTRY_DONE_KEY, ENTRY_TRACK_KEY } from "../constants.ts";
 
-export interface EvidenceFields {
+export interface EntryFields {
 	/** Link to the track card, written the way this vault writes links. */
 	track: string;
 	/** Local calendar date as `YYYY-MM-DD`. */
@@ -14,7 +14,7 @@ export interface EvidenceFields {
 const FENCE = "---";
 
 /**
- * Text of a new evidence note: the template of the track card with the three properties
+ * Text of a new entry note: the template of the track card with the three properties
  * of the plugin filled in. A template without frontmatter gets one, and a track card
  * without a template gives a bare note with an empty body ([[expectation]] §5).
  *
@@ -23,28 +23,28 @@ const FENCE = "---";
  * rest of the template is left alone — `<% %>` commands included, so Templater finds its
  * work untouched when the file appears.
  */
-export function composeEvidence(template: string | null, fields: EvidenceFields): string {
+export function composeEntry(template: string | null, fields: EntryFields): string {
 	const { head, body } = split(template ?? "");
 
 	let properties = head;
-	properties = setProperty(properties, EVIDENCE_TRACK_KEY, quote(fields.track));
-	properties = setProperty(properties, EVIDENCE_DATE_KEY, fields.date);
-	properties = setProperty(properties, EVIDENCE_DONE_KEY, String(fields.done));
+	properties = setProperty(properties, ENTRY_TRACK_KEY, quote(fields.track));
+	properties = setProperty(properties, ENTRY_DATE_KEY, fields.date);
+	properties = setProperty(properties, ENTRY_DONE_KEY, String(fields.done));
 
 	return [FENCE, ...properties, FENCE, body].join("\n");
 }
 
 /**
- * Default name of an evidence note — `{{track}} {{date}}` ([[expectation]] §5). Characters
+ * Default name of an entry note — `{{track}} {{date}}` ([[expectation]] §5). Characters
  * a vault cannot keep in a file name are dropped, so a track named `10/10` still gets one.
  */
-export function evidenceFileName(trackName: string, date: string): string {
+export function entryFileName(trackName: string, date: string): string {
 	const name = trackName.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim();
 	return name === "" ? date : `${name} ${date}`;
 }
 
-/** Path of a new evidence note; an empty folder means the root of the vault. */
-export function evidencePath(folder: string, name: string): string {
+/** Path of a new entry note; an empty folder means the root of the vault. */
+export function entryPath(folder: string, name: string): string {
 	const clean = normalizeFolder(folder);
 	return clean === "" ? `${name}.md` : `${clean}/${name}.md`;
 }

@@ -6,17 +6,17 @@ import type { MarkdownPostProcessorContext, TFile } from "obsidian";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
 import { buildDateColumns } from "./dates/grid.ts";
-import { cellAction } from "./evidence/actions.ts";
-import { collectEvidence, toEvidence } from "./evidence/source.ts";
-import { buildEvidenceIndex, findEvidence } from "./evidence/state.ts";
-import { createEvidence, setEvidenceDone } from "./evidence/write.ts";
+import { cellAction } from "./entry/actions.ts";
+import { collectEntries, toEntry } from "./entry/source.ts";
+import { buildEntryIndex, findEntry } from "./entry/state.ts";
+import { createEntry, setEntryDone } from "./entry/write.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { CellPointerChild } from "./render/pointer.ts";
 import type { CellTarget } from "./render/pointer.ts";
 import {
 	SCROLL_CLASS,
 	paintCell,
-	refreshEvidence,
+	refreshEntry,
 	renderError,
 	renderTracker,
 	renderWarnings,
@@ -54,7 +54,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 			(source, element, context) => this.renderBlock(source, element, context),
 		);
 
-		// Evidence written outside the table — in another tab, in a hover popover, by hand.
+		// An entry written outside the table — in another tab, in a hover popover, by hand.
 		// The cell repaints itself; the table is not rebuilt and nothing is recounted.
 		this.registerEvent(this.app.metadataCache.on("changed", (file) => this.refresh(file)));
 		this.registerEvent(this.app.metadataCache.on("deleted", (file) => this.refresh(file, true)));
@@ -99,7 +99,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 			const elements = renderTracker(element, {
 				tracks,
 				columns,
-				evidence: buildEvidenceIndex(collectEvidence(this.app)),
+				entries: buildEntryIndex(collectEntries(this.app)),
 				trackTag: this.settings.trackTag,
 				trackFilter: options.track,
 			});
@@ -196,8 +196,8 @@ export default class ProcessTrackerPlugin extends Plugin {
 	private refresh(file: TFile, gone = false): void {
 		if (this.tables.size === 0) return;
 
-		const evidence = gone ? null : toEvidence(this.app, file);
-		for (const table of this.tables) refreshEvidence(table, file.path, evidence);
+		const entry = gone ? null : toEntry(this.app, file);
+		for (const table of this.tables) refreshEntry(table, file.path, entry);
 	}
 
 	/**
@@ -210,22 +210,22 @@ export default class ProcessTrackerPlugin extends Plugin {
 		const action = cellAction(target.state, mod);
 		try {
 			if (action.kind === "create") {
-				const file = await createEvidence(
+				const file = await createEntry(
 					this.app,
 					target.trackPath,
 					target.date,
 					action.done,
-					this.settings.evidenceFolder,
+					this.settings.entryFolder,
 				);
 				paintCell(target.cell, action.done ? "done" : "draft", file.path);
 				return;
 			}
 
-			const file = this.evidenceFile(target);
-			if (file === null) throw new Error(`the evidence note of ${target.date} is gone`);
+			const file = this.entryFile(target);
+			if (file === null) throw new Error(`the entry note of ${target.date} is gone`);
 
 			if (action.kind === "toggle") {
-				await setEvidenceDone(this.app, file.path, action.done);
+				await setEntryDone(this.app, file.path, action.done);
 				paintCell(target.cell, action.done ? "done" : "draft", file.path);
 				return;
 			}
@@ -240,17 +240,17 @@ export default class ProcessTrackerPlugin extends Plugin {
 	/**
 	 * The note behind a cell. The path written into the cell can go stale between renders
 	 * — Templater moves a new note while it renders it — so a path that leads nowhere is
-	 * answered by looking the evidence up in the vault again, not by opening a link, which
+	 * answered by looking the entry up in the vault again, not by opening a link, which
 	 * would quietly create an empty note at the old address.
 	 */
-	private evidenceFile(target: CellTarget): TFile | null {
-		if (target.evidencePath !== null) {
-			const file = this.app.vault.getFileByPath(target.evidencePath);
+	private entryFile(target: CellTarget): TFile | null {
+		if (target.entryPath !== null) {
+			const file = this.app.vault.getFileByPath(target.entryPath);
 			if (file !== null) return file;
 		}
 
-		const index = buildEvidenceIndex(collectEvidence(this.app));
-		const found = findEvidence(index, target.trackPath, target.date);
+		const index = buildEntryIndex(collectEntries(this.app));
+		const found = findEntry(index, target.trackPath, target.date);
 		return found === null ? null : this.app.vault.getFileByPath(found.path);
 	}
 }

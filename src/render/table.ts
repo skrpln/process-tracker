@@ -3,11 +3,11 @@
 
 import { setTooltip } from "obsidian";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
-import { planRefresh } from "../evidence/refresh.ts";
-import type { CellRef } from "../evidence/refresh.ts";
-import { cellState, evidenceKey, findEvidence } from "../evidence/state.ts";
-import type { EvidenceIndex } from "../evidence/state.ts";
-import type { CellState, DateColumn, Evidence, TrackCard } from "../model/types.ts";
+import { planRefresh } from "../entry/refresh.ts";
+import type { CellRef } from "../entry/refresh.ts";
+import { cellState, entryKey, findEntry } from "../entry/state.ts";
+import type { EntryIndex } from "../entry/state.ts";
+import type { CellState, DateColumn, Entry, TrackCard } from "../model/types.ts";
 
 /**
  * Note of a draft, shown on hover. The preview beside it shows the note itself; this says
@@ -22,8 +22,8 @@ export const SCROLL_CLASS = "process-tracker__scroll";
 export interface TrackerView {
 	tracks: TrackCard[];
 	columns: DateColumn[];
-	/** Evidence of the vault; decides the state of every cell. */
-	evidence: EvidenceIndex;
+	/** Entries of the vault; decide the state of every cell. */
+	entries: EntryIndex;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -139,7 +139,7 @@ function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	for (const track of view.tracks) {
 		const row = body.createEl("tr");
 		for (const column of view.columns) {
-			renderCheckCell(row, track, column, findEvidence(view.evidence, track.path, column.iso));
+			renderCheckCell(row, track, column, findEntry(view.entries, track.path, column.iso));
 		}
 	}
 }
@@ -162,7 +162,7 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
  * The box shows what the vault says: checked for `done: true`, unchecked for a draft
  * or an empty day. The state also goes on the cell as `data-state`, where the stylesheet
  * picks the draft up and where the click handling reads it back — together with
- * `data-track`, `data-date` and `data-evidence`, which address the cell.
+ * `data-track`, `data-date` and `data-entry`, which address the cell.
  *
  * The click itself is handled once for the whole table, by `CellClickChild`.
  */
@@ -170,15 +170,15 @@ function renderCheckCell(
 	row: HTMLTableRowElement,
 	track: TrackCard,
 	column: DateColumn,
-	evidence: Evidence | null,
+	entry: Entry | null,
 ): void {
-	const state = cellState(evidence);
+	const state = cellState(entry);
 	const cell = row.createEl("td", {
 		cls: "process-tracker__cell",
 		attr: { "data-date": column.iso, "data-track": track.path, "data-state": state },
 	});
 	if (column.isToday) cell.addClass("is-today");
-	if (evidence !== null) cell.setAttr("data-evidence", evidence.path);
+	if (entry !== null) cell.setAttr("data-entry", entry.path);
 
 	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
 	// so centring it never has to argue with the way a theme styles a checkbox.
@@ -198,11 +198,11 @@ function renderCheckCell(
 export function paintCell(
 	cell: HTMLElement,
 	state: CellState,
-	evidencePath: string | null,
+	entryPath: string | null,
 ): void {
 	cell.setAttr("data-state", state);
-	if (evidencePath === null) cell.removeAttribute("data-evidence");
-	else cell.setAttr("data-evidence", evidencePath);
+	if (entryPath === null) cell.removeAttribute("data-entry");
+	else cell.setAttr("data-entry", entryPath);
 
 	setTooltip(cell, state === "draft" ? DRAFT_TOOLTIP : "");
 
@@ -211,31 +211,31 @@ export function paintCell(
 }
 
 /**
- * Repaints the cells of one table after an evidence note changed outside it: in another tab,
+ * Repaints the cells of one table after an entry note changed outside it: in another tab,
  * in a hover popover, by hand. Only the cells that note addresses are touched — the table
  * keeps its scroll position, its measured column width and everything else it holds.
  *
- * The cells showing the note are found by the path the renderer wrote into `data-evidence`,
+ * The cells showing the note are found by the path the renderer wrote into `data-entry`,
  * so nothing about the table has to be remembered between renders; what the found cells must
- * become is decided by `planRefresh` ([[evidence]]).
+ * become is decided by `planRefresh` ([[entry]]).
  */
-export function refreshEvidence(
+export function refreshEntry(
 	root: HTMLElement,
 	path: string,
-	evidence: Evidence | null,
+	entry: Entry | null,
 ): void {
 	const claimed = new Map<string, HTMLElement>();
 	const refs: CellRef[] = [];
-	for (const element of cellsOf(root, `[data-evidence=${quote(path)}]`)) {
+	for (const element of cellsOf(root, `[data-entry=${quote(path)}]`)) {
 		const ref = readCellRef(element);
 		if (ref === null) continue;
 		refs.push(ref);
-		claimed.set(evidenceKey(ref.trackPath, ref.date), element);
+		claimed.set(entryKey(ref.trackPath, ref.date), element);
 	}
 
-	const plan = planRefresh(evidence, refs);
+	const plan = planRefresh(entry, refs);
 	for (const ref of plan.clear) {
-		const cell = claimed.get(evidenceKey(ref.trackPath, ref.date));
+		const cell = claimed.get(entryKey(ref.trackPath, ref.date));
 		if (cell !== undefined) paintCell(cell, "empty", null);
 	}
 
@@ -243,7 +243,7 @@ export function refreshEvidence(
 	const { trackPath, date } = plan.paint.cell;
 	const target = cellsOf(root, `[data-track=${quote(trackPath)}][data-date=${quote(date)}]`)[0];
 	// The day may lie outside the columns of this table, or the track outside its rows.
-	if (target !== undefined) paintCell(target, plan.paint.state, plan.paint.evidencePath);
+	if (target !== undefined) paintCell(target, plan.paint.state, plan.paint.entryPath);
 }
 
 function cellsOf(root: HTMLElement, attributes: string): HTMLElement[] {

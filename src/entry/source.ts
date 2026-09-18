@@ -1,34 +1,34 @@
-// Process Tracker — reading evidence notes out of the Obsidian metadata cache.
+// Process Tracker — reading entry notes out of the Obsidian metadata cache.
 // Adapter module: resolves the `track` link against the vault, nothing else.
 
 import type { App, CachedMetadata, TFile } from "obsidian";
-import { EVIDENCE_DATE_KEY, EVIDENCE_DONE_KEY, EVIDENCE_TRACK_KEY } from "../constants.ts";
-import type { Evidence } from "../model/types.ts";
+import { ENTRY_DATE_KEY, ENTRY_DONE_KEY, ENTRY_TRACK_KEY } from "../constants.ts";
+import type { Entry } from "../model/types.ts";
 import { readDate, readDone, readTrackLink } from "./state.ts";
 
 /**
- * Every evidence note of the vault. A note counts as evidence when it names a track
+ * Every entry note of the vault. A note counts as an entry when it names a track
  * card and a date — the two properties the plugin identifies it by ([[expectation]] §6)
  * — however it was created: by the tracker, by a template or by hand.
  */
-export function collectEvidence(app: App): Evidence[] {
-	const evidence: Evidence[] = [];
+export function collectEntries(app: App): Entry[] {
+	const entries: Entry[] = [];
 	for (const file of app.vault.getMarkdownFiles()) {
-		const entry = toEvidence(app, file);
-		if (entry !== null) evidence.push(entry);
+		const entry = toEntry(app, file);
+		if (entry !== null) entries.push(entry);
 	}
-	return evidence;
+	return entries;
 }
 
-export function toEvidence(app: App, file: TFile): Evidence | null {
+export function toEntry(app: App, file: TFile): Entry | null {
 	const cache = app.metadataCache.getFileCache(file);
 	const frontmatter = cache?.frontmatter;
 	if (cache === null || cache === undefined || frontmatter === undefined) return null;
 
-	const date = readDate(frontmatter[EVIDENCE_DATE_KEY]);
+	const date = readDate(frontmatter[ENTRY_DATE_KEY]);
 	if (date === null) return null;
 
-	const link = frontmatterLink(cache, frontmatter, EVIDENCE_TRACK_KEY);
+	const link = frontmatterLink(cache, frontmatter, ENTRY_TRACK_KEY);
 	if (link === null) return null;
 
 	// The link is resolved the way Obsidian resolves it in the note itself, so a bare
@@ -40,7 +40,7 @@ export function toEvidence(app: App, file: TFile): Evidence | null {
 		path: file.path,
 		trackPath: target.path,
 		date,
-		done: readDone(frontmatter[EVIDENCE_DONE_KEY]),
+		done: readDone(frontmatter[ENTRY_DONE_KEY]),
 	};
 }
 

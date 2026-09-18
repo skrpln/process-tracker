@@ -1,9 +1,9 @@
-// Unit tests for reading evidence out of the metadata cache.
+// Unit tests for reading entries out of the metadata cache.
 // The adapter imports `obsidian` for types only, so a stub app is enough here.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App, TFile } from "obsidian";
-import { collectEvidence, toEvidence } from "../src/evidence/source.ts";
+import { collectEntries, toEntry } from "../src/entry/source.ts";
 
 interface Note {
 	path: string;
@@ -34,18 +34,18 @@ function appWith(notes: Note[]): App {
 
 const card: Note = { path: "cleaning.md", frontmatter: { tags: "process_tracker" } };
 
-function readOne(note: Note): ReturnType<typeof toEvidence> {
+function readOne(note: Note): ReturnType<typeof toEntry> {
 	const app = appWith([card, note]);
-	return toEvidence(app, { path: note.path } as TFile);
+	return toEntry(app, { path: note.path } as TFile);
 }
 
-describe("toEvidence", () => {
+describe("toEntry", () => {
 	it("reads a note that names a track and a date", () => {
-		const evidence = readOne({
+		const entry = readOne({
 			path: "cleaning 2026-09-11.md",
 			frontmatter: { track: "[[cleaning]]", date: "2026-09-11", done: true },
 		});
-		assert.deepEqual(evidence, {
+		assert.deepEqual(entry, {
 			path: "cleaning 2026-09-11.md",
 			trackPath: "cleaning.md",
 			date: "2026-09-11",
@@ -54,55 +54,55 @@ describe("toEvidence", () => {
 	});
 
 	it("reads a draft as a draft", () => {
-		const evidence = readOne({
+		const entry = readOne({
 			path: "e.md",
 			frontmatter: { track: "[[cleaning]]", date: "2026-09-11", done: false },
 		});
-		assert.equal(evidence?.done, false);
+		assert.equal(entry?.done, false);
 	});
 
-	it("treats evidence without a done property as a draft", () => {
-		const evidence = readOne({
+	it("treats an entry without a done property as a draft", () => {
+		const entry = readOne({
 			path: "e.md",
 			frontmatter: { track: "[[cleaning]]", date: "2026-09-11" },
 		});
-		assert.equal(evidence?.done, false);
+		assert.equal(entry?.done, false);
 	});
 
 	it("prefers the link Obsidian parsed itself", () => {
-		const evidence = readOne({
+		const entry = readOne({
 			path: "e.md",
 			frontmatter: { track: "written by hand", date: "2026-09-11" },
 			frontmatterLinks: [{ key: "track", link: "cleaning" }],
 		});
-		assert.equal(evidence?.trackPath, "cleaning.md");
+		assert.equal(entry?.trackPath, "cleaning.md");
 	});
 
 	it("reads a link out of a list property", () => {
-		const evidence = readOne({
+		const entry = readOne({
 			path: "e.md",
 			frontmatter: { track: ["[[cleaning]]"], date: "2026-09-11" },
 			frontmatterLinks: [{ key: "track.0", link: "cleaning" }],
 		});
-		assert.equal(evidence?.trackPath, "cleaning.md");
+		assert.equal(entry?.trackPath, "cleaning.md");
 	});
 
-	it("is not evidence without a date", () => {
+	it("is not an entry without a date", () => {
 		assert.equal(readOne({ path: "e.md", frontmatter: { track: "[[cleaning]]" } }), null);
 	});
 
-	it("is not evidence without a track", () => {
+	it("is not an entry without a track", () => {
 		assert.equal(readOne({ path: "e.md", frontmatter: { date: "2026-09-11" } }), null);
 	});
 
-	it("is not evidence when the track link leads nowhere", () => {
+	it("is not an entry when the track link leads nowhere", () => {
 		assert.equal(
 			readOne({ path: "e.md", frontmatter: { track: "[[gone]]", date: "2026-09-11" } }),
 			null,
 		);
 	});
 
-	it("is not evidence without frontmatter", () => {
+	it("is not an entry without frontmatter", () => {
 		assert.equal(readOne({ path: "e.md" }), null);
 	});
 
@@ -111,8 +111,8 @@ describe("toEvidence", () => {
 	});
 });
 
-describe("collectEvidence", () => {
-	it("keeps the evidence of the vault and nothing else", () => {
+describe("collectEntries", () => {
+	it("keeps the entries of the vault and nothing else", () => {
 		const app = appWith([
 			card,
 			{ path: "water.md", frontmatter: { tags: "process_tracker" } },
@@ -122,7 +122,7 @@ describe("collectEvidence", () => {
 			{ path: "plain.md" },
 		]);
 		assert.deepEqual(
-			collectEvidence(app).map((entry) => [entry.path, entry.trackPath, entry.done]),
+			collectEntries(app).map((entry) => [entry.path, entry.trackPath, entry.done]),
 			[
 				["e1.md", "cleaning.md", true],
 				["e2.md", "water.md", false],

@@ -11,8 +11,8 @@ export interface CellTarget {
 	trackPath: string;
 	date: string;
 	state: CellState;
-	/** Path of the evidence behind the cell; `null` while the day is empty. */
-	evidencePath: string | null;
+	/** Path of the entry behind the cell; `null` while the day is empty. */
+	entryPath: string | null;
 }
 
 /** The note under the pointer, and the element it hangs on. */
@@ -91,18 +91,18 @@ function readCell(node: EventTarget | null): CellTarget | null {
 		trackPath,
 		date,
 		state: (cell.dataset.state ?? "empty") as CellState,
-		evidencePath: cell.dataset.evidence ?? null,
+		entryPath: cell.dataset.entry ?? null,
 	};
 }
 
 /**
- * The note to preview: the evidence of a cell that has one, the card behind a track name.
+ * The note to preview: the entry of a cell that has one, the card behind a track name.
  * An empty cell shows nothing — there is no note to show ([[expectation]] §8).
  */
 function readHover(node: EventTarget | null): HoverTarget | null {
 	const cell = closestOf(node, ".process-tracker__cell");
 	if (cell !== null) {
-		const path = cell.dataset.evidence ?? "";
+		const path = cell.dataset.entry ?? "";
 		return path === "" ? null : { element: cell, path };
 	}
 

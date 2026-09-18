@@ -1,9 +1,9 @@
-// Unit tests for creating evidence and switching `done`.
+// Unit tests for creating an entry and switching `done`.
 // The writer imports `obsidian` for types only, so a stub vault is enough here.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App, TFile } from "obsidian";
-import { createEvidence, setEvidenceDone } from "../src/evidence/write.ts";
+import { createEntry, setEntryDone } from "../src/entry/write.ts";
 
 interface Note {
 	path: string;
@@ -72,10 +72,10 @@ function vaultWith(notes: Note[], folders: string[] = []): Vault {
 
 const card: Note = { path: "cleaning.md", frontmatter: { tags: "process_tracker" } };
 
-describe("createEvidence", () => {
+describe("createEntry", () => {
 	it("writes a note named after the track and the day", async () => {
 		const vault = vaultWith([card]);
-		const file = await createEvidence(vault.app, "cleaning.md", "2026-09-13", false, "");
+		const file = await createEntry(vault.app, "cleaning.md", "2026-09-13", false, "");
 		assert.equal(file.path, "cleaning 2026-09-13.md");
 		assert.deepEqual(vault.created, [
 			{
@@ -87,7 +87,7 @@ describe("createEvidence", () => {
 
 	it("checks the box when the click asked for it", async () => {
 		const vault = vaultWith([card]);
-		await createEvidence(vault.app, "cleaning.md", "2026-09-13", true, "");
+		await createEntry(vault.app, "cleaning.md", "2026-09-13", true, "");
 		assert.match(vault.created[0].text, /^done: true$/m);
 	});
 
@@ -95,26 +95,26 @@ describe("createEvidence", () => {
 		const vault = vaultWith([
 			{ path: "tracks/card.md", frontmatter: { track_name: "уборка" } },
 		]);
-		const file = await createEvidence(vault.app, "tracks/card.md", "2026-09-13", false, "");
+		const file = await createEntry(vault.app, "tracks/card.md", "2026-09-13", false, "");
 		assert.equal(file.path, "уборка 2026-09-13.md");
 	});
 
 	it("writes into the folder of the settings and makes it when it is missing", async () => {
 		const vault = vaultWith([card]);
-		const file = await createEvidence(vault.app, "cleaning.md", "2026-09-13", false, "Журнал");
+		const file = await createEntry(vault.app, "cleaning.md", "2026-09-13", false, "Журнал");
 		assert.equal(file.path, "Журнал/cleaning 2026-09-13.md");
 		assert.deepEqual(vault.folders, ["Журнал"]);
 	});
 
 	it("leaves an existing folder alone", async () => {
 		const vault = vaultWith([card], ["Журнал"]);
-		await createEvidence(vault.app, "cleaning.md", "2026-09-13", false, "Журнал");
+		await createEntry(vault.app, "cleaning.md", "2026-09-13", false, "Журнал");
 		assert.deepEqual(vault.folders, []);
 	});
 
 	it("takes the next free name when the first one is taken", async () => {
 		const vault = vaultWith([card, { path: "cleaning 2026-09-13.md" }]);
-		const file = await createEvidence(vault.app, "cleaning.md", "2026-09-13", false, "");
+		const file = await createEntry(vault.app, "cleaning.md", "2026-09-13", false, "");
 		assert.equal(file.path, "cleaning 2026-09-13 2.md");
 	});
 
@@ -122,12 +122,12 @@ describe("createEvidence", () => {
 		const vault = vaultWith([
 			{
 				path: "cleaning.md",
-				frontmatter: { template: "[[evidence]]" },
-				frontmatterLinks: [{ key: "template", link: "evidence" }],
+				frontmatter: { template: "[[entry]]" },
+				frontmatterLinks: [{ key: "template", link: "entry" }],
 			},
-			{ path: "evidence.md", content: "---\ntrack:\nmood:\n---\n\n<% tp.file.cursor() %>\n" },
+			{ path: "entry.md", content: "---\ntrack:\nmood:\n---\n\n<% tp.file.cursor() %>\n" },
 		]);
-		await createEvidence(vault.app, "cleaning.md", "2026-09-13", false, "");
+		await createEntry(vault.app, "cleaning.md", "2026-09-13", false, "");
 		assert.equal(
 			vault.created[0].text,
 			'---\ntrack: "[[cleaning]]"\nmood:\ndate: 2026-09-13\ndone: false\n---\n\n<% tp.file.cursor() %>\n',
@@ -139,7 +139,7 @@ describe("createEvidence", () => {
 			{ path: "cleaning.md", frontmatter: { template: "[[gone]]" } },
 		]);
 		await assert.rejects(
-			() => createEvidence(vault.app, "cleaning.md", "2026-09-13", false, ""),
+			() => createEntry(vault.app, "cleaning.md", "2026-09-13", false, ""),
 			/template "gone"/,
 		);
 		assert.deepEqual(vault.created, []);
@@ -148,28 +148,28 @@ describe("createEvidence", () => {
 	it("writes nothing when the track card is gone", async () => {
 		const vault = vaultWith([]);
 		await assert.rejects(
-			() => createEvidence(vault.app, "cleaning.md", "2026-09-13", false, ""),
+			() => createEntry(vault.app, "cleaning.md", "2026-09-13", false, ""),
 			/track card "cleaning.md"/,
 		);
 		assert.deepEqual(vault.created, []);
 	});
 });
 
-describe("setEvidenceDone", () => {
+describe("setEntryDone", () => {
 	it("checks the box of an existing note", async () => {
 		const vault = vaultWith([{ path: "e.md", frontmatter: { done: false } }]);
-		await setEvidenceDone(vault.app, "e.md", true);
+		await setEntryDone(vault.app, "e.md", true);
 		assert.equal(vault.notes.get("e.md")?.frontmatter?.done, true);
 	});
 
 	it("takes the mark back without touching the rest", async () => {
 		const vault = vaultWith([{ path: "e.md", frontmatter: { done: true, mood: "ясно" } }]);
-		await setEvidenceDone(vault.app, "e.md", false);
+		await setEntryDone(vault.app, "e.md", false);
 		assert.deepEqual(vault.notes.get("e.md")?.frontmatter, { done: false, mood: "ясно" });
 	});
 
 	it("says so when the note is gone", async () => {
 		const vault = vaultWith([]);
-		await assert.rejects(() => setEvidenceDone(vault.app, "e.md", true), /evidence note "e.md"/);
+		await assert.rejects(() => setEntryDone(vault.app, "e.md", true), /entry note "e.md"/);
 	});
 });

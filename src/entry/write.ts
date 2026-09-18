@@ -1,23 +1,23 @@
-// Process Tracker — writing evidence: creating a note and switching its `done`.
+// Process Tracker — writing an entry: creating a note and switching its `done`.
 // Adapter module: the only place in the plugin that changes files.
 
 import type { App, CachedMetadata, TFile } from "obsidian";
-import { EVIDENCE_DONE_KEY, TRACK_TEMPLATE_KEY } from "../constants.ts";
+import { ENTRY_DONE_KEY, TRACK_TEMPLATE_KEY } from "../constants.ts";
 import { trackDisplayName } from "../tracks/select.ts";
-import { composeEvidence, evidenceFileName, evidencePath, normalizeFolder } from "./compose.ts";
+import { composeEntry, entryFileName, entryPath, normalizeFolder } from "./compose.ts";
 import { frontmatterLink } from "./source.ts";
 
 /** How many names are tried before a folder is declared hopeless. */
 const NAME_ATTEMPTS = 100;
 
 /**
- * Creates the evidence note behind one cell and returns it.
+ * Creates the entry note behind one cell and returns it.
  *
  * Everything the note needs is written before the file appears, in one `create`: Templater
  * renders `<% %>` on the content it finds, so a second pass over the frontmatter would race
  * it for the same file.
  */
-export async function createEvidence(
+export async function createEntry(
 	app: App,
 	trackPath: string,
 	date: string,
@@ -29,7 +29,7 @@ export async function createEvidence(
 
 	const cache = app.metadataCache.getFileCache(card);
 	const frontmatter = (cache?.frontmatter ?? {}) as Record<string, unknown>;
-	const name = evidenceFileName(trackDisplayName(frontmatter, card.basename), date);
+	const name = entryFileName(trackDisplayName(frontmatter, card.basename), date);
 	const path = freePath(app, folder, name);
 	const template = await readTemplate(app, card, cache);
 
@@ -38,16 +38,16 @@ export async function createEvidence(
 	const link = app.fileManager.generateMarkdownLink(card, path);
 
 	await ensureFolder(app, folder);
-	return await app.vault.create(path, composeEvidence(template, { track: link, date, done }));
+	return await app.vault.create(path, composeEntry(template, { track: link, date, done }));
 }
 
-/** Sets `done` of an existing evidence note; the rest of the note is left as it is. */
-export async function setEvidenceDone(app: App, path: string, done: boolean): Promise<void> {
+/** Sets `done` of an existing entry note; the rest of the note is left as it is. */
+export async function setEntryDone(app: App, path: string, done: boolean): Promise<void> {
 	const file = app.vault.getFileByPath(path);
-	if (file === null) throw new Error(`the evidence note "${path}" is gone`);
+	if (file === null) throw new Error(`the entry note "${path}" is gone`);
 
 	await app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-		frontmatter[EVIDENCE_DONE_KEY] = done;
+		frontmatter[ENTRY_DONE_KEY] = done;
 	});
 }
 
@@ -75,7 +75,7 @@ async function readTemplate(
 /** The first free path: `name.md`, then `name 2.md`, `name 3.md`. */
 function freePath(app: App, folder: string, name: string): string {
 	for (let attempt = 1; attempt <= NAME_ATTEMPTS; attempt++) {
-		const path = evidencePath(folder, attempt === 1 ? name : `${name} ${attempt}`);
+		const path = entryPath(folder, attempt === 1 ? name : `${name} ${attempt}`);
 		if (app.vault.getAbstractFileByPath(path) === null) return path;
 	}
 	throw new Error(`"${name}" is taken, and so are ${NAME_ATTEMPTS} names after it`);

@@ -4,11 +4,11 @@
 import { PluginSettingTab, Setting } from "obsidian";
 import type { App } from "obsidian";
 import type ProcessTrackerPlugin from "./main.ts";
-import { DEFAULT_SETTINGS, normalizeEvidenceFolder, normalizeTrackTag } from "./settings.ts";
+import { DEFAULT_SETTINGS, normalizeEntryFolder, normalizeTrackTag } from "./settings.ts";
 
 /**
  * The two settings of [[expectation]] §10: the tag that marks a track card and the folder
- * new evidence goes to. Every keystroke is cleaned up and saved — Obsidian has no Save
+ * new entries go to. Every keystroke is cleaned up and saved — Obsidian has no Save
  * button, and a settings tab that loses what was typed is worse than none.
  *
  * A changed setting reaches a table at its next render: the plugin builds the table from the
@@ -50,9 +50,9 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder("Vault root")
-					.setValue(this.plugin.settings.evidenceFolder)
+					.setValue(this.plugin.settings.entryFolder)
 					.onChange(async (value) => {
-						this.plugin.settings.evidenceFolder = normalizeEvidenceFolder(value);
+						this.plugin.settings.entryFolder = normalizeEntryFolder(value);
 						await this.plugin.saveSettings();
 					}),
 			);

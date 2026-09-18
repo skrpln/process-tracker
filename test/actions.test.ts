@@ -1,7 +1,7 @@
 // Unit tests for the interaction table of a cell.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cellAction } from "../src/evidence/actions.ts";
+import { cellAction } from "../src/entry/actions.ts";
 
 describe("cellAction", () => {
 	it("starts a draft on an empty day", () => {

@@ -6,13 +6,13 @@ import { DEFAULT_TRACK_TAG } from "./constants.ts";
 export interface ProcessTrackerSettings {
 	/** Tag that marks a track card, without the leading `#`. */
 	trackTag: string;
-	/** Folder for new evidence notes; empty string means the vault root. */
-	evidenceFolder: string;
+	/** Folder for new entry notes; empty string means the vault root. */
+	entryFolder: string;
 }
 
 export const DEFAULT_SETTINGS: ProcessTrackerSettings = {
 	trackTag: DEFAULT_TRACK_TAG,
-	evidenceFolder: "",
+	entryFolder: "",
 };
 
 /**
@@ -25,15 +25,22 @@ export function normalizeTrackTag(value: unknown): string {
 }
 
 /** A folder as it was typed, without the spaces around it. Empty means the vault root. */
-export function normalizeEvidenceFolder(value: unknown): string {
+export function normalizeEntryFolder(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
-/** Merges stored data with defaults, dropping unknown or malformed values. */
+/**
+ * Merges stored data with defaults, dropping unknown or malformed values.
+ *
+ * The folder was stored under `evidenceFolder` before the plugin learned to say `entry`, and
+ * that key still sits in the `data.json` of everyone who set the folder back then. It is read
+ * as a fallback, so a folder already chosen does not disappear; the next save writes the new
+ * key and the old one goes.
+ */
 export function normalizeSettings(data: unknown): ProcessTrackerSettings {
-	const stored = (data ?? {}) as Partial<ProcessTrackerSettings>;
+	const stored = (data ?? {}) as Partial<ProcessTrackerSettings> & { evidenceFolder?: unknown };
 	return {
 		trackTag: normalizeTrackTag(stored.trackTag),
-		evidenceFolder: normalizeEvidenceFolder(stored.evidenceFolder),
+		entryFolder: normalizeEntryFolder(stored.entryFolder ?? stored.evidenceFolder),
 	};
 }

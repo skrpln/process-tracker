@@ -274,7 +274,7 @@ body.theme-light .process-tracker {
 }
 
 /*
- * A draft — evidence for the day exists, `done` is false. The box stays unchecked and
+ * A draft — an entry for the day exists, `done` is false. The box stays unchecked and
  * takes a colour of its own, so the day reads as started at a glance.
  *
  * The colour is mixed, not borrowed. Borrowing the hover colour of the theme worked

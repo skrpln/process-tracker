@@ -1,18 +1,18 @@
-// Unit tests for reading evidence properties and indexing evidence by day.
+// Unit tests for reading entry properties and indexing entries by day.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Evidence } from "../src/model/types.ts";
+import type { Entry } from "../src/model/types.ts";
 import {
-	buildEvidenceIndex,
+	buildEntryIndex,
 	cellState,
-	evidenceKey,
-	findEvidence,
+	entryKey,
+	findEntry,
 	readDate,
 	readDone,
 	readTrackLink,
-} from "../src/evidence/state.ts";
+} from "../src/entry/state.ts";
 
-function evidence(overrides: Partial<Evidence> & { path: string }): Evidence {
+function entry(overrides: Partial<Entry> & { path: string }): Entry {
 	return {
 		trackPath: "cleaning.md",
 		date: "2026-09-11",
@@ -100,48 +100,48 @@ describe("readTrackLink", () => {
 	});
 });
 
-describe("buildEvidenceIndex", () => {
-	it("finds evidence by track and date", () => {
-		const index = buildEvidenceIndex([evidence({ path: "a.md" })]);
-		assert.equal(findEvidence(index, "cleaning.md", "2026-09-11")?.path, "a.md");
+describe("buildEntryIndex", () => {
+	it("finds an entry by track and date", () => {
+		const index = buildEntryIndex([entry({ path: "a.md" })]);
+		assert.equal(findEntry(index, "cleaning.md", "2026-09-11")?.path, "a.md");
 	});
 
 	it("tells one track from another on the same day", () => {
-		const index = buildEvidenceIndex([
-			evidence({ path: "a.md" }),
-			evidence({ path: "b.md", trackPath: "water.md" }),
+		const index = buildEntryIndex([
+			entry({ path: "a.md" }),
+			entry({ path: "b.md", trackPath: "water.md" }),
 		]);
-		assert.equal(findEvidence(index, "water.md", "2026-09-11")?.path, "b.md");
+		assert.equal(findEntry(index, "water.md", "2026-09-11")?.path, "b.md");
 	});
 
-	it("reports nothing for a day without evidence", () => {
-		const index = buildEvidenceIndex([evidence({ path: "a.md" })]);
-		assert.equal(findEvidence(index, "cleaning.md", "2026-09-10"), null);
+	it("reports nothing for a day without an entry", () => {
+		const index = buildEntryIndex([entry({ path: "a.md" })]);
+		assert.equal(findEntry(index, "cleaning.md", "2026-09-10"), null);
 	});
 
 	it("lets done win over a draft for the same day", () => {
-		const draft = evidence({ path: "a.md", done: false });
-		const done = evidence({ path: "b.md", done: true });
-		assert.equal(findEvidence(buildEvidenceIndex([draft, done]), "cleaning.md", "2026-09-11"), done);
-		assert.equal(findEvidence(buildEvidenceIndex([done, draft]), "cleaning.md", "2026-09-11"), done);
+		const draft = entry({ path: "a.md", done: false });
+		const done = entry({ path: "b.md", done: true });
+		assert.equal(findEntry(buildEntryIndex([draft, done]), "cleaning.md", "2026-09-11"), done);
+		assert.equal(findEntry(buildEntryIndex([done, draft]), "cleaning.md", "2026-09-11"), done);
 	});
 
 	it("keeps the first path when two notes claim the day alike", () => {
-		const first = evidence({ path: "a.md" });
-		const second = evidence({ path: "b.md" });
-		assert.equal(findEvidence(buildEvidenceIndex([second, first]), "cleaning.md", "2026-09-11"), first);
+		const first = entry({ path: "a.md" });
+		const second = entry({ path: "b.md" });
+		assert.equal(findEntry(buildEntryIndex([second, first]), "cleaning.md", "2026-09-11"), first);
 	});
 
 	it("gives every track and day a key of its own", () => {
-		assert.notEqual(evidenceKey("cleaning.md", "2026-09-11"), evidenceKey("water.md", "2026-09-11"));
-		assert.notEqual(evidenceKey("cleaning.md", "2026-09-11"), evidenceKey("cleaning.md", "2026-09-10"));
+		assert.notEqual(entryKey("cleaning.md", "2026-09-11"), entryKey("water.md", "2026-09-11"));
+		assert.notEqual(entryKey("cleaning.md", "2026-09-11"), entryKey("cleaning.md", "2026-09-10"));
 	});
 });
 
 describe("cellState", () => {
 	it("names the three states", () => {
 		assert.equal(cellState(null), "empty");
-		assert.equal(cellState(evidence({ path: "a.md", done: false })), "draft");
-		assert.equal(cellState(evidence({ path: "a.md", done: true })), "done");
+		assert.equal(cellState(entry({ path: "a.md", done: false })), "draft");
+		assert.equal(cellState(entry({ path: "a.md", done: true })), "done");
 	});
 });

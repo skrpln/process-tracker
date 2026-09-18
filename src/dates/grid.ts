@@ -85,7 +85,7 @@ export function splitMonthYear(label: string): { month: string; year: string } {
 	return { month: label.slice(0, cut), year: label.slice(cut + 1) };
 }
 
-/** Local calendar date as `YYYY-MM-DD` — the format used in evidence frontmatter. */
+/** Local calendar date as `YYYY-MM-DD` — the format used in entry frontmatter. */
 export function toIsoDate(date: Date): string {
 	const year = String(date.getFullYear()).padStart(4, "0");
 	const month = String(date.getMonth() + 1).padStart(2, "0");

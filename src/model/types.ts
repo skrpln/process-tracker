@@ -36,8 +36,8 @@ export interface TrackCard {
 	mtime: number;
 }
 
-/** An evidence note: one day of one track. */
-export interface Evidence {
+/** An entry note: one day of one track. */
+export interface Entry {
 	path: string;
 	/** Path of the track card the `track` property points at. */
 	trackPath: string;
@@ -47,7 +47,7 @@ export interface Evidence {
 	done: boolean;
 }
 
-/** State of one cell, derived from the evidence behind it ([[expectation]] §7). */
+/** State of one cell, derived from the entry behind it ([[expectation]] §7). */
 export type CellState = "empty" | "draft" | "done";
 
 /** One date column of the tracker table. */

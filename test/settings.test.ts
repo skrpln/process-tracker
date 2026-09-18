@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	DEFAULT_SETTINGS,
-	normalizeEvidenceFolder,
+	normalizeEntryFolder,
 	normalizeSettings,
 	normalizeTrackTag,
 } from "../src/settings.ts";
@@ -24,27 +24,40 @@ describe("normalizeTrackTag", () => {
 	});
 });
 
-describe("normalizeEvidenceFolder", () => {
+describe("normalizeEntryFolder", () => {
 	it("keeps the folder, without the spaces around it", () => {
-		assert.equal(normalizeEvidenceFolder(" evidence/2026 "), "evidence/2026");
+		assert.equal(normalizeEntryFolder(" entry/2026 "), "entry/2026");
 	});
 
 	it("answers the vault root for an empty or unreadable value", () => {
-		assert.equal(normalizeEvidenceFolder("   "), "");
-		assert.equal(normalizeEvidenceFolder(null), "");
+		assert.equal(normalizeEntryFolder("   "), "");
+		assert.equal(normalizeEntryFolder(null), "");
 	});
 });
 
 describe("normalizeSettings", () => {
 	it("reads what data.json holds", () => {
-		assert.deepEqual(normalizeSettings({ trackTag: "#habits", evidenceFolder: "evidence" }), {
+		assert.deepEqual(normalizeSettings({ trackTag: "#habits", entryFolder: "entry" }), {
 			trackTag: "habits",
-			evidenceFolder: "evidence",
+			entryFolder: "entry",
 		});
 	});
 
 	it("stands on the defaults when there is nothing stored", () => {
 		assert.deepEqual(normalizeSettings(null), DEFAULT_SETTINGS);
 		assert.deepEqual(normalizeSettings({ trackTag: 0 }), DEFAULT_SETTINGS);
+	});
+
+	it("reads the folder stored under the old key", () => {
+		assert.equal(normalizeSettings({ evidenceFolder: "Журнал" }).entryFolder, "Журнал");
+	});
+
+	it("prefers the new key when data.json holds both", () => {
+		const stored = { entryFolder: "Записи", evidenceFolder: "Журнал" };
+		assert.equal(normalizeSettings(stored).entryFolder, "Записи");
+	});
+
+	it("keeps the vault root chosen under the new key", () => {
+		assert.equal(normalizeSettings({ entryFolder: "", evidenceFolder: "Журнал" }).entryFolder, "");
 	});
 });
