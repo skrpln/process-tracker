@@ -3,9 +3,8 @@
 
 import { setTooltip } from "obsidian";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
-import { planRefresh } from "../entry/refresh.ts";
 import type { CellRef } from "../entry/refresh.ts";
-import { cellState, entryKey, findEntry } from "../entry/state.ts";
+import { cellState, findEntries } from "../entry/state.ts";
 import type { EntryIndex } from "../entry/state.ts";
 import type { CellState, DateColumn, Entry, TrackCard } from "../model/types.ts";
 
@@ -17,6 +16,12 @@ const DRAFT_TOOLTIP = "Not done";
 
 /** Class of the scrolling container; the wheel handler of the plugin looks for it by name. */
 export const SCROLL_CLASS = "process-tracker__scroll";
+
+/**
+ * How the paths of a day are written into one attribute: one per line. A vault path holds
+ * no newline, so the list splits back exactly as it was written.
+ */
+const PATH_SEPARATOR = "\n";
 
 /** Everything the table needs; assembled by the plugin entry point. */
 export interface TrackerView {
@@ -139,7 +144,7 @@ function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	for (const track of view.tracks) {
 		const row = body.createEl("tr");
 		for (const column of view.columns) {
-			renderCheckCell(row, track, column, findEntry(view.entries, track.path, column.iso));
+			renderCheckCell(row, track, column, findEntries(view.entries, track.path, column.iso));
 		}
 	}
 }
@@ -159,26 +164,30 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
 }
 
 /**
- * The box shows what the vault says: checked for `done: true`, unchecked for a draft
- * or an empty day. The state also goes on the cell as `data-state`, where the stylesheet
- * picks the draft up and where the click handling reads it back — together with
- * `data-track`, `data-date` and `data-entry`, which address the cell.
+ * The box shows what the vault says: checked when every entry of the day is done, unchecked
+ * for a draft or an empty day. The state also goes on the cell as `data-state`, where the
+ * stylesheet picks the draft up and where the click handling reads it back — together with
+ * `data-track`, `data-date` and `data-entry`, which address the cell and name the notes
+ * behind it, one path per line.
  *
- * The click itself is handled once for the whole table, by `CellClickChild`.
+ * A day with several entries looks like any other day: there is no mark for it, because
+ * several entries are a state of affairs and not an error ([[expectation]] §7).
+ *
+ * The click itself is handled once for the whole table, by `CellPointerChild`.
  */
 function renderCheckCell(
 	row: HTMLTableRowElement,
 	track: TrackCard,
 	column: DateColumn,
-	entry: Entry | null,
+	entries: readonly Entry[],
 ): void {
-	const state = cellState(entry);
+	const state = cellState(entries);
 	const cell = row.createEl("td", {
 		cls: "process-tracker__cell",
 		attr: { "data-date": column.iso, "data-track": track.path, "data-state": state },
 	});
 	if (column.isToday) cell.addClass("is-today");
-	if (entry !== null) cell.setAttr("data-entry", entry.path);
+	writeEntryPaths(cell, entries.map((entry) => entry.path));
 
 	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
 	// so centring it never has to argue with the way a theme styles a checkbox.
@@ -187,63 +196,51 @@ function renderCheckCell(
 		type: "checkbox",
 	});
 	box.checked = state === "done";
-	if (state === "draft") setTooltip(cell, DRAFT_TOOLTIP);
+	setTooltip(cell, draftTooltip(state, entries.length));
 }
 
 /**
- * Repaints one cell after a click. The table is not rebuilt: the file behind this cell is
- * the only thing that changed, and a rebuild would throw away the scroll position of the
- * table the reader is working in.
+ * Repaints one cell after its day changed. The table is not rebuilt: a rebuild would throw
+ * away the scroll position of the table the reader is working in.
  */
-export function paintCell(
-	cell: HTMLElement,
-	state: CellState,
-	entryPath: string | null,
-): void {
+export function paintCell(cell: HTMLElement, state: CellState, paths: readonly string[]): void {
 	cell.setAttr("data-state", state);
-	if (entryPath === null) cell.removeAttribute("data-entry");
-	else cell.setAttr("data-entry", entryPath);
-
-	setTooltip(cell, state === "draft" ? DRAFT_TOOLTIP : "");
+	writeEntryPaths(cell, paths);
+	setTooltip(cell, draftTooltip(state, paths.length));
 
 	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
 	if (box !== null) box.checked = state === "done";
 }
 
 /**
- * Repaints the cells of one table after an entry note changed outside it: in another tab,
- * in a hover popover, by hand. Only the cells that note addresses are touched — the table
- * keeps its scroll position, its measured column width and everything else it holds.
- *
- * The cells showing the note are found by the path the renderer wrote into `data-entry`,
- * so nothing about the table has to be remembered between renders; what the found cells must
- * become is decided by `planRefresh` ([[entry]]).
+ * The note of a draft, shown on hover beside the preview of its entry. A day with several
+ * entries says nothing here: its popup lists them with a box each, and a tooltip over that
+ * popup would only be in the way ([[expectation]] §8).
  */
-export function refreshEntry(
-	root: HTMLElement,
-	path: string,
-	entry: Entry | null,
-): void {
-	const claimed = new Map<string, HTMLElement>();
-	const refs: CellRef[] = [];
-	for (const element of cellsOf(root, `[data-entry=${quote(path)}]`)) {
-		const ref = readCellRef(element);
-		if (ref === null) continue;
-		refs.push(ref);
-		claimed.set(entryKey(ref.trackPath, ref.date), element);
-	}
+function draftTooltip(state: CellState, count: number): string {
+	return state === "draft" && count === 1 ? DRAFT_TOOLTIP : "";
+}
 
-	const plan = planRefresh(entry, refs);
-	for (const ref of plan.clear) {
-		const cell = claimed.get(entryKey(ref.trackPath, ref.date));
-		if (cell !== undefined) paintCell(cell, "empty", null);
-	}
+/** The notes behind a cell, in the order the popup lists them. */
+export function entryPathsOf(cell: HTMLElement): string[] {
+	const written = cell.dataset.entry ?? "";
+	return written === "" ? [] : written.split(PATH_SEPARATOR);
+}
 
-	if (plan.paint === null) return;
-	const { trackPath, date } = plan.paint.cell;
-	const target = cellsOf(root, `[data-track=${quote(trackPath)}][data-date=${quote(date)}]`)[0];
-	// The day may lie outside the columns of this table, or the track outside its rows.
-	if (target !== undefined) paintCell(target, plan.paint.state, plan.paint.entryPath);
+function writeEntryPaths(cell: HTMLElement, paths: readonly string[]): void {
+	if (paths.length === 0) cell.removeAttribute("data-entry");
+	else cell.setAttr("data-entry", paths.join(PATH_SEPARATOR));
+}
+
+/** The cells of this table that show the note at this path right now. */
+export function cellsShowing(root: HTMLElement, path: string): HTMLElement[] {
+	return cellsOf(root, "[data-entry]").filter((cell) => entryPathsOf(cell).includes(path));
+}
+
+/** The cell of one day, or `null`: the day may lie outside the columns, the track outside the rows. */
+export function cellOf(root: HTMLElement, day: CellRef): HTMLElement | null {
+	const selector = `[data-track=${quote(day.trackPath)}][data-date=${quote(day.date)}]`;
+	return cellsOf(root, selector)[0] ?? null;
 }
 
 function cellsOf(root: HTMLElement, attributes: string): HTMLElement[] {
@@ -252,7 +249,8 @@ function cellsOf(root: HTMLElement, attributes: string): HTMLElement[] {
 	);
 }
 
-function readCellRef(cell: HTMLElement): CellRef | null {
+/** The day a cell stands for, read back from the attributes the renderer wrote. */
+export function readCellRef(cell: HTMLElement): CellRef | null {
 	const trackPath = cell.dataset.track ?? "";
 	const date = cell.dataset.date ?? "";
 	return trackPath === "" || date === "" ? null : { trackPath, date };

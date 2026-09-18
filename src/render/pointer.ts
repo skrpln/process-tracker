@@ -1,9 +1,16 @@
-// Process Tracker — the pointer over the table: clicks and hover previews.
+// Process Tracker — the pointer over the table: clicks, previews and the list of a day.
 
 import { Keymap, MarkdownRenderChild } from "obsidian";
 import type { App, HoverParent, HoverPopover } from "obsidian";
 import { HOVER_SOURCE } from "../constants.ts";
-import type { CellState } from "../model/types.ts";
+import { entryAt } from "../entry/source.ts";
+import type { CellState, Entry } from "../model/types.ts";
+import { DayPopup } from "./popup.ts";
+import type { DayHandlers } from "./popup.ts";
+import { entryPathsOf } from "./table.ts";
+
+/** How long the pointer rests on a day before its list opens, as a preview waits too. */
+const OPEN_DELAY = 300;
 
 /** The cell a click landed on, read back from the DOM. */
 export interface CellTarget {
@@ -11,8 +18,8 @@ export interface CellTarget {
 	trackPath: string;
 	date: string;
 	state: CellState;
-	/** Path of the entry behind the cell; `null` while the day is empty. */
-	entryPath: string | null;
+	/** Paths of the notes behind the cell, in the order the list shows them. */
+	entryPaths: string[];
 }
 
 /** The note under the pointer, and the element it hangs on. */
@@ -33,6 +40,13 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	/** Where the core Page preview plugin keeps the popover it opened for this table. */
 	hoverPopover: HoverPopover | null = null;
 
+	/** The list of a day, while one is open. */
+	private day: DayPopup | null = null;
+	/** Handle of the timer that opens a list; 0 when none is pending. */
+	private opening = 0;
+	/** The cell that timer belongs to, so a pointer moving inside it does not reset it. */
+	private openingCell: HTMLElement | null = null;
+
 	constructor(
 		containerEl: HTMLElement,
 		/** Both tables of the tracker: the cells scroll, the track names do not. */
@@ -40,6 +54,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		private readonly app: App,
 		private readonly sourcePath: string,
 		private readonly onClick: (target: CellTarget, mod: boolean) => void,
+		private readonly handlers: DayHandlers,
 	) {
 		super(containerEl);
 	}
@@ -52,13 +67,61 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 			// The box must not check itself: the mark belongs to the file. Cancelling the
 			// click here also takes back the checked state the browser has already set.
 			event.preventDefault();
+			// The day is about to change; a list drawn from the old one would lie.
+			this.closeDay();
 			this.onClick(target, Keymap.isModifier(event, "Mod"));
 		});
 
-		this.registerDomEvent(this.frame, "mouseover", (event: MouseEvent) => {
-			const target = readHover(event.target);
-			if (target !== null) this.preview(target, event);
+		this.registerDomEvent(this.frame, "mouseover", (event: MouseEvent) => this.onHover(event));
+		this.registerDomEvent(this.frame, "mouseleave", () => {
+			this.cancelOpen();
+			this.liveDay()?.scheduleClose();
 		});
+	}
+
+	onunload(): void {
+		this.cancelOpen();
+		this.closeDay();
+	}
+
+	/**
+	 * What the pointer found ([[expectation]] §8): a day of one entry hands its note to the
+	 * core Page preview plugin, a day of several opens the list of the plugin, an empty day
+	 * shows nothing, and a track name shows its card.
+	 */
+	private onHover(event: MouseEvent): void {
+		const cell = closestOf(event.target, ".process-tracker__cell");
+		if (cell !== null) {
+			this.onCellHover(cell, event);
+			return;
+		}
+
+		this.cancelOpen();
+		this.liveDay()?.scheduleClose();
+
+		const link = closestOf(event.target, ".process-tracker__track a");
+		const path = link === null ? "" : (link.dataset.href ?? "");
+		if (link !== null && path !== "") this.preview({ element: link, path }, event);
+	}
+
+	private onCellHover(cell: HTMLElement, event: MouseEvent): void {
+		const paths = entryPathsOf(cell);
+		if (paths.length > 1) {
+			const open = this.liveDay();
+			// The pointer came back to the cell the list belongs to: the list stays.
+			if (open !== null && open.cell === cell) {
+				open.hold();
+				return;
+			}
+			// The list of another day is on its way out while this one is on its way in.
+			open?.scheduleClose();
+			this.scheduleOpen(cell, paths);
+			return;
+		}
+
+		this.cancelOpen();
+		this.liveDay()?.scheduleClose();
+		if (paths.length === 1) this.preview({ element: cell, path: paths[0] }, event);
 	}
 
 	/**
@@ -76,6 +139,54 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 			sourcePath: this.sourcePath,
 		});
 	}
+
+	private scheduleOpen(cell: HTMLElement, paths: string[]): void {
+		// A pointer crossing the box and the wrapper inside one cell reports a hover each
+		// time; the wait belongs to the cell, so it is not started over by them.
+		if (this.openingCell === cell) return;
+
+		this.cancelOpen();
+		this.openingCell = cell;
+		const view = cell.ownerDocument.defaultView;
+		this.opening = view?.setTimeout(() => this.openDayList(cell, paths), OPEN_DELAY) ?? 0;
+	}
+
+	/**
+	 * Opens the list of one day. The notes are read again here, so the boxes show what the
+	 * vault says at the moment the list appears. A day that thinned out to one note in the
+	 * meantime gets no list: the cell itself is repainted by the subscription.
+	 */
+	private openDayList(cell: HTMLElement, paths: string[]): void {
+		this.opening = 0;
+		this.openingCell = null;
+
+		const entries: Entry[] = [];
+		for (const path of paths) {
+			const entry = entryAt(this.app, path);
+			if (entry !== null) entries.push(entry);
+		}
+		if (entries.length < 2) return;
+
+		this.closeDay();
+		this.day = new DayPopup(this.app, this.sourcePath, cell, entries, this.handlers);
+	}
+
+	private cancelOpen(): void {
+		this.openingCell = null;
+		if (this.opening === 0) return;
+		this.frame.ownerDocument.defaultView?.clearTimeout(this.opening);
+		this.opening = 0;
+	}
+
+	private closeDay(): void {
+		this.liveDay()?.close();
+		this.day = null;
+	}
+
+	/** The list on screen, if the one the child holds has not closed itself already. */
+	private liveDay(): DayPopup | null {
+		return this.day !== null && this.day.isOpen() ? this.day : null;
+	}
 }
 
 function readCell(node: EventTarget | null): CellTarget | null {
@@ -91,25 +202,8 @@ function readCell(node: EventTarget | null): CellTarget | null {
 		trackPath,
 		date,
 		state: (cell.dataset.state ?? "empty") as CellState,
-		entryPath: cell.dataset.entry ?? null,
+		entryPaths: entryPathsOf(cell),
 	};
-}
-
-/**
- * The note to preview: the entry of a cell that has one, the card behind a track name.
- * An empty cell shows nothing — there is no note to show ([[expectation]] §8).
- */
-function readHover(node: EventTarget | null): HoverTarget | null {
-	const cell = closestOf(node, ".process-tracker__cell");
-	if (cell !== null) {
-		const path = cell.dataset.entry ?? "";
-		return path === "" ? null : { element: cell, path };
-	}
-
-	const link = closestOf(node, ".process-tracker__track a");
-	if (link === null) return null;
-	const path = link.dataset.href ?? "";
-	return path === "" ? null : { element: link, path };
 }
 
 /**

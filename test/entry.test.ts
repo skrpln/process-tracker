@@ -6,11 +6,15 @@ import {
 	buildEntryIndex,
 	cellState,
 	entryKey,
-	findEntry,
+	findEntries,
 	readDate,
 	readDone,
 	readTrackLink,
 } from "../src/entry/state.ts";
+
+function paths(entries: readonly Entry[]): string[] {
+	return entries.map((entry) => entry.path);
+}
 
 function entry(overrides: Partial<Entry> & { path: string }): Entry {
 	return {
@@ -101,9 +105,9 @@ describe("readTrackLink", () => {
 });
 
 describe("buildEntryIndex", () => {
-	it("finds an entry by track and date", () => {
+	it("finds the entry of a day by track and date", () => {
 		const index = buildEntryIndex([entry({ path: "a.md" })]);
-		assert.equal(findEntry(index, "cleaning.md", "2026-09-11")?.path, "a.md");
+		assert.deepEqual(paths(findEntries(index, "cleaning.md", "2026-09-11")), ["a.md"]);
 	});
 
 	it("tells one track from another on the same day", () => {
@@ -111,25 +115,25 @@ describe("buildEntryIndex", () => {
 			entry({ path: "a.md" }),
 			entry({ path: "b.md", trackPath: "water.md" }),
 		]);
-		assert.equal(findEntry(index, "water.md", "2026-09-11")?.path, "b.md");
+		assert.deepEqual(paths(findEntries(index, "water.md", "2026-09-11")), ["b.md"]);
 	});
 
-	it("reports nothing for a day without an entry", () => {
+	it("reports an empty day as an empty list", () => {
 		const index = buildEntryIndex([entry({ path: "a.md" })]);
-		assert.equal(findEntry(index, "cleaning.md", "2026-09-10"), null);
+		assert.deepEqual(findEntries(index, "cleaning.md", "2026-09-10"), []);
 	});
 
-	it("lets done win over a draft for the same day", () => {
-		const draft = entry({ path: "a.md", done: false });
-		const done = entry({ path: "b.md", done: true });
-		assert.equal(findEntry(buildEntryIndex([draft, done]), "cleaning.md", "2026-09-11"), done);
-		assert.equal(findEntry(buildEntryIndex([done, draft]), "cleaning.md", "2026-09-11"), done);
-	});
-
-	it("keeps the first path when two notes claim the day alike", () => {
-		const first = entry({ path: "a.md" });
-		const second = entry({ path: "b.md" });
-		assert.equal(findEntry(buildEntryIndex([second, first]), "cleaning.md", "2026-09-11"), first);
+	it("keeps every entry of a day, in the order of their paths", () => {
+		const index = buildEntryIndex([
+			entry({ path: "c.md" }),
+			entry({ path: "a.md", done: false }),
+			entry({ path: "b.md" }),
+		]);
+		assert.deepEqual(paths(findEntries(index, "cleaning.md", "2026-09-11")), [
+			"a.md",
+			"b.md",
+			"c.md",
+		]);
 	});
 
 	it("gives every track and day a key of its own", () => {
@@ -139,9 +143,17 @@ describe("buildEntryIndex", () => {
 });
 
 describe("cellState", () => {
-	it("names the three states", () => {
-		assert.equal(cellState(null), "empty");
-		assert.equal(cellState(entry({ path: "a.md", done: false })), "draft");
-		assert.equal(cellState(entry({ path: "a.md", done: true })), "done");
+	it("names the three states of a day with one entry", () => {
+		assert.equal(cellState([]), "empty");
+		assert.equal(cellState([entry({ path: "a.md", done: false })]), "draft");
+		assert.equal(cellState([entry({ path: "a.md", done: true })]), "done");
+	});
+
+	it("checks the box only when every entry of the day is done", () => {
+		const done = entry({ path: "a.md", done: true });
+		const draft = entry({ path: "b.md", done: false });
+		assert.equal(cellState([done, draft]), "draft");
+		assert.equal(cellState([draft, done]), "draft");
+		assert.equal(cellState([done, entry({ path: "c.md", done: true })]), "done");
 	});
 });

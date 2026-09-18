@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App, TFile } from "obsidian";
-import { collectEntries, toEntry } from "../src/entry/source.ts";
+import { collectEntries, entryAt, toEntry } from "../src/entry/source.ts";
 
 interface Note {
 	path: string;
@@ -19,7 +19,10 @@ function appWith(notes: Note[]): App {
 	const byPath = new Map(notes.map((note) => [note.path, note]));
 
 	return {
-		vault: { getMarkdownFiles: () => files },
+		vault: {
+			getMarkdownFiles: () => files,
+			getFileByPath: (path: string) => files.find((file) => file.path === path) ?? null,
+		},
 		metadataCache: {
 			getFileCache: (file: TFile) => {
 				const note = byPath.get(file.path);
@@ -128,5 +131,24 @@ describe("collectEntries", () => {
 				["e2.md", "water.md", false],
 			],
 		);
+	});
+});
+
+describe("entryAt", () => {
+	const note: Note = {
+		path: "cleaning 2026-09-11.md",
+		frontmatter: { track: "[[cleaning]]", date: "2026-09-11", done: true },
+	};
+
+	it("reads the note at a path", () => {
+		assert.equal(entryAt(appWith([card, note]), note.path)?.done, true);
+	});
+
+	it("answers nothing for a path that leads nowhere", () => {
+		assert.equal(entryAt(appWith([card, note]), "gone.md"), null);
+	});
+
+	it("answers nothing for a note that is no entry", () => {
+		assert.equal(entryAt(appWith([card, note]), card.path), null);
 	});
 });

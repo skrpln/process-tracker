@@ -317,3 +317,89 @@ body.theme-light .process-tracker {
 	font-size: var(--font-ui-small);
 	padding: var(--size-4-2);
 }
+
+/*
+ * The list a day of several entries opens on hover.
+ *
+ * The container carries the classes of an Obsidian popover, so a theme dresses it like the
+ * previews standing next to it — and sizes it like them too. Width is left alone: Obsidian
+ * gives the child of a popover `var(--popover-width)`, so the list stands as wide as every
+ * other popup of the vault, and a list that measured itself by its longest note name would
+ * be the one popup that jumps about.
+ *
+ * Height is the exception. A preview is a window onto a note and is given the height of one;
+ * this list is as tall as the day is long, so the fixed height goes and the cap becomes the
+ * one the theme states for a popover.
+ *
+ * Placed in the body, at the cell: the cells scroll inside a frame that clips them, and a
+ * list drawn inside that frame would be cut off by it. The coordinates are written on the
+ * element by the plugin; how it is positioned is decided here.
+ */
+.popover.hover-popover.process-tracker__day {
+	position: fixed;
+	/*
+	 * The direction is stated, not assumed. A popover is laid out as a flex container —
+	 * it holds one embedded note and stretches it — and a flex container with no direction
+	 * of its own puts its children in a row: the rows of the day stood side by side.
+	 */
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0;
+	height: auto;
+	max-height: var(--popover-height);
+	overflow-y: auto;
+}
+
+.process-tracker__day .process-tracker__day-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-2-2) 0;
+}
+
+/*
+ * The rows are content, and content is the business of the theme: the look of an internal
+ * link hangs on `markdown-rendered`, and a list drawn without that class shows a bare
+ * browser link while every other link in the vault is dressed by the theme.
+ *
+ * Only that class. The other half of the pair, `markdown-preview-view`, means the box of a
+ * note view, and themes fill it with page geometry — Ultra Lobster ends a note with
+ * `padding-bottom: 80px !important`, which no rule of the plugin could take back. The box
+ * here belongs to the popup; the content belongs to the theme, its size included.
+ */
+/*
+ * The two things Obsidian states on the box class the list does without: a note is set in the
+ * text font of the theme, at the text size of the theme. Stated in a rule of one class, so a
+ * theme that has its own word about the size of rendered text — Ultra Lobster scales it —
+ * still has the last one.
+ */
+.process-tracker__day-list {
+	font-family: var(--font-text);
+	font-size: var(--font-text-size);
+}
+
+.process-tracker__day .process-tracker__day-list.markdown-rendered {
+	display: flex;
+	flex-direction: column;
+	/* The space between rows is the padding of a row, not a gap a theme happens to set. */
+	gap: 0;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	/* The inner padding, so the width of the popover stays the width Obsidian gives it. */
+	padding: var(--size-4-2);
+	overflow: visible;
+}
+
+/* The box keeps its size whatever the name beside it is; the name gives way instead. */
+.process-tracker__day .process-tracker__day-row input[type="checkbox"] {
+	flex: 0 0 auto;
+	margin: 0;
+}
+
+.process-tracker__day .process-tracker__day-row a {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}

@@ -20,6 +20,12 @@ export function collectEntries(app: App): Entry[] {
 	return entries;
 }
 
+/** The note at this path as the metadata cache has it; `null` when it is gone or is no entry. */
+export function entryAt(app: App, path: string): Entry | null {
+	const file = app.vault.getFileByPath(path);
+	return file === null ? null : toEntry(app, file);
+}
+
 export function toEntry(app: App, file: TFile): Entry | null {
 	const cache = app.metadataCache.getFileCache(file);
 	const frontmatter = cache?.frontmatter;

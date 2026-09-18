@@ -1,71 +1,95 @@
-// Unit tests for the repaint plan of a changed entry note.
+// Unit tests for the recount of a day after one note changed.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { planRefresh, sameCell } from "../src/entry/refresh.ts";
+import { belongsTo, recountDay, sameCell, touchedDays } from "../src/entry/refresh.ts";
 import type { CellRef } from "../src/entry/refresh.ts";
 import type { Entry } from "../src/model/types.ts";
 
-const entry: Entry = {
-	path: "entry/cleaning 2026-09-14.md",
-	trackPath: "tracks/cleaning.md",
-	date: "2026-09-14",
-	done: true,
-};
+const day: CellRef = { trackPath: "cleaning.md", date: "2026-09-14" };
 
-const own: CellRef = { trackPath: "tracks/cleaning.md", date: "2026-09-14" };
+function entry(overrides: Partial<Entry> & { path: string }): Entry {
+	return { trackPath: "cleaning.md", date: "2026-09-14", done: true, ...overrides };
+}
 
-describe("planRefresh", () => {
-	it("checks the box of the cell the note already holds", () => {
-		const plan = planRefresh(entry, [own]);
-		assert.deepEqual(plan.clear, []);
-		assert.deepEqual(plan.paint, {
-			cell: own,
-			state: "done",
-			entryPath: "entry/cleaning 2026-09-14.md",
-		});
+describe("touchedDays", () => {
+	it("keeps the day of a note that stayed where it was", () => {
+		assert.deepEqual(touchedDays([day], entry({ path: "a.md" })), [day]);
 	});
 
-	it("takes the mark back when the note says it is not done", () => {
-		const plan = planRefresh({ ...entry, done: false }, [own]);
-		assert.equal(plan.paint?.state, "draft");
-		assert.deepEqual(plan.clear, []);
+	it("adds the day a note has just claimed", () => {
+		assert.deepEqual(touchedDays([], entry({ path: "a.md" })), [day]);
 	});
 
-	it("paints a cell the table does not show yet", () => {
-		const plan = planRefresh(entry, []);
-		assert.deepEqual(plan.clear, []);
-		assert.equal(plan.paint?.cell.date, "2026-09-14");
+	it("takes both days of a note that moved", () => {
+		const moved = entry({ path: "a.md", date: "2026-09-15" });
+		assert.deepEqual(touchedDays([day], moved), [day, { ...day, date: "2026-09-15" }]);
 	});
 
-	it("empties the old cell when the note moves to another day", () => {
-		const plan = planRefresh({ ...entry, date: "2026-09-15" }, [own]);
-		assert.deepEqual(plan.clear, [own]);
-		assert.deepEqual(plan.paint?.cell, { trackPath: "tracks/cleaning.md", date: "2026-09-15" });
+	it("takes both days of a note that changed its track", () => {
+		const moved = entry({ path: "a.md", trackPath: "water.md" });
+		assert.deepEqual(touchedDays([day], moved), [day, { ...day, trackPath: "water.md" }]);
 	});
 
-	it("empties the old cell when the note moves to another track", () => {
-		const plan = planRefresh({ ...entry, trackPath: "tracks/sport.md" }, [own]);
-		assert.deepEqual(plan.clear, [own]);
-		assert.equal(plan.paint?.cell.trackPath, "tracks/sport.md");
+	it("leaves only the days of a note that is no longer an entry", () => {
+		assert.deepEqual(touchedDays([day], null), [day]);
 	});
 
-	it("empties every cell of a note that is no longer an entry", () => {
-		const other: CellRef = { trackPath: "tracks/sport.md", date: "2026-09-14" };
-		const plan = planRefresh(null, [own, other]);
-		assert.deepEqual(plan.clear, [own, other]);
-		assert.equal(plan.paint, null);
+	it("asks for nothing when a note nobody showed stopped being an entry", () => {
+		assert.deepEqual(touchedDays([], null), []);
+	});
+});
+
+describe("recountDay", () => {
+	it("counts the changed note into its day", () => {
+		const changed = entry({ path: "b.md" });
+		assert.deepEqual(recountDay(day, [entry({ path: "a.md" })], changed), [
+			entry({ path: "a.md" }),
+			changed,
+		]);
 	});
 
-	it("asks for nothing when a gone note was showing nowhere", () => {
-		const plan = planRefresh(null, []);
-		assert.deepEqual(plan, { clear: [], paint: null });
+	it("keeps the day in the order of the paths", () => {
+		const changed = entry({ path: "a.md" });
+		const known = [entry({ path: "c.md" }), entry({ path: "b.md" })];
+		assert.deepEqual(
+			recountDay(day, known, changed).map((found) => found.path),
+			["a.md", "b.md", "c.md"],
+		);
+	});
+
+	it("drops the note that left the day", () => {
+		const moved = entry({ path: "b.md", date: "2026-09-15" });
+		assert.deepEqual(recountDay(day, [entry({ path: "a.md" })], moved), [
+			entry({ path: "a.md" }),
+		]);
+	});
+
+	it("drops a note of the day that stopped being an entry", () => {
+		assert.deepEqual(recountDay(day, [entry({ path: "a.md" })], null), [entry({ path: "a.md" })]);
+	});
+
+	it("empties a day whose only note is gone", () => {
+		assert.deepEqual(recountDay(day, [], null), []);
+	});
+
+	it("drops a note the cell was showing that no longer belongs to the day", () => {
+		const known = [entry({ path: "a.md" }), entry({ path: "b.md", trackPath: "water.md" })];
+		assert.deepEqual(recountDay(day, known, null), [entry({ path: "a.md" })]);
+	});
+});
+
+describe("belongsTo", () => {
+	it("tells the entries of a day from the rest", () => {
+		assert.equal(belongsTo(entry({ path: "a.md" }), day), true);
+		assert.equal(belongsTo(entry({ path: "a.md", date: "2026-09-15" }), day), false);
+		assert.equal(belongsTo(entry({ path: "a.md", trackPath: "water.md" }), day), false);
 	});
 });
 
 describe("sameCell", () => {
-	it("tells cells apart by track and by date", () => {
-		assert.equal(sameCell(own, { ...own }), true);
-		assert.equal(sameCell(own, { ...own, date: "2026-09-15" }), false);
-		assert.equal(sameCell(own, { ...own, trackPath: "tracks/sport.md" }), false);
+	it("tells one cell from another", () => {
+		assert.equal(sameCell(day, { ...day }), true);
+		assert.equal(sameCell(day, { ...day, date: "2026-09-15" }), false);
+		assert.equal(sameCell(day, { ...day, trackPath: "water.md" }), false);
 	});
 });

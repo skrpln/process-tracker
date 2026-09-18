@@ -3,20 +3,26 @@
 
 import { Notice, Plugin } from "obsidian";
 import type { MarkdownPostProcessorContext, TFile } from "obsidian";
+import type { Entry } from "./model/types.ts";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
 import { buildDateColumns } from "./dates/grid.ts";
 import { cellAction } from "./entry/actions.ts";
-import { collectEntries, toEntry } from "./entry/source.ts";
-import { buildEntryIndex, findEntry } from "./entry/state.ts";
+import { recountDay, touchedDays } from "./entry/refresh.ts";
+import type { CellRef } from "./entry/refresh.ts";
+import { collectEntries, entryAt, toEntry } from "./entry/source.ts";
+import { buildEntryIndex, cellState, findEntries } from "./entry/state.ts";
 import { createEntry, setEntryDone } from "./entry/write.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { CellPointerChild } from "./render/pointer.ts";
 import type { CellTarget } from "./render/pointer.ts";
 import {
 	SCROLL_CLASS,
+	cellOf,
+	cellsShowing,
+	entryPathsOf,
 	paintCell,
-	refreshEntry,
+	readCellRef,
 	renderError,
 	renderTracker,
 	renderWarnings,
@@ -126,6 +132,12 @@ export default class ProcessTrackerPlugin extends Plugin {
 						(target, mod) => {
 							void this.runCellAction(target, mod);
 						},
+						{
+							toggle: (path, done) => this.toggleEntry(path, done),
+							open: (path) => {
+								void this.openEntry(path);
+							},
+						},
 					),
 				);
 			}
@@ -183,12 +195,12 @@ export default class ProcessTrackerPlugin extends Plugin {
 	}
 
 	/**
-	 * Repaints the cells of one note in every table on screen ([[expectation]] §9).
+	 * Recounts the days of one changed note in every table on screen ([[expectation]] §9).
 	 *
 	 * This is the whole of the subscription to the vault: the handler reads the properties of
-	 * the one file that changed and hands them to the tables, which repaint a cell each. No
-	 * index is rebuilt and no table is redrawn, so the cost does not grow with the vault; with
-	 * no table on screen the handler returns before it reads anything at all.
+	 * the one file that changed and hands them to the tables, which recount the days that note
+	 * touches. No index is rebuilt and no table is redrawn, so the cost does not grow with the
+	 * vault; with no table on screen the handler returns before it reads anything at all.
 	 *
 	 * Track cards are not watched. A tag taken off a card changes the rows of the table, not a
 	 * cell in it, and that is the business of the next render ([[architecture]]).
@@ -197,17 +209,94 @@ export default class ProcessTrackerPlugin extends Plugin {
 		if (this.tables.size === 0) return;
 
 		const entry = gone ? null : toEntry(this.app, file);
-		for (const table of this.tables) refreshEntry(table, file.path, entry);
+		for (const table of this.tables) this.recount(table, file.path, entry);
+	}
+
+	/**
+	 * Recounts, in one table, every day the changed note touches: the days whose cells show
+	 * it and the day it claims now ([[entry]]).
+	 *
+	 * A day is counted, not guessed: the cell names the notes behind it, and each of them is
+	 * read again from the metadata cache — a lookup in memory, no disk. So a day that holds
+	 * two entries answers for both, and a note that left the day leaves the rest of it
+	 * standing. The work is bounded by the notes of one day, not by the size of the vault.
+	 */
+	private recount(table: HTMLElement, path: string, changed: Entry | null): void {
+		const shown: CellRef[] = [];
+		for (const cell of cellsShowing(table, path)) {
+			const day = readCellRef(cell);
+			if (day !== null) shown.push(day);
+		}
+
+		for (const day of touchedDays(shown, changed)) {
+			const cell = cellOf(table, day);
+			if (cell !== null) this.paint(cell, day, path, changed);
+		}
+	}
+
+	/**
+	 * Repaints one cell from the entries of its day: every note the cell names is read again
+	 * from the metadata cache, and the one note the caller knows better is taken as given —
+	 * as the event brought it, or as a write has just left it.
+	 */
+	private paint(cell: HTMLElement, day: CellRef, known: string, changed: Entry | null): void {
+		const rest: Entry[] = [];
+		for (const path of entryPathsOf(cell)) {
+			if (path === known) continue;
+			const entry = entryAt(this.app, path);
+			if (entry !== null) rest.push(entry);
+		}
+
+		const entries = recountDay(day, rest, changed);
+		paintCell(cell, cellState(entries), entries.map((entry) => entry.path));
+	}
+
+	/**
+	 * Switches one note of a day, asked for by the list the day opens on hover.
+	 *
+	 * The cells showing that note are repainted at once, with the note taken as it was just
+	 * asked to be: `processFrontMatter` has written the file, but the metadata cache catches
+	 * up a moment later, and reading it here would answer with the state before the write.
+	 * The answer says whether the file took the change, so the box of the list can follow it.
+	 */
+	private async toggleEntry(path: string, done: boolean): Promise<boolean> {
+		try {
+			await setEntryDone(this.app, path, done);
+		} catch (error) {
+			new Notice(`Process Tracker: ${message(error)}`);
+			return false;
+		}
+
+		for (const table of this.tables) {
+			for (const cell of cellsShowing(table, path)) {
+				const day = readCellRef(cell);
+				if (day === null) continue;
+				this.paint(cell, day, path, { path, trackPath: day.trackPath, date: day.date, done });
+			}
+		}
+		return true;
+	}
+
+	/** Opens one note of a day in a new tab, as a click on a cell of one entry does. */
+	private async openEntry(path: string): Promise<void> {
+		const file = this.app.vault.getFileByPath(path);
+		if (file === null) {
+			new Notice(`Process Tracker: the entry note "${path}" is gone`);
+			return;
+		}
+		await this.app.workspace.getLeaf("tab").openFile(file);
 	}
 
 	/**
 	 * Performs what a click asks for ([[expectation]] §8) and repaints the one cell that
 	 * changed. Only that cell: a table redrawn on every click would lose its scroll
 	 * position, and noticing changes made elsewhere in the vault is the business of the
-	 * subscription that arrives in Phase 6.
+	 * subscription to `metadataCache`.
 	 */
 	private async runCellAction(target: CellTarget, mod: boolean): Promise<void> {
-		const action = cellAction(target.state, mod);
+		const action = cellAction(target.state, target.entryPaths.length, mod);
+		if (action.kind === "nothing") return;
+
 		try {
 			if (action.kind === "create") {
 				const file = await createEntry(
@@ -217,40 +306,81 @@ export default class ProcessTrackerPlugin extends Plugin {
 					action.done,
 					this.settings.entryFolder,
 				);
-				paintCell(target.cell, action.done ? "done" : "draft", file.path);
+				paintCell(target.cell, action.done ? "done" : "draft", [file.path]);
+				return;
+			}
+
+			if (action.kind === "toggleDay") {
+				await this.toggleDay(target, action.done);
 				return;
 			}
 
 			const file = this.entryFile(target);
-			if (file === null) throw new Error(`the entry note of ${target.date} is gone`);
+			if (file === null) {
+				throw new Error(`the entry note of ${target.date} is no longer where the table left it`);
+			}
 
 			if (action.kind === "toggle") {
 				await setEntryDone(this.app, file.path, action.done);
-				paintCell(target.cell, action.done ? "done" : "draft", file.path);
+				paintCell(target.cell, action.done ? "done" : "draft", [file.path]);
 				return;
 			}
 			await this.app.workspace.getLeaf("tab").openFile(file);
 		} catch (error) {
-			new Notice(
-				`Process Tracker: ${error instanceof Error ? error.message : String(error)}`,
-			);
+			new Notice(`Process Tracker: ${message(error)}`);
 		}
 	}
 
 	/**
-	 * The note behind a cell. The path written into the cell can go stale between renders
-	 * — Templater moves a new note while it renders it — so a path that leads nowhere is
-	 * answered by looking the entry up in the vault again, not by opening a link, which
-	 * would quietly create an empty note at the old address.
+	 * Closes or opens every entry of one day at once ([[expectation]] §8).
+	 *
+	 * A note that will not take the change does not stop the others, and it does not pass in
+	 * silence either: the count and the first reason go into a `Notice`. The cell is repainted
+	 * from what was asked only when every note took it; otherwise it is left to the
+	 * subscription, which recounts the day from the vault as the writes land.
+	 */
+	private async toggleDay(target: CellTarget, done: boolean): Promise<void> {
+		const refused: string[] = [];
+		for (const path of target.entryPaths) {
+			try {
+				await setEntryDone(this.app, path, done);
+			} catch (error) {
+				refused.push(message(error));
+			}
+		}
+
+		if (refused.length === 0) {
+			paintCell(target.cell, done ? "done" : "draft", target.entryPaths);
+			return;
+		}
+		throw new Error(
+			`${refused.length} of ${target.entryPaths.length} notes of ${target.date} ` +
+				`did not take the change: ${refused[0]}`,
+		);
+	}
+
+	/**
+	 * The one note behind a cell — asked for only where the cell holds exactly one.
+	 *
+	 * The path written into the cell can go stale between renders — Templater moves a new
+	 * note while it renders it — so a path that leads nowhere is answered by looking the day
+	 * up in the vault again, not by opening a link, which would quietly create an empty note
+	 * at the old address. A day that has meanwhile grown a second entry is not chosen from:
+	 * the click reports that the day moved on, and the next render draws it as it is.
 	 */
 	private entryFile(target: CellTarget): TFile | null {
-		if (target.entryPath !== null) {
-			const file = this.app.vault.getFileByPath(target.entryPath);
+		const written = target.entryPaths[0];
+		if (written !== undefined) {
+			const file = this.app.vault.getFileByPath(written);
 			if (file !== null) return file;
 		}
 
 		const index = buildEntryIndex(collectEntries(this.app));
-		const found = findEntry(index, target.trackPath, target.date);
-		return found === null ? null : this.app.vault.getFileByPath(found.path);
+		const day = findEntries(index, target.trackPath, target.date);
+		return day.length === 1 ? this.app.vault.getFileByPath(day[0].path) : null;
 	}
+}
+
+function message(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }

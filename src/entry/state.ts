@@ -4,8 +4,11 @@
 import { toIsoDate } from "../dates/grid.ts";
 import type { CellState, Entry } from "../model/types.ts";
 
-/** Entries of the vault, keyed by track card and date. */
-export type EntryIndex = ReadonlyMap<string, Entry>;
+/** Entries of the vault, keyed by track card and date: one day can hold several. */
+export type EntryIndex = ReadonlyMap<string, readonly Entry[]>;
+
+/** The answer for a day nobody wrote about; shared, so a lookup allocates nothing. */
+const NO_ENTRIES: readonly Entry[] = Object.freeze([]);
 
 /**
  * Reads the `date` property as `YYYY-MM-DD`. A property written as a timestamp
@@ -53,38 +56,47 @@ export function entryKey(trackPath: string, date: string): string {
 }
 
 /**
- * Indexes entries by track and date.
+ * Indexes the entries of the vault by track and date.
  *
- * Two notes can claim the same day — a duplicate, a note made by hand — and the cell
- * has room for one. Done wins over draft, so the cell shows the strongest claim the
- * vault makes; between equals the first path in alphabetical order stays, so the table
- * does not change from render to render.
+ * A day can hold several: a duplicate, a note made by hand, a copy brought by sync. None
+ * of them is dropped and none is chosen over the others — the cell is counted from all of
+ * them ([[expectation]] §7) and the popup lists them ([[rendering]]). The list is ordered
+ * by path, so it reads the same from render to render.
  */
 export function buildEntryIndex(entries: Entry[]): EntryIndex {
-	const index = new Map<string, Entry>();
-	for (const candidate of entries) {
-		const key = entryKey(candidate.trackPath, candidate.date);
-		const kept = index.get(key);
-		if (kept === undefined || beats(candidate, kept)) index.set(key, candidate);
+	const index = new Map<string, Entry[]>();
+	for (const entry of entries) {
+		const key = entryKey(entry.trackPath, entry.date);
+		const day = index.get(key);
+		if (day === undefined) index.set(key, [entry]);
+		else day.push(entry);
 	}
+	for (const day of index.values()) day.sort(byPath);
 	return index;
 }
 
-function beats(candidate: Entry, kept: Entry): boolean {
-	if (candidate.done !== kept.done) return candidate.done;
-	return candidate.path < kept.path;
-}
-
-export function findEntry(
+/** The entries of one day of one track, in the order the popup lists them. */
+export function findEntries(
 	index: EntryIndex,
 	trackPath: string,
 	date: string,
-): Entry | null {
-	return index.get(entryKey(trackPath, date)) ?? null;
+): readonly Entry[] {
+	return index.get(entryKey(trackPath, date)) ?? NO_ENTRIES;
 }
 
-/** The three states of a cell, derived from the entry behind it. */
-export function cellState(entry: Entry | null): CellState {
-	if (entry === null) return "empty";
-	return entry.done ? "done" : "draft";
+/** The order of a day: by path, because a path is the one thing two entries never share. */
+export function byPath(left: Entry, right: Entry): number {
+	if (left.path === right.path) return 0;
+	return left.path < right.path ? -1 : 1;
+}
+
+/**
+ * The three states of a cell, counted over the whole day ([[expectation]] §7): the box is
+ * checked only when every entry of the day is done, and one open entry keeps the day a
+ * draft. Several entries are a state of affairs, not an error, so the cell carries no mark
+ * of its own — the popup is where a day is taken apart ([[entry]]).
+ */
+export function cellState(entries: readonly Entry[]): CellState {
+	if (entries.length === 0) return "empty";
+	return entries.every((entry) => entry.done) ? "done" : "draft";
 }
