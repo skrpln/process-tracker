@@ -1,7 +1,7 @@
 {
   "name": "obsidian-process-tracker",
   "version": "0.1.0",
-  "description": "Process Tracker — таблица-трекер привычек и процессов для Obsidian",
+  "description": "Process Tracker — a tracker table of habits and processes for Obsidian",
   "main": "main.js",
   "type": "module",
   "scripts": {
