@@ -2,7 +2,7 @@
 
 A tracker for [Obsidian](https://obsidian.md) whose checkmarks are notes. A `process-tracker` code block becomes a table: rows are your tracks — a habit, a practice, a long project — columns are days, and a checked box means the day is done.
 
-Every check is a separate note in your vault, where you can write what you did, how it went, links, photos, the protocol you followed. Hover the cell and the note opens in a preview you can read and edit on the spot, without leaving the table.
+Every check is a separate note in your vault, where you can write what you did, how it went, links, photos, the protocol you followed . Hover the cell and the note opens in a preview you can read and edit on the spot, without leaving the table.
 
 ## Getting started
 
@@ -16,9 +16,13 @@ The properties of the note set up its row:
 ---
 tags: process_tracker, some, other, tags
 track_name: Cleaning            # Row title. Without it the file name is used.
+track_color: "#4CAF50"          # Colour of the checkmarks. Without it the theme decides.
 template: "[[Cleaning entry]]"  # Template for new entry notes of this track.
 ---
 ```
+
+> [!tip]
+> `track_color` takes any colour CSS understands — `#4CAF50`, `green`, `rgb(76 175 80)`, or a variable of your theme like `var(--color-red)`. Keep the quotes: without them YAML reads `#` as the start of a comment. A value the browser cannot read is ignored and the track goes back to the colour of the theme. The colour is used as given — pick one that reads well against the theme you use, in the light and the dark variant both.
 
 > [!tip]
 > New entries go to the folder set in the plugin settings. A `tp.file.move` command inside the template can send the entries of this track somewhere else — that needs [Templater](https://github.com/SilentVoid13/Templater) with "Trigger Templater on new file creation" enabled.
@@ -36,21 +40,25 @@ start: 2026-09-01
 days: 30
 dates: asc
 sort: priority desc
+track_color: "#4CAF50"
 ```
 ````
 
-| Option  | Values                                                       | Default     | What it does                         |
-| ------- | ------------------------------------------------------------ | ----------- | ------------------------------------ |
-| `track` | a Dataview filter                                            | every track | Picks which tracks become rows.      |
-| `start` | `YYYY-MM-DD`                                                 | today       | First day of the window.             |
-| `days`  | a number                                                     | `7`         | How many days the window holds.      |
-| `dates` | `desc`, `asc`                                                | `desc`      | Which end of the window comes first. |
-| `sort`  | `name`, `ctime`, `mtime` or a property, with `asc` or `desc` | `name asc`  | Define order of the rows.            |
+| Option        | Values                                                       | Default     | What it does                         |
+| ------------- | ------------------------------------------------------------ | ----------- | ------------------------------------ |
+| `track`       | a Dataview filter                                            | every track | Picks which tracks become rows.      |
+| `start`       | `YYYY-MM-DD`                                                 | today       | First day of the window.             |
+| `days`        | a number                                                     | `7`         | How many days the window holds.      |
+| `dates`       | `desc`, `asc`                                                | `desc`      | Which end of the window comes first. |
+| `sort`        | `name`, `ctime`, `mtime` or a property, with `asc` or `desc` | `name asc`  | Define order of the rows.            |
+| `track_color` | any CSS colour                                               | theme       | Colours the checkmarks of the table. |
+|               |                                                              |             |                                      |
 
->[!tip]
+>[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
 > - the filter only narrows tracks: a note without the track tag never becomes a row, whatever the filter says;
-> - without Dataview the table still works and shows every track in the vault.
+> - without Dataview the table still works and shows every track in the vault;
+> - `track_color` colours this table only, and only the tracks whose own card names no colour: the card always wins. A value that is not a colour is ignored, and a note about it appears under the table.
 
 ### 3. Click a cell
 

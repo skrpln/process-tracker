@@ -18,6 +18,9 @@ export const DEFAULT_TRACK_TAG = "process_tracker";
 /** Frontmatter key that overrides the displayed track name. */
 export const TRACK_NAME_KEY = "track_name";
 
+/** Frontmatter key that gives a track a colour of its own, in any form CSS understands. */
+export const TRACK_COLOR_KEY = "track_color";
+
 /** Frontmatter key of a track card that links to the template of its entries. */
 export const TRACK_TEMPLATE_KEY = "template";
 

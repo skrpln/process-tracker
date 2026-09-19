@@ -299,6 +299,39 @@ body.theme-light .process-tracker {
 	border-color: var(--pt-draft-border);
 }
 
+/*
+ * The colour of a track ([[rendering]]). The renderer writes it into `--pt-track-color` on the
+ * row and marks the row with a class; everything that repaints a checkbox stands behind that
+ * class, so a table where nobody asked for a colour is drawn exactly as before.
+ *
+ * Only a done day takes the colour. A draft keeps the outline it has: a coloured outline and a
+ * coloured box would be two tones of one hue standing for two different things, and the
+ * difference between "started" and "finished" is the one thing the cell has to say.
+ *
+ * Themes paint a checked box in more than one way, so the colour is handed over in every one
+ * of them at once: through the variables Obsidian gives the box, through `accent-color` for a
+ * box left to the browser, and as the background and the border for a theme that paints them
+ * itself. All of them say the same thing here, so whichever the theme reads, it reads the
+ * colour of the track.
+ */
+.process-tracker .process-tracker__table .process-tracker--colored .process-tracker__cell[data-state="done"] input[type="checkbox"] {
+	--checkbox-color: var(--pt-track-color);
+	--checkbox-color-hover: var(--pt-track-color);
+	accent-color: var(--pt-track-color);
+	background-color: var(--pt-track-color);
+	border-color: var(--pt-track-color);
+}
+
+/*
+ * The probe: the element a colour is tried on before the table keeps it ([[rendering]]).
+ * It is never drawn — the render child only reads the computed value of its background,
+ * where a colour that resolves to nothing leaves nothing.
+ */
+.process-tracker__probe {
+	display: none;
+	background-color: var(--pt-track-color);
+}
+
 .process-tracker__empty {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);

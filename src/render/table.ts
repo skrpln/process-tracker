@@ -7,6 +7,7 @@ import type { CellRef } from "../entry/refresh.ts";
 import { cellState, findEntries } from "../entry/state.ts";
 import type { EntryIndex } from "../entry/state.ts";
 import type { CellState, DateColumn, Entry, TrackCard } from "../model/types.ts";
+import { resolveTrackColor } from "../tracks/color.ts";
 
 /**
  * Note of a draft, shown on hover. The preview beside it shows the note itself; this says
@@ -16,6 +17,15 @@ const DRAFT_TOOLTIP = "Not done";
 
 /** Class of the scrolling container; the wheel handler of the plugin looks for it by name. */
 export const SCROLL_CLASS = "process-tracker__scroll";
+
+/** Class of a row that has a colour of its own; the stylesheet repaints checkmarks by it. */
+export const COLORED_CLASS = "process-tracker--colored";
+
+/** Custom property the colour of a track is written into. */
+export const TRACK_COLOR_PROPERTY = "--pt-track-color";
+
+/** Class of the element a colour is tried on before the table keeps it. */
+export const PROBE_CLASS = "process-tracker__probe";
 
 /**
  * How the paths of a day are written into one attribute: one per line. A vault path holds
@@ -29,6 +39,8 @@ export interface TrackerView {
 	columns: DateColumn[];
 	/** Entries of the vault; decide the state of every cell. */
 	entries: EntryIndex;
+	/** Colour of this table, for the tracks whose card names none. `null` — the theme decides. */
+	trackColor: string | null;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -42,6 +54,8 @@ export interface TrackerElements {
 	/** The part that scrolls — the date columns and nothing else. */
 	scroll: HTMLElement;
 	captionCell: HTMLElement;
+	/** Where a colour is tried on; `null` when no track of this table asked for one. */
+	probe: HTMLElement | null;
 }
 
 /**
@@ -80,9 +94,11 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	});
 	renderColumnWidths(dates, view.columns.length);
 	renderDatesHead(dates, view.columns);
-	renderDatesBody(dates, view);
+	const colored = renderDatesBody(dates, view);
 
-	return { frame, scroll, captionCell };
+	// A table nobody gave a colour to gets no probe either: there is nothing to ask about.
+	const probe = colored ? root.createDiv({ cls: PROBE_CLASS }) : null;
+	return { frame, scroll, captionCell, probe };
 }
 
 /**
@@ -139,14 +155,47 @@ function renderDatesHead(table: HTMLTableElement, columns: DateColumn[]): void {
 	}
 }
 
-function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
+/** Draws the rows of checkboxes; answers whether any of them took a colour. */
+function renderDatesBody(table: HTMLTableElement, view: TrackerView): boolean {
 	const body = table.createEl("tbody");
+	let colored = false;
 	for (const track of view.tracks) {
 		const row = body.createEl("tr");
+		colored = paintRow(row, resolveTrackColor(track.color, view.trackColor)) || colored;
 		for (const column of view.columns) {
 			renderCheckCell(row, track, column, findEntries(view.entries, track.path, column.iso));
 		}
 	}
+	return colored;
+}
+
+/**
+ * The colour of a track reaches its checkmarks as a variable on the row, which the rules of
+ * the stylesheet read ([[rendering]]). A track of no colour gets neither the variable nor the
+ * class, and every rule that repaints a checkbox stands behind that class: a table where
+ * nobody asked for a colour is drawn exactly as a table was drawn before colours existed.
+ *
+ * The class says the same thing the variable does — the difference is that CSS can select on
+ * it. A rule that read the variable alone would have to state what to do without one, and for
+ * a plain property that answer is "the initial value", which for a background means
+ * transparent: a theme's own checkbox would be wiped out by a rule meant to leave it alone.
+ */
+function paintRow(row: HTMLTableRowElement, color: string | null): boolean {
+	if (color === null) return false;
+	row.addClass(COLORED_CLASS);
+	row.style.setProperty(TRACK_COLOR_PROPERTY, color);
+	return true;
+}
+
+/** Gives a row back to the theme: the colour it was given paints nothing ([[rendering]]). */
+export function unpaintRow(row: HTMLElement): void {
+	row.removeClass(COLORED_CLASS);
+	row.style.removeProperty(TRACK_COLOR_PROPERTY);
+}
+
+/** The colour a row carries, as it was written into it; `""` when it carries none. */
+export function rowColor(row: HTMLElement): string {
+	return row.style.getPropertyValue(TRACK_COLOR_PROPERTY).trim();
 }
 
 /**

@@ -12,6 +12,7 @@ function card(basename: string, folder = ""): TrackCard {
 		path,
 		basename,
 		name: basename,
+		color: null,
 		tags: ["process_tracker"],
 		frontmatter: {},
 		ctime: 0,

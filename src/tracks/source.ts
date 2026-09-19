@@ -4,6 +4,7 @@
 import { getAllTags } from "obsidian";
 import type { App, TFile } from "obsidian";
 import type { TrackCard } from "../model/types.ts";
+import { readCardColor } from "./color.ts";
 import { trackDisplayName } from "./select.ts";
 
 /**
@@ -26,6 +27,7 @@ export function toTrackCard(app: App, file: TFile): TrackCard {
 		path: file.path,
 		basename: file.basename,
 		name: trackDisplayName(frontmatter, file.basename),
+		color: readCardColor(frontmatter),
 		tags,
 		frontmatter,
 		ctime: file.stat.ctime,

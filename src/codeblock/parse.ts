@@ -3,6 +3,7 @@
 
 import { MAX_DAYS } from "../constants.ts";
 import type { SortDirection, SortSpec, TrackerOptions } from "../model/types.ts";
+import { readColor } from "../tracks/color.ts";
 
 export interface ParseResult {
 	options: TrackerOptions;
@@ -15,7 +16,7 @@ export const DEFAULT_SORT: SortSpec = { field: "name", direction: "asc" };
 /** Newest column first: the day just lived through sits next to the track name. */
 export const DEFAULT_DATES: SortDirection = "desc";
 
-const KNOWN_KEYS = ["track", "start", "days", "dates", "sort"];
+const KNOWN_KEYS = ["track", "start", "days", "dates", "sort", "track_color"];
 
 /** Parses `key: value` lines of a code block into tracker options. */
 export function parseCodeBlock(source: string): ParseResult {
@@ -26,6 +27,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		days: null,
 		dates: DEFAULT_DATES,
 		sort: { ...DEFAULT_SORT },
+		trackColor: null,
 	};
 	const seen = new Set<string>();
 
@@ -59,9 +61,23 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "days") applyDays(options, value, warnings);
 		if (key === "dates") options.dates = parseDirection(value, DEFAULT_DATES, warnings);
 		if (key === "sort") options.sort = parseSort(value, warnings);
+		if (key === "track_color") options.trackColor = parseColor(value, warnings);
 	}
 
 	return { options, warnings };
+}
+
+/**
+ * `track_color: <any CSS colour>` — the colour of the checkmarks of this table.
+ *
+ * Here an unreadable value is worth a warning, unlike the same value in a track card, where
+ * it is ignored in silence: a code block is a thing the reader is writing right now, and the
+ * warnings under the table are where this block answers for itself ([[expectation]] §4).
+ */
+export function parseColor(value: string, warnings: string[] = []): string | null {
+	const color = readColor(value);
+	if (color === null) warnings.push(`"track_color: ${value}" is not a colour, ignored.`);
+	return color;
 }
 
 /** `dates: asc | desc` — the direction of the date columns. */

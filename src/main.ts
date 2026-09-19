@@ -106,6 +106,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 				tracks,
 				columns,
 				entries: buildEntryIndex(collectEntries(this.app)),
+				trackColor: options.trackColor,
 				trackTag: this.settings.trackTag,
 				trackFilter: options.track,
 			});
@@ -119,6 +120,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 						elements.frame,
 						elements.scroll,
 						elements.captionCell,
+						elements.probe,
 						columns,
 						this.tables,
 					),

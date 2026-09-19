@@ -1,7 +1,7 @@
 // Unit tests for the code block parser.
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import { parseCodeBlock, parseSort, parseStartDate } from "../src/codeblock/parse.ts";
+import { after, before, describe, it } from "node:test";
+import { parseCodeBlock, parseColor, parseSort, parseStartDate } from "../src/codeblock/parse.ts";
 import { MAX_DAYS } from "../src/constants.ts";
 
 describe("parseCodeBlock", () => {
@@ -13,6 +13,7 @@ describe("parseCodeBlock", () => {
 			days: null,
 			dates: "desc",
 			sort: { field: "name", direction: "asc" },
+			trackColor: null,
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -160,6 +161,45 @@ describe("parseSort", () => {
 	it("warns about extra words", () => {
 		const warnings: string[] = [];
 		parseSort("name asc please", warnings);
+		assert.equal(warnings.length, 1);
+	});
+});
+
+describe("track_color", () => {
+	// The browser answers `CSS.supports`; in Node the test answers for it ([[test/color.test.ts]]).
+	const css = {
+		supports: (property: string, value: string) =>
+			property === "color" && ["#4CAF50", "green"].includes(value),
+	};
+
+	before(() => {
+		(globalThis as Record<string, unknown>).CSS = css;
+	});
+
+	after(() => {
+		delete (globalThis as Record<string, unknown>).CSS;
+	});
+
+	it("reads a colour, with the quotes the reader is used to writing", () => {
+		const { options, warnings } = parseCodeBlock('track_color: "#4CAF50"');
+		assert.equal(options.trackColor, "#4CAF50");
+		assert.deepEqual(warnings, []);
+	});
+
+	it("reads a colour written without them", () => {
+		assert.equal(parseCodeBlock("track_color: green").options.trackColor, "green");
+	});
+
+	it("warns about a value that is not a colour and leaves the table to the theme", () => {
+		const { options, warnings } = parseCodeBlock("track_color: blurple");
+		assert.equal(options.trackColor, null);
+		assert.equal(warnings.length, 1);
+		assert.match(warnings[0], /blurple/);
+	});
+
+	it("warns on its own, so the same value can be checked outside a block", () => {
+		const warnings: string[] = [];
+		assert.equal(parseColor("url(evil.png)", warnings), null);
 		assert.equal(warnings.length, 1);
 	});
 });

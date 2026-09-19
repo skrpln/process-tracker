@@ -19,6 +19,11 @@ export interface TrackerOptions {
 	/** Table length in days. `null` — resolve at render time. */
 	days: number | null;
 	sort: SortSpec;
+	/**
+	 * Colour of the checkmarks of this table, for the tracks whose card names none.
+	 * `null` — the colour of the theme.
+	 */
+	trackColor: string | null;
 }
 
 /** A track card: a vault note tagged with the plugin tag. */
@@ -28,6 +33,8 @@ export interface TrackCard {
 	basename: string;
 	/** Displayed name: `track_name` property, or the file name. */
 	name: string;
+	/** Colour of the checkmarks of this track: the `track_color` property. `null` — none. */
+	color: string | null;
 	/** Tags of the note, normalized: lower case, without the leading `#`. */
 	tags: string[];
 	frontmatter: Record<string, unknown>;

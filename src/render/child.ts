@@ -3,7 +3,13 @@
 import { MarkdownRenderChild } from "obsidian";
 import type { DateColumn } from "../model/types.ts";
 import { formatMonthYear } from "../dates/grid.ts";
-import { renderPeriodCaption } from "./table.ts";
+import {
+	COLORED_CLASS,
+	TRACK_COLOR_PROPERTY,
+	renderPeriodCaption,
+	rowColor,
+	unpaintRow,
+} from "./table.ts";
 import { captionLabel, columnWidth, visibleColumnRange } from "./visible.ts";
 
 /** The tables the reader has on screen; the plugin repaints their cells through it. */
@@ -11,6 +17,9 @@ export interface LiveTables {
 	add(scroll: HTMLElement): unknown;
 	delete(scroll: HTMLElement): unknown;
 }
+
+/** What a background computes to when the colour on it resolved to nothing. */
+const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
 /**
  * Runs the two things the table cannot do in CSS alone: keeps a date column as wide
@@ -35,6 +44,8 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		private readonly frame: HTMLElement,
 		private readonly scroll: HTMLElement,
 		private readonly captionCell: HTMLElement,
+		/** Where a colour is tried on; `null` when this table was given none. */
+		private readonly probe: HTMLElement | null,
 		private readonly columns: DateColumn[],
 		private readonly tables: LiveTables,
 	) {
@@ -43,6 +54,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	onload(): void {
+		this.checkColors();
 		this.tables.add(this.scroll);
 		this.register(() => this.tables.delete(this.scroll));
 
@@ -63,6 +75,48 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	onunload(): void {
 		if (this.pending !== 0) this.win.cancelAnimationFrame(this.pending);
 		this.pending = 0;
+	}
+
+	/**
+	 * Takes the colour back from a row where it would paint nothing ([[rendering]]).
+	 *
+	 * `CSS.supports` answers for the form of a value, and `var(--color-gren)` has the form of
+	 * a colour whatever it points at: a misspelt variable passes the check and then resolves
+	 * to nothing, and a done day comes out with a transparent box — finished, and looking
+	 * empty. What a value paints is not a question about its text; only the document the
+	 * table stands in can answer it, and it is asked here, once, when the table appears.
+	 *
+	 * The colours of a table are few, so each distinct one is tried once and the answer is
+	 * reused. A row whose colour paints nothing loses it and goes back to the theme — as an
+	 * unreadable value should ([[expectation]] §5).
+	 */
+	private checkColors(): void {
+		if (this.probe === null) return;
+
+		const answers = new Map<string, boolean>();
+		for (const row of Array.from(this.frame.querySelectorAll<HTMLElement>(`.${COLORED_CLASS}`))) {
+			const color = rowColor(row);
+			const paints = answers.get(color) ?? this.paints(color);
+			answers.set(color, paints);
+			if (!paints) unpaintRow(row);
+		}
+	}
+
+	/**
+	 * Does this colour paint? The probe wears it and the browser is read back.
+	 *
+	 * The probe is not drawn — it is a hidden element, and only the computed value of its
+	 * background is ever taken from it, which costs no layout. A value that resolves to
+	 * nothing leaves the background transparent, and that is the answer. Where there is
+	 * nobody to ask — a table rendered outside the document, which computes to nothing at
+	 * all — the value stands as the reader wrote it.
+	 */
+	private paints(color: string): boolean {
+		if (this.probe === null) return true;
+
+		this.probe.style.setProperty(TRACK_COLOR_PROPERTY, color);
+		const painted = this.win.getComputedStyle(this.probe).backgroundColor;
+		return painted === "" || painted !== TRANSPARENT;
 	}
 
 	/** At most one update per frame, however many scroll events arrive. */
