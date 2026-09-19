@@ -21,11 +21,23 @@ export const SCROLL_CLASS = "process-tracker__scroll";
 /** Class of a row that has a colour of its own; the stylesheet repaints checkmarks by it. */
 export const COLORED_CLASS = "process-tracker--colored";
 
-/** Custom property the colour of a track is written into. */
+/** Custom property the colour of a track is written into, once it is known to paint. */
 export const TRACK_COLOR_PROPERTY = "--pt-track-color";
 
-/** Class of the element a colour is tried on before the table keeps it. */
+/** Attribute a row carries the colour its track asked for, before anything is painted. */
+export const TRACK_COLOR_ATTRIBUTE = "data-track-color";
+
+/** Class of the hidden element the theme is asked its questions through. */
 export const PROBE_CLASS = "process-tracker__probe";
+
+/** Class of the part of the probe that wears a colour. */
+export const PROBE_COLOR_CLASS = "process-tracker__probe-color";
+
+/** Class of a frame whose theme paints an unchecked box instead of outlining it. */
+export const FILLED_CLASS = "process-tracker--filled";
+
+/** Custom property the fill of an unchecked box is measured into. */
+export const BOX_FILL_PROPERTY = "--pt-box-fill";
 
 /**
  * How the paths of a day are written into one attribute: one per line. A vault path holds
@@ -54,8 +66,22 @@ export interface TrackerElements {
 	/** The part that scrolls — the date columns and nothing else. */
 	scroll: HTMLElement;
 	captionCell: HTMLElement;
-	/** Where a colour is tried on; `null` when no track of this table asked for one. */
-	probe: HTMLElement | null;
+	probe: ThemeProbe;
+}
+
+/**
+ * The two questions only a rendered table can answer, asked through hidden elements of the
+ * table itself ([[rendering]]): does this colour paint anything, and how does the theme draw
+ * an unchecked box here. Both live inside the dates table, because a theme is free to dress a
+ * checkbox in a table differently from one in a paragraph — Brutalist does.
+ */
+export interface ThemeProbe {
+	/** Wears a colour; its background says whether the colour paints anything. */
+	color: HTMLElement;
+	/** An unchecked box the theme has drawn its own way, untouched by the plugin. */
+	box: HTMLElement;
+	/** The same box, dressed as a draft: the two together say whether a draft shows. */
+	draftBox: HTMLElement;
 }
 
 /**
@@ -92,13 +118,37 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	const dates = scroll.createEl("table", {
 		cls: "process-tracker__table process-tracker__dates",
 	});
+	const probe = renderProbe(dates);
 	renderColumnWidths(dates, view.columns.length);
 	renderDatesHead(dates, view.columns);
-	const colored = renderDatesBody(dates, view);
+	renderDatesBody(dates, view);
 
-	// A table nobody gave a colour to gets no probe either: there is nothing to ask about.
-	const probe = colored ? root.createDiv({ cls: PROBE_CLASS }) : null;
 	return { frame, scroll, captionCell, probe };
+}
+
+/**
+ * The probe: what the table asks the theme before it trusts its own stylesheet.
+ *
+ * It sits in the caption of the dates table — a caption is a legal child of a table and is
+ * never laid out while it is hidden, so the probe costs nothing and disturbs no row. Inside
+ * the table is where it has to be: a theme may style a checkbox in a table differently from
+ * one in a paragraph, and an answer from the wrong neighbourhood is worse than none.
+ */
+function renderProbe(table: HTMLTableElement): ThemeProbe {
+	const probe = table.createEl("caption", { cls: PROBE_CLASS });
+	const color = probe.createDiv({ cls: PROBE_COLOR_CLASS });
+	const box = probe.createEl("input", { cls: "task-list-item-checkbox", type: "checkbox" });
+	// The draft box is dressed exactly as a draft cell is, so the comparison answers the real
+	// question instead of a guess about it: the cell class and the state carry the rules.
+	const draftCell = probe.createDiv({
+		cls: "process-tracker__cell",
+		attr: { "data-state": "draft" },
+	});
+	const draftBox = draftCell.createEl("input", {
+		cls: "task-list-item-checkbox",
+		type: "checkbox",
+	});
+	return { color, box, draftBox };
 }
 
 /**
@@ -155,47 +205,56 @@ function renderDatesHead(table: HTMLTableElement, columns: DateColumn[]): void {
 	}
 }
 
-/** Draws the rows of checkboxes; answers whether any of them took a colour. */
-function renderDatesBody(table: HTMLTableElement, view: TrackerView): boolean {
+function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	const body = table.createEl("tbody");
-	let colored = false;
 	for (const track of view.tracks) {
 		const row = body.createEl("tr");
-		colored = paintRow(row, resolveTrackColor(track.color, view.trackColor)) || colored;
+		requestColor(row, resolveTrackColor(track.color, view.trackColor));
 		for (const column of view.columns) {
 			renderCheckCell(row, track, column, findEntries(view.entries, track.path, column.iso));
 		}
 	}
-	return colored;
 }
 
 /**
- * The colour of a track reaches its checkmarks as a variable on the row, which the rules of
- * the stylesheet read ([[rendering]]). A track of no colour gets neither the variable nor the
- * class, and every rule that repaints a checkbox stands behind that class: a table where
- * nobody asked for a colour is drawn exactly as a table was drawn before colours existed.
+ * The colour a track asked for, written on the row and not yet painted ([[rendering]]).
+ *
+ * Nothing is painted here on purpose. A colour can be a form without a colour behind it —
+ * `var(--color-gren)` reads as one and resolves to nothing — and a rule fed such a value
+ * paints nothing at all, which on a done day means an empty-looking box. Whether a value
+ * paints is a question for the rendered table, so the row states its request and the render
+ * child answers it ([[rendering#Пробник|Пробник]]); until then the row looks as it always did.
+ */
+function requestColor(row: HTMLTableRowElement, color: string | null): void {
+	if (color === null) return;
+	row.setAttr(TRACK_COLOR_ATTRIBUTE, color);
+}
+
+/** The colour a row asked for; `""` when its track asked for none. */
+export function rowColorRequest(row: HTMLElement): string {
+	return (row.getAttribute(TRACK_COLOR_ATTRIBUTE) ?? "").trim();
+}
+
+/**
+ * Paints the row: the colour is known to paint something, so the rules may read it.
  *
  * The class says the same thing the variable does — the difference is that CSS can select on
  * it. A rule that read the variable alone would have to state what to do without one, and for
  * a plain property that answer is "the initial value", which for a background means
  * transparent: a theme's own checkbox would be wiped out by a rule meant to leave it alone.
  */
-function paintRow(row: HTMLTableRowElement, color: string | null): boolean {
-	if (color === null) return false;
+export function paintRow(row: HTMLElement, color: string): void {
 	row.addClass(COLORED_CLASS);
 	row.style.setProperty(TRACK_COLOR_PROPERTY, color);
-	return true;
 }
 
-/** Gives a row back to the theme: the colour it was given paints nothing ([[rendering]]). */
+/**
+ * Leaves the row to the theme. The request stays on it: a theme can be changed under a table
+ * that is already on screen, and the next measurement asks about the same colour again.
+ */
 export function unpaintRow(row: HTMLElement): void {
 	row.removeClass(COLORED_CLASS);
 	row.style.removeProperty(TRACK_COLOR_PROPERTY);
-}
-
-/** The colour a row carries, as it was written into it; `""` when it carries none. */
-export function rowColor(row: HTMLElement): string {
-	return row.style.getPropertyValue(TRACK_COLOR_PROPERTY).trim();
 }
 
 /**

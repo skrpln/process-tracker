@@ -4,12 +4,16 @@ import { MarkdownRenderChild } from "obsidian";
 import type { DateColumn } from "../model/types.ts";
 import { formatMonthYear } from "../dates/grid.ts";
 import {
-	COLORED_CLASS,
+	BOX_FILL_PROPERTY,
+	FILLED_CLASS,
+	TRACK_COLOR_ATTRIBUTE,
 	TRACK_COLOR_PROPERTY,
+	paintRow,
 	renderPeriodCaption,
-	rowColor,
+	rowColorRequest,
 	unpaintRow,
 } from "./table.ts";
+import type { ThemeProbe } from "./table.ts";
 import { captionLabel, columnWidth, visibleColumnRange } from "./visible.ts";
 
 /** The tables the reader has on screen; the plugin repaints their cells through it. */
@@ -44,8 +48,8 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		private readonly frame: HTMLElement,
 		private readonly scroll: HTMLElement,
 		private readonly captionCell: HTMLElement,
-		/** Where a colour is tried on; `null` when this table was given none. */
-		private readonly probe: HTMLElement | null,
+		/** The hidden elements the theme answers through ([[rendering]]). */
+		private readonly probe: ThemeProbe,
 		private readonly columns: DateColumn[],
 		private readonly tables: LiveTables,
 	) {
@@ -54,7 +58,6 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	onload(): void {
-		this.checkColors();
 		this.tables.add(this.scroll);
 		this.register(() => this.tables.delete(this.scroll));
 
@@ -78,27 +81,29 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	/**
-	 * Takes the colour back from a row where it would paint nothing ([[rendering]]).
+	 * Paints the rows whose colour paints something, and only those ([[rendering]]).
 	 *
 	 * `CSS.supports` answers for the form of a value, and `var(--color-gren)` has the form of
-	 * a colour whatever it points at: a misspelt variable passes the check and then resolves
-	 * to nothing, and a done day comes out with a transparent box — finished, and looking
-	 * empty. What a value paints is not a question about its text; only the document the
-	 * table stands in can answer it, and it is asked here, once, when the table appears.
+	 * a colour whatever it points at: a misspelt variable passes that check and then resolves
+	 * to nothing. A rule fed such a value paints nothing at all, so a done day would come out
+	 * with a transparent box — finished, and looking emptier than an empty one. Whether a
+	 * value paints is not a question about its text: only the document the table stands in
+	 * answers it, which is why the row arrives carrying a request and leaves carrying a
+	 * colour — or nothing, as an unreadable value deserves ([[expectation]] §5).
 	 *
 	 * The colours of a table are few, so each distinct one is tried once and the answer is
-	 * reused. A row whose colour paints nothing loses it and goes back to the theme — as an
-	 * unreadable value should ([[expectation]] §5).
+	 * reused. Asked again — after a theme was changed under the table — the same requests are
+	 * answered afresh, so a colour the new theme understands comes back.
 	 */
 	private checkColors(): void {
-		if (this.probe === null) return;
-
 		const answers = new Map<string, boolean>();
-		for (const row of Array.from(this.frame.querySelectorAll<HTMLElement>(`.${COLORED_CLASS}`))) {
-			const color = rowColor(row);
+		const rows = this.frame.querySelectorAll<HTMLElement>(`[${TRACK_COLOR_ATTRIBUTE}]`);
+		for (const row of Array.from(rows)) {
+			const color = rowColorRequest(row);
 			const paints = answers.get(color) ?? this.paints(color);
 			answers.set(color, paints);
-			if (!paints) unpaintRow(row);
+			if (paints) paintRow(row, color);
+			else unpaintRow(row);
 		}
 	}
 
@@ -112,11 +117,37 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	 * all — the value stands as the reader wrote it.
 	 */
 	private paints(color: string): boolean {
-		if (this.probe === null) return true;
-
-		this.probe.style.setProperty(TRACK_COLOR_PROPERTY, color);
-		const painted = this.win.getComputedStyle(this.probe).backgroundColor;
+		this.probe.color.style.setProperty(TRACK_COLOR_PROPERTY, color);
+		const painted = this.win.getComputedStyle(this.probe.color).backgroundColor;
 		return painted === "" || painted !== TRANSPARENT;
+	}
+
+	/**
+	 * Gives the draft a second way to be seen, in a theme that leaves it none ([[rendering]]).
+	 *
+	 * A draft is an unchecked box in a colour of its own, and that colour goes on the outline —
+	 * which works as long as the theme draws an outline and lets it be recoloured. Brutalist
+	 * draws none at all: `border: none !important`, and an unchecked box in a table is a
+	 * filled square. BrutalGarden draws one and keeps its colour to itself. Either way the
+	 * draft came out looking exactly like an empty day.
+	 *
+	 * The question is therefore asked directly, and about the thing itself: two boxes stand in
+	 * the probe, one plain and one dressed as a draft, and if the theme draws them alike, the
+	 * draft has no voice. Then the fill of the plain box is measured and the draft takes a
+	 * tinted version of it — mixed the same way, and towards the same side, as the outline
+	 * would have been. A theme that draws no unchecked box at all (Slytherin, Terminal) has
+	 * nothing to tint, and the plugin does not argue with that.
+	 *
+	 * Asking again changes nothing: once the draft looks different, this does nothing at all.
+	 */
+	private checkDraft(): void {
+		const plain = this.win.getComputedStyle(this.probe.box);
+		const draft = this.win.getComputedStyle(this.probe.draftBox);
+		if (boxLook(plain) === "" || boxLook(plain) !== boxLook(draft)) return;
+		if (plain.backgroundColor === TRANSPARENT) return;
+
+		this.frame.style.setProperty(BOX_FILL_PROPERTY, plain.backgroundColor);
+		this.frame.addClass(FILLED_CLASS);
 	}
 
 	/** At most one update per frame, however many scroll events arrive. */
@@ -167,6 +198,11 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		if (rowHeight <= 0) return;
 
 		this.measured = true;
+		// A table with a layout is a table in the document, and only there does a theme
+		// answer anything: asked in `onload`, before Obsidian has put the block in its note,
+		// every question about a colour came back empty ([[rendering#Пробник|Пробник]]).
+		this.checkColors();
+		this.checkDraft();
 		this.matchFrameShape(dates);
 		this.centreContent(dates);
 
@@ -340,6 +376,22 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	private get win(): Window & typeof globalThis {
 		return this.scroll.ownerDocument.defaultView ?? window;
 	}
+}
+
+/** Everything about a checkbox a reader could tell two of them apart by. */
+function boxLook(style: CSSStyleDeclaration): string {
+	return [
+		style.backgroundColor,
+		style.backgroundImage,
+		style.borderTopWidth,
+		style.borderTopStyle,
+		style.borderTopColor,
+		style.boxShadow,
+		style.outlineWidth,
+		style.outlineStyle,
+		style.outlineColor,
+		style.opacity,
+	].join(" ");
 }
 
 /** A computed length in pixels; anything unreadable counts as nothing. */

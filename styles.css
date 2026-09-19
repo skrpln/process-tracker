@@ -313,23 +313,48 @@ body.theme-light .process-tracker {
  * box left to the browser, and as the background and the border for a theme that paints them
  * itself. All of them say the same thing here, so whichever the theme reads, it reads the
  * colour of the track.
+ *
+ * The paint declarations carry `!important` because some themes state their own with one —
+ * Discordian paints every checked box `var(--discord-blue) !important` — and a colour the
+ * reader asked for in writing must not be quietly dropped. Nothing else is insisted on: this
+ * reaches only a done day of a row whose track named a colour.
  */
 .process-tracker .process-tracker__table .process-tracker--colored .process-tracker__cell[data-state="done"] input[type="checkbox"] {
 	--checkbox-color: var(--pt-track-color);
 	--checkbox-color-hover: var(--pt-track-color);
-	accent-color: var(--pt-track-color);
-	background-color: var(--pt-track-color);
-	border-color: var(--pt-track-color);
+	accent-color: var(--pt-track-color) !important;
+	background-color: var(--pt-track-color) !important;
+	border-color: var(--pt-track-color) !important;
 }
 
 /*
- * The probe: the element a colour is tried on before the table keeps it ([[rendering]]).
- * It is never drawn — the render child only reads the computed value of its background,
- * where a colour that resolves to nothing leaves nothing.
+ * The probe: how the table asks the theme what it cannot know in advance ([[rendering]]).
+ * It is never drawn — only computed values are read from it: the background of the colour
+ * part, where a colour that resolves to nothing leaves nothing, and the box the theme has
+ * drawn its own way, which the draft needs to know about.
  */
 .process-tracker__probe {
 	display: none;
+}
+
+.process-tracker__probe-color {
 	background-color: var(--pt-track-color);
+}
+
+/*
+ * A draft in a theme that paints the box instead of outlining it.
+ *
+ * Brutalist forbids the outline outright — `border: none !important` — and fills an unchecked
+ * box in a table with a colour of its own, so the draft had nothing to show itself with. The
+ * render child measures that fill and turns this rule on; where a theme does draw an outline,
+ * the rule never applies and the draft stays exactly as it was.
+ *
+ * `!important` is here because the theme's own declaration carries one, and a state the reader
+ * cannot see is worse than a rule that insists. It reaches no further than a draft cell of
+ * this table.
+ */
+.process-tracker .process-tracker--filled .process-tracker__cell[data-state="draft"] input[type="checkbox"] {
+	background-color: color-mix(in srgb, var(--pt-box-fill) 60%, var(--pt-draft-tint)) !important;
 }
 
 .process-tracker__empty {

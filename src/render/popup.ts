@@ -49,12 +49,19 @@ export class DayPopup implements HoverParent {
 		this.element = cell.ownerDocument.body.createDiv({
 			cls: "popover hover-popover process-tracker__day",
 		});
+		// The wrappers a preview has inside a popover. Obsidian gives the popover a surface,
+		// but a theme is free to leave it the colour of the page and dress the embed inside
+		// instead — Brutalist does, and the list came out as text floating over the note.
+		// Built like a preview, it is dressed like one ([[rendering]]).
+		const content = this.element
+			.createDiv({ cls: "markdown-embed" })
+			.createDiv({ cls: "markdown-embed-content" });
 		// A theme hangs the look of an internal link on `markdown-rendered`, so the rows
 		// live under it: without that class the list showed bare underlined links while the
 		// same links everywhere else in the vault were drawn the way the theme draws them.
 		// `markdown-preview-view` is deliberately left out — that class means the box of a
 		// note view, and themes fill it with page geometry ([[rendering]]).
-		this.list = this.element.createDiv({
+		this.list = content.createDiv({
 			cls: "markdown-rendered process-tracker__day-list",
 		});
 		this.inheritTypography();
