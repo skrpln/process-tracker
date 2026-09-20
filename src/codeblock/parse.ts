@@ -16,7 +16,10 @@ export const DEFAULT_SORT: SortSpec = { field: "name", direction: "asc" };
 /** Newest column first: the day just lived through sits next to the track name. */
 export const DEFAULT_DATES: SortDirection = "desc";
 
-const KNOWN_KEYS = ["track", "start", "days", "dates", "sort", "track_color"];
+/** No thread until the block asks for one: a tracker says enough with its checkmarks. */
+export const DEFAULT_STROKE = false;
+
+const KNOWN_KEYS = ["track", "start", "days", "dates", "sort", "track_color", "stroke"];
 
 /** Parses `key: value` lines of a code block into tracker options. */
 export function parseCodeBlock(source: string): ParseResult {
@@ -28,6 +31,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		dates: DEFAULT_DATES,
 		sort: { ...DEFAULT_SORT },
 		trackColor: null,
+		stroke: DEFAULT_STROKE,
 	};
 	const seen = new Set<string>();
 
@@ -62,6 +66,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "dates") options.dates = parseDirection(value, DEFAULT_DATES, warnings);
 		if (key === "sort") options.sort = parseSort(value, warnings);
 		if (key === "track_color") options.trackColor = parseColor(value, warnings);
+		if (key === "stroke") options.stroke = parseStroke(value, warnings);
 	}
 
 	return { options, warnings };
@@ -78,6 +83,20 @@ export function parseColor(value: string, warnings: string[] = []): string | nul
 	const color = readColor(value);
 	if (color === null) warnings.push(`"track_color: ${value}" is not a colour, ignored.`);
 	return color;
+}
+
+/**
+ * `stroke: true | false` — whether a streak of closed days is threaded together.
+ *
+ * Only the two words the syntax names are read. A parameter of two states has no third
+ * meaning to guess at, so anything else is worth saying out loud ([[expectation]] §4).
+ */
+export function parseStroke(value: string, warnings: string[] = []): boolean {
+	const flag = value.toLowerCase();
+	if (flag === "true" || flag === "false") return flag === "true";
+
+	warnings.push(`Unknown value "stroke: ${value}", "${DEFAULT_STROKE}" is used.`);
+	return DEFAULT_STROKE;
 }
 
 /** `dates: asc | desc` — the direction of the date columns. */

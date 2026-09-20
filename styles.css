@@ -25,6 +25,24 @@
 	 */
 	--pt-caption-weight: var(--h4-weight, var(--font-semibold, 600));
 	--pt-body-size: calc(var(--font-ui-small) + 2px);
+	/*
+	 * The thread under a streak of closed days. Thickness and strength live in variables of
+	 * the plugin, so a vault that wants a thinner or a fainter line has one place to say so;
+	 * the colour is the colour of the checkmarks, and a coloured row overrules it below.
+	 *
+	 * The ink is mixed rather than made translucent by `opacity`: the line is painted as the
+	 * background of the cell, and an `opacity` there would fade the checkmark standing on it.
+	 */
+	--pt-stroke-width: 2px;
+	--pt-stroke-strength: 65%;
+	/*
+	 * The last fallback is not decoration. A theme is free to leave the colour of a checkmark
+	 * undefined, and free to break it: Pxld asks `--color-accent` for `--interactive-accent`
+	 * and `--interactive-accent` for `--color-accent`, and a ring like that leaves both
+	 * variables invalid. A colour that fails takes the whole rule with it — the line would
+	 * not be pale, it would be missing — so the chain ends on something that cannot fail.
+	 */
+	--pt-stroke-color: var(--checkbox-color, var(--interactive-accent, currentColor));
 	/* Day captions: a condensed grotesque, so the dates read as a scale. */
 	--pt-day-font: Impact, "Haettenschweiler", "Arial Narrow Bold", "Franklin Gothic Bold",
 		var(--font-interface), sans-serif;
@@ -319,12 +337,69 @@ body.theme-light .process-tracker {
  * reader asked for in writing must not be quietly dropped. Nothing else is insisted on: this
  * reaches only a done day of a row whose track named a colour.
  */
+.process-tracker .process-tracker__table .process-tracker--colored {
+	--pt-stroke-color: var(--pt-track-color);
+}
+
 .process-tracker .process-tracker__table .process-tracker--colored .process-tracker__cell[data-state="done"] input[type="checkbox"] {
 	--checkbox-color: var(--pt-track-color);
 	--checkbox-color-hover: var(--pt-track-color);
 	accent-color: var(--pt-track-color) !important;
 	background-color: var(--pt-track-color) !important;
 	border-color: var(--pt-track-color) !important;
+}
+
+/*
+ * The thread under a streak of three or more closed days ([[expectation]] §9).
+ *
+ * The renderer marks every cell the thread runs through with `data-stroke`, which says where
+ * the line enters and where it leaves: at the checkmark, or at the edge of the cell where the
+ * streak goes on. Three marks are enough for any streak, however long — `start`, `mid`, `end`.
+ *
+ * The line is the background of the cell, not a layer over it, and that settles three things
+ * at once. It reaches the very edge of the cell, borders included, because a background is
+ * laid out on the border box: two cells of one streak meet exactly, with nothing between
+ * them, whatever the theme makes the grid out of. It passes under the checkmarks it joins and
+ * under the lines of the grid, because a background is painted before both: the thread joins
+ * the days without touching anything the theme drew. And the half of a cell it takes is
+ * measured from the border box, whose middle is exactly where the checkmark stands — the
+ * shift the render child hands the checkmark for uneven padding is the difference between the
+ * middle of the content and the middle of the cell, so from here it is already accounted for.
+ *
+ * Only the height has to be asked about: Obsidian sets a checkbox `0.2em` below its line, and
+ * the render child measures how far the box really sits from the middle of its cell.
+ *
+ * Every declaration carries `!important` for the reason the colour of a track does: a theme
+ * may state its own with one. Ultra Lobster gives every cell of every table `background:
+ * transparent !important`, and a shorthand takes the whole background with it — image, size,
+ * position and all — so the thread disappeared without a trace. The insistence reaches no
+ * further than a cell of this table that a streak actually runs through.
+ */
+.process-tracker .process-tracker__dates .process-tracker__cell[data-stroke] {
+	/*
+	 * The ink is mixed here, on the cell, and not once for the whole table: a variable that
+	 * names another one is resolved where it is written, so an ink mixed at the top would
+	 * carry the colour of the theme into every row, including the ones that asked for their
+	 * own. Written on the cell, it is mixed with the colour that reaches the cell.
+	 */
+	--pt-stroke-ink: color-mix(in srgb, var(--pt-stroke-color) var(--pt-stroke-strength), transparent);
+	background-image: linear-gradient(var(--pt-stroke-ink), var(--pt-stroke-ink)) !important;
+	background-repeat: no-repeat !important;
+	background-origin: border-box !important;
+	background-size: 100% var(--pt-stroke-width) !important;
+	background-position: 0 calc(50% + var(--pt-stroke-shift, 0px)) !important;
+}
+
+/* The first day of the streak: from its checkmark to the right edge of the cell. */
+.process-tracker .process-tracker__dates .process-tracker__cell[data-stroke="start"] {
+	background-size: 50% var(--pt-stroke-width) !important;
+	background-position: 100% calc(50% + var(--pt-stroke-shift, 0px)) !important;
+}
+
+/* The last day: from the left edge to its checkmark. */
+.process-tracker .process-tracker__dates .process-tracker__cell[data-stroke="end"] {
+	background-size: 50% var(--pt-stroke-width) !important;
+	background-position: 0 calc(50% + var(--pt-stroke-shift, 0px)) !important;
 }
 
 /*

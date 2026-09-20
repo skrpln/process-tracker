@@ -107,6 +107,8 @@ export default class ProcessTrackerPlugin extends Plugin {
 				columns,
 				entries: buildEntryIndex(collectEntries(this.app)),
 				trackColor: options.trackColor,
+				stroke: options.stroke,
+				dates: options.dates,
 				trackTag: this.settings.trackTag,
 				trackFilter: options.track,
 			});

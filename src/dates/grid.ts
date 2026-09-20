@@ -93,6 +93,18 @@ export function toIsoDate(date: Date): string {
 	return `${year}-${month}-${day}`;
 }
 
+/**
+ * The day a number of days away from an ISO date, on the local calendar.
+ *
+ * The streak of a row runs past the edge of the window, so the table has to ask about days
+ * it never drew ([[rendering]]). Arithmetic goes through calendar components, as everywhere
+ * else here: a day is a day, whatever the clocks did that night.
+ */
+export function shiftIsoDate(iso: string, days: number): string {
+	const [year, month, day] = iso.split("-").map(Number);
+	return toIsoDate(new Date(year, month - 1, day + days));
+}
+
 function addDays(date: Date, days: number): Date {
 	return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }

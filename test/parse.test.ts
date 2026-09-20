@@ -1,7 +1,13 @@
 // Unit tests for the code block parser.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { parseCodeBlock, parseColor, parseSort, parseStartDate } from "../src/codeblock/parse.ts";
+import {
+	parseCodeBlock,
+	parseColor,
+	parseSort,
+	parseStartDate,
+	parseStroke,
+} from "../src/codeblock/parse.ts";
 import { MAX_DAYS } from "../src/constants.ts";
 
 describe("parseCodeBlock", () => {
@@ -14,6 +20,7 @@ describe("parseCodeBlock", () => {
 			dates: "desc",
 			sort: { field: "name", direction: "asc" },
 			trackColor: null,
+			stroke: false,
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -200,6 +207,31 @@ describe("track_color", () => {
 	it("warns on its own, so the same value can be checked outside a block", () => {
 		const warnings: string[] = [];
 		assert.equal(parseColor("url(evil.png)", warnings), null);
+		assert.equal(warnings.length, 1);
+	});
+});
+
+describe("stroke", () => {
+	it("is off until the block asks for it", () => {
+		assert.equal(parseCodeBlock("days: 30").options.stroke, false);
+	});
+
+	it("reads both words, in any case", () => {
+		assert.equal(parseCodeBlock("stroke: true").options.stroke, true);
+		assert.equal(parseCodeBlock("stroke: True").options.stroke, true);
+		assert.equal(parseCodeBlock("stroke: false").options.stroke, false);
+	});
+
+	it("warns about anything else and stays off", () => {
+		const { options, warnings } = parseCodeBlock("stroke: sometimes");
+		assert.equal(options.stroke, false);
+		assert.equal(warnings.length, 1);
+		assert.match(warnings[0], /sometimes/);
+	});
+
+	it("warns on its own, so the same value can be checked outside a block", () => {
+		const warnings: string[] = [];
+		assert.equal(parseStroke("1", warnings), false);
 		assert.equal(warnings.length, 1);
 	});
 });

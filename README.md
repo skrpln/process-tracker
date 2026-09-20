@@ -41,6 +41,7 @@ days: 30
 dates: asc
 sort: priority desc
 track_color: "#4CAF50"
+stroke: true
 ```
 ````
 
@@ -52,13 +53,15 @@ track_color: "#4CAF50"
 | `dates`       | `desc`, `asc`                                                | `desc`      | Which end of the window comes first. |
 | `sort`        | `name`, `ctime`, `mtime` or a property, with `asc` or `desc` | `name asc`  | Define order of the rows.            |
 | `track_color` | any CSS colour                                               | theme       | Colours the checkmarks of the table. |
+| `stroke`      | `true`, `false`                                              | `false`     | Threads a streak of checked days together. |
 |               |                                                              |             |                                      |
 
 >[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
 > - the filter only narrows tracks: a note without the track tag never becomes a row, whatever the filter says;
 > - without Dataview the table still works and shows every track in the vault;
-> - `track_color` colours this table only, and only the tracks whose own card names no colour: the card always wins. A value that is not a colour is ignored, and a note about it appears under the table.
+> - `track_color` colours this table only, and only the tracks whose own card names no colour: the card always wins. A value that is not a colour is ignored, and a note about it appears under the table;
+> - `stroke` draws a thin line through three or more checked days in a row, in the colour of the checkmarks. A day with an entry that is not done breaks the streak, exactly as an empty day does. The streak is counted over your vault and not over the days in sight: scroll into the middle of a long one and the line still runs off both edges of the table.
 
 ### 3. Click a cell
 
@@ -70,7 +73,7 @@ track_color: "#4CAF50"
 - Hover a cell to preview its entry note
 - Hover a track title to preview the track note.
 
-> [!tip] 
+> [!tip]+ gdgdg
 > The preview is drawn by the core **Page preview** plugin, which lists Process Tracker among its sources: the switch there decides whether you have to hold `Cmd`/`Ctrl` to get one.
 
 **Available actions**

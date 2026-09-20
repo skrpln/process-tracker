@@ -6,8 +6,10 @@ import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import type { CellRef } from "../entry/refresh.ts";
 import { cellState, findEntries } from "../entry/state.ts";
 import type { EntryIndex } from "../entry/state.ts";
-import type { CellState, DateColumn, Entry, TrackCard } from "../model/types.ts";
+import type { CellState, DateColumn, Entry, SortDirection, TrackCard } from "../model/types.ts";
 import { resolveTrackColor } from "../tracks/color.ts";
+import { streakEdges, strokeMarks } from "./stroke.ts";
+import type { StrokeEdges, StrokeMark } from "./stroke.ts";
 
 /**
  * Note of a draft, shown on hover. The preview beside it shows the note itself; this says
@@ -39,6 +41,19 @@ export const FILLED_CLASS = "process-tracker--filled";
 /** Custom property the fill of an unchecked box is measured into. */
 export const BOX_FILL_PROPERTY = "--pt-box-fill";
 
+/** Custom property the thread is moved by, to meet the checkmarks where they are drawn. */
+export const STROKE_SHIFT_PROPERTY = "--pt-stroke-shift";
+
+/**
+ * Attribute a row carries what the table cannot see: how far its streaks run past the left
+ * and the right edge of the window, as two numbers. Written only when the block asked for a
+ * thread, so its absence is also the answer to whether this row has one.
+ */
+export const STROKE_EDGES_ATTRIBUTE = "data-stroke-edges";
+
+/** Attribute a cell carries its part of the thread: `start`, `mid` or `end`. */
+export const STROKE_ATTRIBUTE = "data-stroke";
+
 /**
  * How the paths of a day are written into one attribute: one per line. A vault path holds
  * no newline, so the list splits back exactly as it was written.
@@ -53,6 +68,10 @@ export interface TrackerView {
 	entries: EntryIndex;
 	/** Colour of this table, for the tracks whose card names none. `null` — the theme decides. */
 	trackColor: string | null;
+	/** Whether a streak of closed days is threaded together ([[expectation]] §9). */
+	stroke: boolean;
+	/** Which way the columns run; the thread of a row is counted along it. */
+	dates: SortDirection;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -210,10 +229,73 @@ function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	for (const track of view.tracks) {
 		const row = body.createEl("tr");
 		requestColor(row, resolveTrackColor(track.color, view.trackColor));
-		for (const column of view.columns) {
-			renderCheckCell(row, track, column, findEntries(view.entries, track.path, column.iso));
-		}
+		const thread = rowStroke(row, view, track.path);
+		view.columns.forEach((column, index) => {
+			const entries = findEntries(view.entries, track.path, column.iso);
+			renderCheckCell(row, track, column, entries, thread[index] ?? null);
+		});
 	}
+}
+
+/**
+ * Where the thread of one row runs ([[rendering#Ниточка|Ниточка]]). Nothing at all until the
+ * block asks for one — a table without `stroke` counts no streaks and marks no cells.
+ *
+ * The streak is counted over the whole vault, which is what the index already holds: the days
+ * beyond the edge of the table are looked up in it exactly as the drawn ones are. What was
+ * found out there stays on the row, so a day that changes later can be answered for without
+ * reading the vault again.
+ */
+function rowStroke(
+	row: HTMLTableRowElement,
+	view: TrackerView,
+	trackPath: string,
+): (StrokeMark | null)[] {
+	if (!view.stroke) return [];
+
+	const closed = (date: string): boolean =>
+		cellState(findEntries(view.entries, trackPath, date)) === "done";
+	const edges = streakEdges({
+		days: view.columns.map((column) => column.iso),
+		order: view.dates,
+		closed,
+	});
+
+	row.setAttr(STROKE_EDGES_ATTRIBUTE, `${edges.before} ${edges.after}`);
+	return strokeMarks(view.columns.map((column) => closed(column.iso)), edges);
+}
+
+/**
+ * Redraws the thread of one row after a day of it changed ([[rendering#Ниточка|Ниточка]]).
+ *
+ * The days are read back from the cells, which have just been repainted, and the days outside
+ * the window from the row, which has carried them since the render. So a checkmark taken back
+ * breaks its streak at once, and no note of the vault is opened to find that out.
+ *
+ * A row of a table that asked for no thread carries no edges and is left alone.
+ */
+export function paintRowStroke(row: HTMLElement): void {
+	const edges = strokeEdgesOf(row);
+	if (edges === null) return;
+
+	const cells = Array.from(row.querySelectorAll<HTMLElement>(".process-tracker__cell"));
+	const marks = strokeMarks(cells.map((cell) => cell.dataset.state === "done"), edges);
+	cells.forEach((cell, index) => markStroke(cell, marks[index] ?? null));
+}
+
+/** What the row knows about the streaks running past the window; `null` — no thread here. */
+function strokeEdgesOf(row: HTMLElement): StrokeEdges | null {
+	const written = row.getAttribute(STROKE_EDGES_ATTRIBUTE);
+	if (written === null) return null;
+
+	const [before, after] = written.split(" ").map(Number);
+	if (!Number.isFinite(before) || !Number.isFinite(after)) return null;
+	return { before, after };
+}
+
+function markStroke(cell: HTMLElement, mark: StrokeMark | null): void {
+	if (mark === null) cell.removeAttribute(STROKE_ATTRIBUTE);
+	else cell.setAttr(STROKE_ATTRIBUTE, mark);
 }
 
 /**
@@ -281,6 +363,9 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
  * A day with several entries looks like any other day: there is no mark for it, because
  * several entries are a state of affairs and not an error ([[expectation]] §7).
  *
+ * A cell the thread runs through carries `data-stroke`, which says where the line enters
+ * and leaves it; the stylesheet draws the line itself ([[rendering]]).
+ *
  * The click itself is handled once for the whole table, by `CellPointerChild`.
  */
 function renderCheckCell(
@@ -288,6 +373,7 @@ function renderCheckCell(
 	track: TrackCard,
 	column: DateColumn,
 	entries: readonly Entry[],
+	stroke: StrokeMark | null,
 ): void {
 	const state = cellState(entries);
 	const cell = row.createEl("td", {
@@ -295,6 +381,7 @@ function renderCheckCell(
 		attr: { "data-date": column.iso, "data-track": track.path, "data-state": state },
 	});
 	if (column.isToday) cell.addClass("is-today");
+	markStroke(cell, stroke);
 	writeEntryPaths(cell, entries.map((entry) => entry.path));
 
 	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
@@ -318,6 +405,10 @@ export function paintCell(cell: HTMLElement, state: CellState, paths: readonly s
 
 	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
 	if (box !== null) box.checked = state === "done";
+
+	// The thread of the row follows the cell: a day just closed can finish a streak, and a
+	// checkmark taken back breaks one. A row without a thread returns from here at once.
+	if (cell.parentElement !== null) paintRowStroke(cell.parentElement);
 }
 
 /**

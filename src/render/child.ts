@@ -6,6 +6,7 @@ import { formatMonthYear } from "../dates/grid.ts";
 import {
 	BOX_FILL_PROPERTY,
 	FILLED_CLASS,
+	STROKE_SHIFT_PROPERTY,
 	TRACK_COLOR_ATTRIBUTE,
 	TRACK_COLOR_PROPERTY,
 	paintRow,
@@ -210,6 +211,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		this.checkDraft();
 		this.matchFrameShape(dates);
 		this.centreContent(dates);
+		this.centreThread(dates);
 
 		const width = columnWidth(
 			{ rowHeight, checkbox: this.checkboxClaim(), caption: this.captionClaim() },
@@ -283,6 +285,27 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 			dates.style.setProperty(`${variable}-mid`, shift(cells[1] ?? cells[0]));
 			dates.style.setProperty(`${variable}-last`, shift(cells[cells.length - 1]));
 		}
+	}
+
+	/**
+	 * Moves the thread onto the checkmarks it joins ([[rendering]]).
+	 *
+	 * The line is drawn across the middle of the cell, and a checkbox does not stand there:
+	 * Obsidian sets one `0.2em` below its line in a rendered note and by half its own size in
+	 * live preview, and a theme may move it again. So the box is asked where it is, and the
+	 * difference between its middle and the middle of the cell becomes the shift of the line.
+	 *
+	 * Measured only where a thread is drawn: a table without `stroke` has nothing to align.
+	 */
+	private centreThread(dates: HTMLElement): void {
+		const cell = dates.querySelector<HTMLElement>("tbody .process-tracker__cell[data-stroke]");
+		const box = cell?.querySelector<HTMLElement>('input[type="checkbox"]') ?? null;
+		if (cell === undefined || cell === null || box === null) return;
+
+		const cellBox = cell.getBoundingClientRect();
+		const mark = box.getBoundingClientRect();
+		const shift = mark.top + mark.height / 2 - (cellBox.top + cellBox.height / 2);
+		dates.style.setProperty(STROKE_SHIFT_PROPERTY, `${Math.round(shift * 100) / 100}px`);
 	}
 
 	/**

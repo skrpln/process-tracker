@@ -24,6 +24,8 @@ export interface TrackerOptions {
 	 * `null` — the colour of the theme.
 	 */
 	trackColor: string | null;
+	/** Whether a streak of closed days is threaded together ([[expectation]] §9). */
+	stroke: boolean;
 }
 
 /** A track card: a vault note tagged with the plugin tag. */
