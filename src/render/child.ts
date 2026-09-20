@@ -125,26 +125,31 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	/**
 	 * Gives the draft a second way to be seen, in a theme that leaves it none ([[rendering]]).
 	 *
-	 * A draft is an unchecked box in a colour of its own, and that colour goes on the outline —
-	 * which works as long as the theme draws an outline and lets it be recoloured. Brutalist
-	 * draws none at all: `border: none !important`, and an unchecked box in a table is a
-	 * filled square. BrutalGarden draws one and keeps its colour to itself. Either way the
-	 * draft came out looking exactly like an empty day.
+	 * A draft is an unchecked box in a colour of its own, and that colour goes on the outline.
+	 * Brutalist draws no outline at all — `border: none !important` — and paints an unchecked
+	 * box in a table as a filled square instead, so there was nothing to recolour and a draft
+	 * looked exactly like an empty day.
 	 *
-	 * The question is therefore asked directly, and about the thing itself: two boxes stand in
-	 * the probe, one plain and one dressed as a draft, and if the theme draws them alike, the
-	 * draft has no voice. Then the fill of the plain box is measured and the draft takes a
-	 * tinted version of it — mixed the same way, and towards the same side, as the outline
-	 * would have been. A theme that draws no unchecked box at all (Slytherin, Terminal) has
-	 * nothing to tint, and the plugin does not argue with that.
+	 * The fill is therefore a last resort, and the conditions for it are read off the theme's
+	 * own box, all three together:
+	 *
+	 * 1. **No outline.** A theme that draws one owns the look of a draft, and the recolouring
+	 *    is its business; the fill must never reach such a theme. This condition comes first
+	 *    and alone decides against, because it is a fact about the theme rather than a
+	 *    conclusion drawn from a comparison.
+	 * 2. **Something to tint.** A box with no fill either (Slytherin, Terminal) shows no draft
+	 *    and never did: the theme draws no unchecked box, and the plugin does not argue.
+	 * 3. **Nothing already telling them apart.** Two boxes stand in the probe, one plain and
+	 *    one dressed as a draft; if the theme draws them differently, the draft already has a
+	 *    voice and takes no fill.
 	 *
 	 * Asking again changes nothing: once the draft looks different, this does nothing at all.
 	 */
 	private checkDraft(): void {
 		const plain = this.win.getComputedStyle(this.probe.box);
-		const draft = this.win.getComputedStyle(this.probe.draftBox);
-		if (boxLook(plain) === "" || boxLook(plain) !== boxLook(draft)) return;
+		if (boxLook(plain) === "" || outlined(plain)) return;
 		if (plain.backgroundColor === TRANSPARENT) return;
+		if (boxLook(plain) !== boxLook(this.win.getComputedStyle(this.probe.draftBox))) return;
 
 		this.frame.style.setProperty(BOX_FILL_PROPERTY, plain.backgroundColor);
 		this.frame.addClass(FILLED_CLASS);
@@ -376,6 +381,21 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	private get win(): Window & typeof globalThis {
 		return this.scroll.ownerDocument.defaultView ?? window;
 	}
+}
+
+/**
+ * Does the theme draw an outline around this box — the thing a draft recolours?
+ *
+ * A width of zero, a style of `none` or a transparent colour all mean the same to a reader:
+ * there is no outline on screen. Any one of them is enough for the answer to be no.
+ */
+function outlined(style: CSSStyleDeclaration): boolean {
+	return (
+		style.borderTopStyle !== "none" &&
+		style.borderTopStyle !== "hidden" &&
+		px(style.borderTopWidth) > 0 &&
+		style.borderTopColor !== TRANSPARENT
+	);
 }
 
 /** Everything about a checkbox a reader could tell two of them apart by. */

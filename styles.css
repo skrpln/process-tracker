@@ -352,8 +352,13 @@ body.theme-light .process-tracker {
  * `!important` is here because the theme's own declaration carries one, and a state the reader
  * cannot see is worse than a rule that insists. It reaches no further than a draft cell of
  * this table.
+ *
+ * The table class is in the chain for weight, not for meaning. Brutalist states its rule for
+ * Live Preview as `.markdown-source-view.mod-cm6 table input[type="checkbox"]:not(:checked)`,
+ * which counts one class more than its reading-mode twin; without this fourth class the fill
+ * won in reading mode and lost in Live Preview, in the same theme and the same table.
  */
-.process-tracker .process-tracker--filled .process-tracker__cell[data-state="draft"] input[type="checkbox"] {
+.process-tracker .process-tracker--filled .process-tracker__table .process-tracker__cell[data-state="draft"] input[type="checkbox"] {
 	background-color: color-mix(in srgb, var(--pt-box-fill) 60%, var(--pt-draft-tint)) !important;
 }
 
