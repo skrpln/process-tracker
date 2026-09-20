@@ -156,7 +156,7 @@ body.theme-light .process-tracker {
 	font-family: var(--font-interface);
 }
 
-/* Captions stand above the table: no grid around them, muted, in the caption face. */
+/* Captions stand above the table: no grid around them, in the caption face of the theme. */
 .process-tracker .process-tracker__table thead th {
 	border: 0;
 	/*
@@ -168,7 +168,14 @@ body.theme-light .process-tracker {
 	font-size: var(--pt-caption-size);
 	font-weight: var(--pt-caption-weight);
 	letter-spacing: 0.02em;
-	color: var(--text-muted);
+	/*
+	 * The colour is the theme's, and the theme is asked for it by saying nothing: Obsidian
+	 * gives every table heading `color: var(--table-header-color)`, and a theme answers
+	 * either through that variable or with a rule of its own on `th` — Comic paints the head
+	 * of a table yellow and its headings near black. A muted colour of our own stood over
+	 * both, and on that yellow the day captions were unreadable. Only the colour is left to
+	 * the theme; the face of the captions stays ours.
+	 */
 	text-align: center;
 	/*
 	 * The corner caption and the day captions live in two different tables now, and a
