@@ -12,6 +12,13 @@ import { entryPathsOf } from "./table.ts";
 /** How long the pointer rests on a day before its list opens, as a preview waits too. */
 const OPEN_DELAY = 300;
 
+/**
+ * The links of the table: a track name, and the caption of a day whose journal is in the
+ * vault ([[expectation]] §10). Both are opened by Obsidian itself; what they need from here
+ * is the preview on hover, which a link of a plugin does not get on its own.
+ */
+const LINK_SELECTOR = ".process-tracker__track a, .process-tracker__date a";
+
 /** The cell a click landed on, read back from the DOM. */
 export interface CellTarget {
 	cell: HTMLElement;
@@ -87,7 +94,8 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	/**
 	 * What the pointer found ([[expectation]] §8): a day of one entry hands its note to the
 	 * core Page preview plugin, a day of several opens the list of the plugin, an empty day
-	 * shows nothing, and a track name shows its card.
+	 * shows nothing, and a link of the table — a track name, or a day caption that leads to
+	 * a journal — shows the note behind it.
 	 */
 	private onHover(event: MouseEvent): void {
 		const cell = closestOf(event.target, ".process-tracker__cell");
@@ -99,7 +107,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		this.cancelOpen();
 		this.liveDay()?.scheduleClose();
 
-		const link = closestOf(event.target, ".process-tracker__track a");
+		const link = closestOf(event.target, LINK_SELECTOR);
 		const path = link === null ? "" : (link.dataset.href ?? "");
 		if (link !== null && path !== "") this.preview({ element: link, path }, event);
 	}

@@ -72,6 +72,8 @@ export interface TrackerView {
 	stroke: boolean;
 	/** Which way the columns run; the thread of a row is counted along it. */
 	dates: SortDirection;
+	/** Journals of the days in sight: day -> path. A day without one is not in the map. */
+	dailyNotes: ReadonlyMap<string, string>;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -139,7 +141,7 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	});
 	const probe = renderProbe(dates);
 	renderColumnWidths(dates, view.columns.length);
-	renderDatesHead(dates, view.columns);
+	renderDatesHead(dates, view.columns, view.dailyNotes);
 	renderDatesBody(dates, view);
 
 	return { frame, scroll, captionCell, probe };
@@ -210,18 +212,48 @@ function renderNamesBody(table: HTMLTableElement, tracks: TrackCard[]): void {
  * The head of the scrolling table carries no grid: captions stand above the columns,
  * and a caption is the day alone — the month and the year belong to the corner.
  */
-function renderDatesHead(table: HTMLTableElement, columns: DateColumn[]): void {
+function renderDatesHead(
+	table: HTMLTableElement,
+	columns: DateColumn[],
+	journals: ReadonlyMap<string, string>,
+): void {
 	const row = table.createEl("thead").createEl("tr");
 	for (const column of columns) {
 		const cell = row.createEl("th", {
 			cls: "process-tracker__date",
 			attr: { "data-date": column.iso },
 		});
-		// The number sits in an element of its own, so it can be centred on the cell
-		// whatever alignment and padding a theme gives the cell ([[rendering]]).
-		cell.createSpan({ cls: "process-tracker__day", text: formatDay(column) });
+		renderDayCaption(cell, column, journals.get(column.iso) ?? null);
 		if (column.isToday) cell.addClass("is-today");
 	}
+}
+
+/**
+ * The caption of one day ([[expectation]] §10).
+ *
+ * A day whose journal is in the vault wears it as a link — the same `a.internal-link` a
+ * track name is, so Obsidian's own handler opens it: a click in this tab, a click with the
+ * modifier in a new one. Nothing of ours listens for that click; a listener on top of the
+ * link opened the note twice when the track names were made links.
+ *
+ * A day with no journal stays a plain number, and that is the only sign the table gives:
+ * the caption itself says whether there is anything to open, so nothing has to be announced
+ * and nothing has to be switched on.
+ *
+ * Either way the number sits in an element of its own, so it can be centred on the cell
+ * whatever alignment and padding a theme gives the cell ([[rendering]]).
+ */
+function renderDayCaption(cell: HTMLElement, column: DateColumn, journal: string | null): void {
+	const text = formatDay(column);
+	if (journal === null) {
+		cell.createSpan({ cls: "process-tracker__day", text });
+		return;
+	}
+	cell.createEl("a", {
+		cls: "process-tracker__day internal-link",
+		text,
+		attr: { href: journal, "data-href": journal },
+	});
 }
 
 function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {

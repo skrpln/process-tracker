@@ -247,13 +247,42 @@ body.theme-light .process-tracker {
  * A link in the table keeps the colour a theme gives links, but not their typography:
  * themes reset the family, size or weight of `.internal-link`, and the track names
  * came out in another face, larger than the captions above them.
+ *
+ * The head is held to the same rule. The caption of a day whose journal is in the vault is
+ * a link too, and a column is as wide as its widest caption: a face of the theme's choosing
+ * up there would widen every column of the table, and the linked days would stand taller
+ * than the days beside them.
  */
-.process-tracker .process-tracker__table tbody a {
+.process-tracker .process-tracker__table a {
 	font-family: inherit;
 	font-size: inherit;
 	font-weight: inherit;
 	font-style: inherit;
 	letter-spacing: inherit;
+}
+
+/*
+ * A day caption that leads to a journal is a link, and a theme dresses a link in things a
+ * caption cannot wear: Ultra Lobster makes it a pill — sideways padding, a border, a weight
+ * of its own — while Comic and Terminal2K give it a line of their own height. Any of that
+ * shows at once, because the caption stands in a row of bare numbers: it sits a pixel or
+ * three above its neighbours, and the padding eats into a column measured by the width of
+ * the number alone, where a caption that no longer fits ends in an ellipsis.
+ *
+ * So in the head a link keeps the line and the room of a caption, and the theme keeps what
+ * says "link" without moving anything: the colour and the underline. The background is left
+ * to the theme as well — Slytherin paints the text of a link with a gradient showing through
+ * it, and a caption stripped of its background would have no colour at all.
+ *
+ * The selector has to outweigh `body .markdown-preview-view a.internal-link`, which is how a
+ * theme reaches the links of a note — and a table of the plugin stands in a note.
+ */
+.process-tracker .process-tracker__dates thead a.process-tracker__day {
+	font-weight: inherit;
+	line-height: inherit;
+	padding: 0;
+	margin: 0;
+	border: 0;
 }
 
 .process-tracker .process-tracker__table .process-tracker__cell input[type="checkbox"] {

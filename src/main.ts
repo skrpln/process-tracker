@@ -6,6 +6,7 @@ import type { MarkdownPostProcessorContext, TFile } from "obsidian";
 import type { Entry } from "./model/types.ts";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
+import { findDailyNotes } from "./daily/notes.ts";
 import { buildDateColumns } from "./dates/grid.ts";
 import { cellAction } from "./entry/actions.ts";
 import { recountDay, touchedDays } from "./entry/refresh.ts";
@@ -106,6 +107,10 @@ export default class ProcessTrackerPlugin extends Plugin {
 				tracks,
 				columns,
 				entries: buildEntryIndex(collectEntries(this.app)),
+				// The journals are looked up once per render, and a day that gets one later
+				// waits for the next render: a caption is dressed where it is drawn
+				// ([[daily-notes]]).
+				dailyNotes: findDailyNotes(columns.map((column) => column.iso)),
 				trackColor: options.trackColor,
 				stroke: options.stroke,
 				dates: options.dates,

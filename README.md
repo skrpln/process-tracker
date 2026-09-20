@@ -73,7 +73,7 @@ stroke: true
 - Hover a cell to preview its entry note
 - Hover a track title to preview the track note.
 
-> [!tip]+ gdgdg
+> [!tip]+
 > The preview is drawn by the core **Page preview** plugin, which lists Process Tracker among its sources: the switch there decides whether you have to hold `Cmd`/`Ctrl` to get one.
 
 **Available actions**
@@ -94,6 +94,13 @@ done: true
 
 anything worth keeping about that day: what you did, links, checklists
 ```
+
+### 4. Click a date
+
+The caption above a column is a link when the daily note of that day is in your vault: a click opens it in this tab, `Cmd`/`Ctrl` + click in a new one, and hovering it gives the same preview a cell does. A day without a daily note stays a plain number, so the caption itself tells you whether there is anything to open.
+
+> [!tip]
+> The folder and the date format come from the core **Daily notes** plugin, or from [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) when you keep your journal there. Process Tracker only opens a daily note, it never creates one — with neither plugin enabled, no caption is a link.
 
 ## Settings
 
