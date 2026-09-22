@@ -364,7 +364,6 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 			range.selectNodeContents(caption.querySelector(".process-tracker__day") ?? caption);
 			widest = Math.max(widest, range.getBoundingClientRect().width);
 		}
-		range.detach();
 
 		return widest === 0 ? 0 : widest + this.widestSideRoom(this.sample(".process-tracker__date"));
 	}
@@ -401,7 +400,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	/** The table may live in a popout window, which has its own timers. */
-	private get win(): Window & typeof globalThis {
+	private get win(): typeof window {
 		return this.scroll.ownerDocument.defaultView ?? window;
 	}
 }

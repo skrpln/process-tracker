@@ -111,8 +111,8 @@ function filterByCondition(
 	originFile: string,
 	warnings: string[],
 ): TrackCard[] {
-	let failures = 0;
-	let firstError: string | null = null;
+	// What Dataview said on each card it could not read the condition on.
+	const errors: string[] = [];
 
 	const rows = tracks.filter((card) => {
 		const page = api.page(card.path, originFile);
@@ -121,13 +121,13 @@ function filterByCondition(
 		const result = api.evaluate(condition, page, originFile);
 		if (result.successful) return isTruthy(api, result.value);
 
-		failures++;
-		if (firstError === null) firstError = describe(result.error);
+		errors.push(describe(result.error));
 		return false;
 	});
 
-	if (firstError === null) return rows;
-	if (failures === tracks.length) {
+	const [firstError] = errors;
+	if (firstError === undefined) return rows;
+	if (errors.length === tracks.length) {
 		warnings.push(`Dataview could not read "${condition}": ${firstError}. It is ignored.`);
 		return tracks;
 	}

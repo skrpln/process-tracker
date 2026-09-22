@@ -17,10 +17,8 @@ import { TRACK_COLOR_KEY } from "../constants.ts";
  * nothing is a colour. The plugin always runs in one.
  */
 export function isCssColor(value: string): boolean {
-	const css = (globalThis as { CSS?: { supports?(property: string, value: string): boolean } })
-		.CSS;
-	if (typeof css?.supports !== "function") return false;
-	return css.supports("color", value);
+	if (typeof CSS === "undefined" || typeof CSS.supports !== "function") return false;
+	return CSS.supports("color", value);
 }
 
 /**
