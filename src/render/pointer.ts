@@ -7,7 +7,7 @@ import { entryAt } from "../entry/source.ts";
 import type { CellState, Entry } from "../model/types.ts";
 import { DayPopup } from "./popup.ts";
 import type { DayHandlers } from "./popup.ts";
-import { entryPathsOf } from "./table.ts";
+import { CREATABLE_CLASS, entryPathsOf } from "./table.ts";
 
 /** How long the pointer rests on a day before its list opens, as a preview waits too. */
 const OPEN_DELAY = 300;
@@ -28,6 +28,9 @@ export interface CellTarget {
 	/** Paths of the notes behind the cell, in the order the list shows them. */
 	entryPaths: string[];
 }
+
+/** Asked for by a click on the caption of a day with no journal: the caption cell and the day. */
+export type JournalRequest = (caption: HTMLElement, date: string) => void;
 
 /** The note under the pointer, and the element it hangs on. */
 interface HoverTarget {
@@ -62,12 +65,20 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		private readonly sourcePath: string,
 		private readonly onClick: (target: CellTarget, mod: boolean) => void,
 		private readonly handlers: DayHandlers,
+		private readonly onJournal: JournalRequest,
 	) {
 		super(containerEl);
 	}
 
 	onload(): void {
 		this.registerDomEvent(this.frame, "click", (event: MouseEvent) => {
+			const caption = readNewDay(event.target);
+			if (caption !== null) {
+				this.closeDay();
+				this.onJournal(caption.cell, caption.date);
+				return;
+			}
+
 			const target = readCell(event.target);
 			if (target === null) return;
 
@@ -212,6 +223,18 @@ function readCell(node: EventTarget | null): CellTarget | null {
 		state: (cell.dataset.state ?? "empty") as CellState,
 		entryPaths: entryPathsOf(cell),
 	};
+}
+
+/**
+ * The caption of a day a click can make a journal for ([[daily-notes]]). A caption that is a
+ * link is not one of them: Obsidian opens the journal behind it by itself.
+ */
+function readNewDay(node: EventTarget | null): { cell: HTMLElement; date: string } | null {
+	if (closestOf(node, `.process-tracker__day.${CREATABLE_CLASS}`) === null) return null;
+
+	const cell = closestOf(node, ".process-tracker__date");
+	const date = cell?.dataset.date ?? "";
+	return cell === null || date === "" ? null : { cell, date };
 }
 
 /**

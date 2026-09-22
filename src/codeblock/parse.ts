@@ -2,6 +2,7 @@
 // Pure module: no Obsidian API, covered by test/parse.test.ts.
 
 import { MAX_DAYS } from "../constants.ts";
+import { normalizeFolder } from "../entry/compose.ts";
 import type { SortDirection, SortSpec, TrackerOptions } from "../model/types.ts";
 import { readColor } from "../tracks/color.ts";
 
@@ -19,7 +20,16 @@ export const DEFAULT_DATES: SortDirection = "desc";
 /** No thread until the block asks for one: a tracker says enough with its checkmarks. */
 export const DEFAULT_STROKE = false;
 
-const KNOWN_KEYS = ["track", "start", "days", "dates", "sort", "track_color", "stroke"];
+const KNOWN_KEYS = [
+	"track",
+	"start",
+	"days",
+	"dates",
+	"sort",
+	"track_color",
+	"stroke",
+	"daily_note_dir",
+];
 
 /** Parses `key: value` lines of a code block into tracker options. */
 export function parseCodeBlock(source: string): ParseResult {
@@ -32,6 +42,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		sort: { ...DEFAULT_SORT },
 		trackColor: null,
 		stroke: DEFAULT_STROKE,
+		dailyNoteDir: null,
 	};
 	const seen = new Set<string>();
 
@@ -67,6 +78,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "sort") options.sort = parseSort(value, warnings);
 		if (key === "track_color") options.trackColor = parseColor(value, warnings);
 		if (key === "stroke") options.stroke = parseStroke(value, warnings);
+		if (key === "daily_note_dir") options.dailyNoteDir = parseFolder(value);
 	}
 
 	return { options, warnings };
@@ -97,6 +109,16 @@ export function parseStroke(value: string, warnings: string[] = []): boolean {
 
 	warnings.push(`Unknown value "stroke: ${value}", "${DEFAULT_STROKE}" is used.`);
 	return DEFAULT_STROKE;
+}
+
+/**
+ * `daily_note_dir: <folder>` — where the journals of this table are looked for and created,
+ * instead of the folder of the daily notes settings ([[daily-notes]]). Quotes around the
+ * value are dropped, and so are the slashes at its ends; `/` is the vault root, returned as an
+ * empty string. Whether the folder is in the vault is asked at render, not here.
+ */
+export function parseFolder(value: string): string {
+	return normalizeFolder(value.replace(/^(["'])(.*)\1$/, "$2"));
 }
 
 /** `dates: asc | desc` — the direction of the date columns. */

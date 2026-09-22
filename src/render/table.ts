@@ -17,6 +17,9 @@ import type { StrokeEdges, StrokeMark } from "./stroke.ts";
  */
 const DRAFT_TOOLTIP = "Not done";
 
+/** Class of a day caption with no journal behind it, where a click can make one. */
+export const CREATABLE_CLASS = "is-creatable";
+
 /** Class of the scrolling container; the wheel handler of the plugin looks for it by name. */
 export const SCROLL_CLASS = "process-tracker__scroll";
 
@@ -74,6 +77,8 @@ export interface TrackerView {
 	dates: SortDirection;
 	/** Journals of the days in sight: day -> path. A day without one is not in the map. */
 	dailyNotes: ReadonlyMap<string, string>;
+	/** Whether a day without a journal can have one made by a click ([[daily-notes]]). */
+	journalsCreatable: boolean;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -141,7 +146,7 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	});
 	const probe = renderProbe(dates);
 	renderColumnWidths(dates, view.columns.length);
-	renderDatesHead(dates, view.columns, view.dailyNotes);
+	renderDatesHead(dates, view.columns, view.dailyNotes, view.journalsCreatable);
 	renderDatesBody(dates, view);
 
 	return { frame, scroll, captionCell, probe };
@@ -216,6 +221,7 @@ function renderDatesHead(
 	table: HTMLTableElement,
 	columns: DateColumn[],
 	journals: ReadonlyMap<string, string>,
+	creatable: boolean,
 ): void {
 	const row = table.createEl("thead").createEl("tr");
 	for (const column of columns) {
@@ -223,13 +229,13 @@ function renderDatesHead(
 			cls: "process-tracker__date",
 			attr: { "data-date": column.iso },
 		});
-		renderDayCaption(cell, column, journals.get(column.iso) ?? null);
+		renderDayCaption(cell, formatDay(column), journals.get(column.iso) ?? null, creatable);
 		if (column.isToday) cell.addClass("is-today");
 	}
 }
 
 /**
- * The caption of one day ([[expectation]] §10).
+ * The caption of one day ([[expectation]] §9).
  *
  * A day whose journal is in the vault wears it as a link — the same `a.internal-link` a
  * track name is, so Obsidian's own handler opens it: a click in this tab, a click with the
@@ -237,23 +243,40 @@ function renderDatesHead(
  * link opened the note twice when the track names were made links.
  *
  * A day with no journal stays a plain number, and that is the only sign the table gives:
- * the caption itself says whether there is anything to open, so nothing has to be announced
- * and nothing has to be switched on.
+ * the caption itself says whether there is anything to open. Where a journal can be made —
+ * the daily notes are on and their folder is there — the number answers a click by offering
+ * to create one ([[daily-notes]]); the pointer child listens for it, since no link is there
+ * for Obsidian to handle.
  *
  * Either way the number sits in an element of its own, so it can be centred on the cell
  * whatever alignment and padding a theme gives the cell ([[rendering]]).
  */
-function renderDayCaption(cell: HTMLElement, column: DateColumn, journal: string | null): void {
-	const text = formatDay(column);
-	if (journal === null) {
-		cell.createSpan({ cls: "process-tracker__day", text });
+function renderDayCaption(
+	cell: HTMLElement,
+	text: string,
+	journal: string | null,
+	creatable: boolean,
+): void {
+	if (journal !== null) {
+		cell.createEl("a", {
+			cls: "process-tracker__day internal-link",
+			text,
+			attr: { href: journal, "data-href": journal },
+		});
 		return;
 	}
-	cell.createEl("a", {
-		cls: "process-tracker__day internal-link",
-		text,
-		attr: { href: journal, "data-href": journal },
-	});
+	const day = cell.createSpan({ cls: "process-tracker__day", text });
+	if (creatable) day.addClass(CREATABLE_CLASS);
+}
+
+/**
+ * Turns the caption of a day into a link to its journal, just created by a click on it. The
+ * rest of the table stays: the caption is dressed in place, as a render would have drawn it.
+ */
+export function dressDayCaption(cell: HTMLElement, journal: string): void {
+	const text = cell.querySelector(".process-tracker__day")?.textContent ?? "";
+	cell.empty();
+	renderDayCaption(cell, text, journal, false);
 }
 
 function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {

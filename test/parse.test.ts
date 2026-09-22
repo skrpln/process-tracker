@@ -4,6 +4,7 @@ import { after, before, describe, it } from "node:test";
 import {
 	parseCodeBlock,
 	parseColor,
+	parseFolder,
 	parseSort,
 	parseStartDate,
 	parseStroke,
@@ -21,6 +22,7 @@ describe("parseCodeBlock", () => {
 			sort: { field: "name", direction: "asc" },
 			trackColor: null,
 			stroke: false,
+			dailyNoteDir: null,
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -232,6 +234,38 @@ describe("stroke", () => {
 	it("warns on its own, so the same value can be checked outside a block", () => {
 		const warnings: string[] = [];
 		assert.equal(parseStroke("1", warnings), false);
+		assert.equal(warnings.length, 1);
+	});
+});
+
+describe("daily_note_dir", () => {
+	it("is the folder of the daily notes settings until the block names one", () => {
+		assert.equal(parseCodeBlock("days: 30").options.dailyNoteDir, null);
+	});
+
+	it("reads a folder as the vault spells it", () => {
+		const { options, warnings } = parseCodeBlock("daily_note_dir: Archive/Daily");
+		assert.equal(options.dailyNoteDir, "Archive/Daily");
+		assert.deepEqual(warnings, []);
+	});
+
+	it("drops the quotes around the value and the slashes at its ends", () => {
+		assert.equal(parseFolder('"Archive/2025"'), "Archive/2025");
+		assert.equal(parseFolder("'Archive'"), "Archive");
+		assert.equal(parseFolder("/Archive/Daily/"), "Archive/Daily");
+	});
+
+	it("keeps the spaces inside a folder name", () => {
+		assert.equal(parseFolder("Old journals/2025"), "Old journals/2025");
+	});
+
+	it("reads a lone slash as the vault root", () => {
+		assert.equal(parseCodeBlock("daily_note_dir: /").options.dailyNoteDir, "");
+	});
+
+	it("leaves an empty value to the settings, with a warning", () => {
+		const { options, warnings } = parseCodeBlock("daily_note_dir:");
+		assert.equal(options.dailyNoteDir, null);
 		assert.equal(warnings.length, 1);
 	});
 });

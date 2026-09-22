@@ -6,7 +6,8 @@ import type { MarkdownPostProcessorContext, TFile } from "obsidian";
 import type { Entry } from "./model/types.ts";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
-import { findDailyNotes } from "./daily/notes.ts";
+import { confirmJournal } from "./daily/confirm.ts";
+import { createJournal, findDailyNotes, journalPathOf, journalPlace } from "./daily/notes.ts";
 import { buildDateColumns } from "./dates/grid.ts";
 import { cellAction } from "./entry/actions.ts";
 import { recountDay, touchedDays } from "./entry/refresh.ts";
@@ -21,6 +22,7 @@ import {
 	SCROLL_CLASS,
 	cellOf,
 	cellsShowing,
+	dressDayCaption,
 	entryPathsOf,
 	paintCell,
 	readCellRef,
@@ -103,14 +105,18 @@ export default class ProcessTrackerPlugin extends Plugin {
 				order: options.dates,
 			});
 
+			// The journals are looked up once per render, and a day that gets one elsewhere
+			// waits for the next render: a caption is dressed where it is drawn
+			// ([[daily-notes]]).
+			const journals = journalPlace(this.app, options.dailyNoteDir, warnings);
+			const days = columns.map((column) => column.iso);
+
 			const elements = renderTracker(element, {
 				tracks,
 				columns,
 				entries: buildEntryIndex(collectEntries(this.app)),
-				// The journals are looked up once per render, and a day that gets one later
-				// waits for the next render: a caption is dressed where it is drawn
-				// ([[daily-notes]]).
-				dailyNotes: findDailyNotes(columns.map((column) => column.iso)),
+				dailyNotes: journals === null ? new Map() : findDailyNotes(this.app, journals, days),
+				journalsCreatable: journals !== null,
 				trackColor: options.trackColor,
 				stroke: options.stroke,
 				dates: options.dates,
@@ -146,6 +152,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 							open: (path) => {
 								void this.openEntry(path);
 							},
+						},
+						(caption, date) => {
+							void this.newJournal(caption, date, options.dailyNoteDir);
 						},
 					),
 				);
@@ -284,6 +293,35 @@ export default class ProcessTrackerPlugin extends Plugin {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Makes the journal of a day, asked for by a click on its caption ([[daily-notes]]).
+	 *
+	 * The place is asked again here, not taken from the render: the settings or the folder may
+	 * have changed since the table was drawn. The reader is asked first, with the path shown —
+	 * a click on a number is easy to make by accident, and the journal is a note of their own.
+	 * A journal that has appeared at that path in the meantime is opened without the question.
+	 * The caption becomes a link at once: the table knows the path, and a render would draw it
+	 * the same way. The journal opens in a new tab, as a note made by a click on a cell does:
+	 * the table the reader clicked in stays where it was.
+	 */
+	private async newJournal(caption: HTMLElement, date: string, dir: string | null): Promise<void> {
+		try {
+			const place = journalPlace(this.app, dir);
+			if (place === null) throw new Error("the daily notes are off, or their folder is gone");
+
+			const path = journalPathOf(place, date);
+			if (this.app.vault.getFileByPath(path) === null) {
+				if (!(await confirmJournal(this.app, path))) return;
+			}
+
+			const file = await createJournal(this.app, place, date);
+			dressDayCaption(caption, file.path);
+			await this.app.workspace.getLeaf("tab").openFile(file);
+		} catch (error) {
+			new Notice(`Process Tracker: ${message(error)}`);
+		}
 	}
 
 	/** Opens one note of a day in a new tab, as a click on a cell of one entry does. */

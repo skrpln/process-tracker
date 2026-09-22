@@ -2,7 +2,7 @@
 
 A tracker for [Obsidian](https://obsidian.md) whose checkmarks are notes. A `process-tracker` code block becomes a table: rows are your tracks — a habit, a practice, a long project — columns are days, and a checked box means the day is done.
 
-Every check is a separate note in your vault, where you can write what you did, how it went, links, photos, the protocol you followed . Hover the cell and the note opens in a preview you can read and edit on the spot, without leaving the table.
+Every check is a separate note in your vault, where you can write what you did, how it went, links, photos, the protocol you followed. Hover the cell and the note opens in a preview you can read and edit on the spot, without leaving the table.
 
 ## Getting started
 
@@ -54,7 +54,7 @@ stroke: true
 | `sort`        | `name`, `ctime`, `mtime` or a property, with `asc` or `desc` | `name asc`  | Define order of the rows.            |
 | `track_color` | any CSS colour                                               | theme       | Colours the checkmarks of the table. |
 | `stroke`      | `true`, `false`                                              | `false`     | Threads a streak of checked days together. |
-|               |                                                              |             |                                      |
+| `daily_note_dir` | a folder, `/` for the vault root                          | your daily notes folder | Where this table looks for daily notes and creates them. |
 
 >[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
@@ -97,10 +97,18 @@ anything worth keeping about that day: what you did, links, checklists
 
 ### 4. Click a date
 
-The caption above a column is a link when the daily note of that day is in your vault: a click opens it in this tab, `Cmd`/`Ctrl` + click in a new one, and hovering it gives the same preview a cell does. A day without a daily note stays a plain number, so the caption itself tells you whether there is anything to open.
+The caption above a column is a link when the daily note of that day is in your vault: a click opens it in this tab, `Cmd`/`Ctrl` + click in a new one, and hovering it gives the same preview a cell does.
+
+A day without a daily note shows a plain number, so the caption itself tells you whether there is anything to open. Click the number and Process Tracker offers to create the note — it shows the path first and waits for **Create**. The new note opens in a new tab, and the number becomes a link. Days ahead of today can have one too.
 
 > [!tip]
-> The folder and the date format come from the core **Daily notes** plugin, or from [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) when you keep your journal there. Process Tracker only opens a daily note, it never creates one — with neither plugin enabled, no caption is a link.
+> The folder, the date format and the template come from the core **Daily notes** plugin, or from [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) when you keep your journal there. With neither plugin enabled, captions are plain numbers.
+
+> [!tip]
+> In the template, `{{date}}` and `{{title}}` are the name of the new note, `{{date:dddd, D MMMM}}` formats the day of that note — not today — and `{{yesterday}}`, `{{tomorrow}}` give the days around it. Templater commands run as in any new note when "Trigger Templater on new file creation" is on.
+
+> [!tip]
+> Moved older daily notes somewhere else, an archive for instance? Name that folder with `daily_note_dir`, and the table looks for them there and creates new ones there. Inside that folder a note is found at the path your date format gives it or, failing that, by its file name.
 
 ## Settings
 

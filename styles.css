@@ -328,6 +328,14 @@ body.theme-light .process-tracker {
 }
 
 /*
+ * A day with no journal, where a click offers to create one. It looks like every other
+ * number of the row; only the pointer says that it answers.
+ */
+.process-tracker .process-tracker__dates .process-tracker__day.is-creatable {
+	cursor: pointer;
+}
+
+/*
  * A draft — an entry for the day exists, `done` is false. The box stays unchecked and
  * takes a colour of its own, so the day reads as started at a glance.
  *
