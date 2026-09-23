@@ -3,7 +3,7 @@
   "name": "Process Tracker",
   "version": "0.1.1",
   "minAppVersion": "1.5.7",
-  "description": "Tracker table for habits and processes, with tracks as rows and dates as columns. Requires Dataview for track filtering and Templater for entry templates.",
+  "description": "Daily habit and progress tracker in a table: rows are your tracks, columns are days, and every checked day is a note you can open and edit in place.",
   "author": "skrpln",
   "isDesktopOnly": true,
   "authorUrl": "https://github.com/skrpln"
