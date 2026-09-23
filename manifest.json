@@ -1,7 +1,7 @@
 {
   "id": "process-tracker",
   "name": "Process Tracker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.5.7",
   "description": "Tracker table for habits and processes, with tracks as rows and dates as columns. Requires Dataview for track filtering and Templater for entry templates.",
   "author": "skrpln",

@@ -2,10 +2,46 @@
 // Pure module: works on the moments it is given, covered by test/journal.test.ts
 // ([[daily-notes]]).
 
-import type { moment } from "obsidian";
 import { normalizeFolder } from "../entry/compose.ts";
 
-export type Moment = ReturnType<typeof moment>;
+/**
+ * A day, as much of one as the plugin asks for; Obsidian hands it the real moment.
+ *
+ * The type is written out rather than taken from the moment the Obsidian types export.
+ * That one is declared as a namespace import, and a namespace is not callable while
+ * `esModuleInterop` is on — as it is by default in TypeScript 6 and in the linter the
+ * community directory runs. Types taken from it would collapse there, and every line that
+ * touched a day would be an untyped one.
+ */
+export interface Moment {
+	clone(): Moment;
+	add(amount: number, unit: TimeUnit): Moment;
+	subtract(amount: number, unit: TimeUnit): Moment;
+	set(values: { hour: number; minute: number; second: number }): Moment;
+	get(unit: "hour" | "minute" | "second"): number;
+	format(format?: string): string;
+}
+
+/**
+ * Units a day is moved by: the words the plugin uses itself, and the letters a template
+ * writes a shift with — `{{date+1d}}`, `{{date-2w}}`. Spelled out, because the units of the
+ * real moment are a list of literals too, and a plain `string` would not fit it.
+ *
+ * The case of a letter is its meaning: `M` is a month, `m` is a minute.
+ */
+export type TimeUnit =
+	| "day"
+	| "week"
+	| "month"
+	| "year"
+	| "y"
+	| "Q"
+	| "M"
+	| "w"
+	| "d"
+	| "h"
+	| "m"
+	| "s";
 
 /**
  * The name the journal of a day is filed under, the folders of the format included:
@@ -97,7 +133,7 @@ export function fillJournalTemplate(
 					second: now.get("second"),
 				});
 				if (shift !== undefined && amount !== undefined && unit !== undefined) {
-					at.add(Number.parseInt(amount, 10), unit as "d");
+					at.add(Number.parseInt(amount, 10), unit as TimeUnit);
 				}
 				return own === undefined ? at.format(format) : at.format(own.slice(1).trim());
 			},

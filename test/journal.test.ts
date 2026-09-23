@@ -100,6 +100,11 @@ describe("fillJournalTemplate", () => {
 		assert.equal(fill("{{date+1d:YYYY-MM-DD}} {{date-1w:YYYY-MM-DD}}"), "2026-09-19 2026-09-11");
 	});
 
+	it("reads the case of a shift unit as moment reads it: M is a month, m a minute", () => {
+		assert.equal(fill("{{date+1M:YYYY-MM-DD}}"), "2026-10-18");
+		assert.equal(fill("{{date+30m:HH:mm}}"), "14:35");
+	});
+
 	it("gives yesterday and tomorrow in the format of the journal", () => {
 		assert.equal(
 			fill("{{yesterday}} {{tomorrow}}", "2026-09-18", "DD.MM.YYYY"),

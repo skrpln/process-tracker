@@ -20,6 +20,13 @@ import type { Moment } from "./journal.ts";
 /** How a column of the table spells a day, and how moment is told to read it back. */
 const ISO_DATE = "YYYY-MM-DD";
 
+/**
+ * The moment of Obsidian, typed the way the plugin calls it ([[daily-notes]]). One cast, in
+ * one place: the types Obsidian ships declare it as a namespace, and a namespace is not
+ * callable under the newer defaults of TypeScript. Everything past this line stays typed.
+ */
+const makeMoment = moment as unknown as (input?: string, format?: string, strict?: boolean) => Moment;
+
 /** What the core Daily notes plugin files a journal under when no format is set. */
 const DEFAULT_FORMAT = "YYYY-MM-DD";
 
@@ -155,7 +162,7 @@ export async function createJournal(app: App, place: JournalPlace, day: string):
 	if (existing !== null) return existing;
 
 	const template = await readTemplate(app, place.template);
-	const text = fillJournalTemplate(template, dayOf(day), place.format, moment());
+	const text = fillJournalTemplate(template, dayOf(day), place.format, makeMoment());
 
 	const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 	if (parent !== "" && app.vault.getFolderByPath(parent) === null) {
@@ -182,5 +189,5 @@ async function readTemplate(app: App, template: string): Promise<string> {
 
 /** A column of the table as a moment: the local calendar day, read strictly. */
 function dayOf(day: string): Moment {
-	return moment(day, ISO_DATE, true);
+	return makeMoment(day, ISO_DATE, true);
 }
