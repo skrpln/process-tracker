@@ -32,3 +32,6 @@ export const ENTRY_DATE_KEY = "date";
 
 /** Frontmatter key that checks the box: only a true value counts as done. */
 export const ENTRY_DONE_KEY = "done";
+
+/** Frontmatter key of an entry note whose first visible sign a closed day shows instead of the checkmark. */
+export const ENTRY_MARK_KEY = "mark";

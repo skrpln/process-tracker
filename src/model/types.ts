@@ -59,6 +59,8 @@ export interface Entry {
 	date: string;
 	/** The `done` property; `false` for a draft. */
 	done: boolean;
+	/** The first visible sign of the `mark` property; `null` — no mark ([[expectation]] §6). */
+	mark: string | null;
 }
 
 /** State of one cell, derived from the entry behind it ([[expectation]] §7). */

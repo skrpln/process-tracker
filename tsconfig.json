@@ -14,7 +14,7 @@
     "strictNullChecks": true,
     "strict": true,
     "noEmit": true,
-    "lib": ["DOM", "ES2020"],
+    "lib": ["DOM", "ES2020", "ES2022.Intl"],
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]

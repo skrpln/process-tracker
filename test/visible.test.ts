@@ -88,7 +88,7 @@ describe("captionLabel", () => {
 });
 
 describe("columnWidth", () => {
-	const square = { rowHeight: 26.4, checkbox: 20, caption: 22 };
+	const square = { rowHeight: 26.4, checkbox: 20, caption: 22, mark: 0 };
 
 	it("takes the height of a row when nothing else is wider", () => {
 		assert.equal(columnWidth(square, null), 26.4);
@@ -102,8 +102,12 @@ describe("columnWidth", () => {
 		assert.equal(columnWidth({ ...square, caption: 66 }, null), 66);
 	});
 
+	it("widens the column for a mark wider than the box it replaces", () => {
+		assert.equal(columnWidth({ ...square, mark: 34 }, null), 34);
+	});
+
 	it("never goes below the height of a row", () => {
-		assert.equal(columnWidth({ rowHeight: 26.4, checkbox: 8, caption: 10 }, null), 26.4);
+		assert.equal(columnWidth({ rowHeight: 26.4, checkbox: 8, caption: 10, mark: 0 }, null), 26.4);
 	});
 
 	it("ignores a change under half a pixel", () => {
@@ -117,15 +121,20 @@ describe("columnWidth", () => {
 	});
 
 	it("stays silent while the table has no layout yet", () => {
-		assert.equal(columnWidth({ rowHeight: 0, checkbox: 0, caption: 0 }, null), null);
+		assert.equal(columnWidth({ rowHeight: 0, checkbox: 0, caption: 0, mark: 0 }, null), null);
 		assert.equal(
-			columnWidth({ rowHeight: Number.NaN, checkbox: Number.NaN, caption: Number.NaN }, null),
+			columnWidth({
+				rowHeight: Number.NaN,
+				checkbox: Number.NaN,
+				caption: Number.NaN,
+				mark: Number.NaN,
+			}, null),
 			null,
 		);
-		assert.equal(columnWidth({ rowHeight: -5, checkbox: -2, caption: -1 }, 26), null);
+		assert.equal(columnWidth({ rowHeight: -5, checkbox: -2, caption: -1, mark: -1 }, 26), null);
 	});
 
 	it("ignores a measurement that has not arrived yet", () => {
-		assert.equal(columnWidth({ rowHeight: 26.4, checkbox: 0, caption: Number.NaN }, null), 26.4);
+		assert.equal(columnWidth({ rowHeight: 26.4, checkbox: 0, caption: Number.NaN, mark: 0 }, null), 26.4);
 	});
 });

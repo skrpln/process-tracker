@@ -4,7 +4,7 @@
 import { setTooltip } from "obsidian";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import type { CellRef } from "../entry/refresh.ts";
-import { cellState, findEntries } from "../entry/state.ts";
+import { cellMark, cellState, findEntries } from "../entry/state.ts";
 import type { EntryIndex } from "../entry/state.ts";
 import type { CellState, DateColumn, Entry, SortDirection, TrackCard } from "../model/types.ts";
 import { resolveTrackColor } from "../tracks/color.ts";
@@ -44,8 +44,23 @@ export const FILLED_CLASS = "process-tracker--filled";
 /** Custom property the fill of an unchecked box is measured into. */
 export const BOX_FILL_PROPERTY = "--pt-box-fill";
 
-/** Custom property the thread is moved by, to meet the checkmarks where they are drawn. */
-export const STROKE_SHIFT_PROPERTY = "--pt-stroke-shift";
+/**
+ * Custom property that says how far a checkbox stands from the middle of its cell. The thread
+ * is moved by it to meet the checkmarks, and a mark to stand where the checkmark would.
+ */
+export const BOX_SHIFT_PROPERTY = "--pt-box-shift";
+
+/** Class of the wrapper that centres what a cell shows: the checkbox, or the mark over it. */
+export const SLOT_CLASS = "process-tracker__slot";
+
+/** Class of the sign a closed day shows instead of its checkmark ([[expectation]] §7). */
+export const MARK_CLASS = "process-tracker__mark";
+
+/**
+ * Attribute a cell with a mark carries. The stylesheet hides the checkbox by it and puts the
+ * sign on a backing where the thread runs ([[rendering]]).
+ */
+export const MARK_ATTRIBUTE = "data-mark";
 
 /**
  * Attribute a row carries what the table cannot see: how far its streaks run past the left
@@ -421,6 +436,10 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
  * A cell the thread runs through carries `data-stroke`, which says where the line enters
  * and leaves it; the stylesheet draws the line itself ([[rendering]]).
  *
+ * A closed day of one entry with a `mark` shows the mark instead of the checkmark. The box
+ * stays in the cell, hidden: the measurements ask a box its size and its place, and a mark
+ * taken back by a click has the box to fall back on.
+ *
  * The click itself is handled once for the whole table, by `CellPointerChild`.
  */
 function renderCheckCell(
@@ -441,29 +460,51 @@ function renderCheckCell(
 
 	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
 	// so centring it never has to argue with the way a theme styles a checkbox.
-	const box = cell.createDiv({ cls: "process-tracker__mark" }).createEl("input", {
+	const box = cell.createDiv({ cls: SLOT_CLASS }).createEl("input", {
 		cls: "task-list-item-checkbox",
 		type: "checkbox",
 	});
 	box.checked = state === "done";
+	showMark(cell, cellMark(entries));
 	setTooltip(cell, draftTooltip(state, entries.length));
 }
 
 /**
- * Repaints one cell after its day changed. The table is not rebuilt: a rebuild would throw
- * away the scroll position of the table the reader is working in.
+ * Repaints one cell from the entries of its day, after the day changed. The table is not
+ * rebuilt: a rebuild would throw away the scroll position of the table the reader is working
+ * in.
  */
-export function paintCell(cell: HTMLElement, state: CellState, paths: readonly string[]): void {
+export function paintCell(cell: HTMLElement, entries: readonly Entry[]): void {
+	const state = cellState(entries);
 	cell.setAttr("data-state", state);
-	writeEntryPaths(cell, paths);
-	setTooltip(cell, draftTooltip(state, paths.length));
+	writeEntryPaths(cell, entries.map((entry) => entry.path));
+	setTooltip(cell, draftTooltip(state, entries.length));
 
 	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
 	if (box !== null) box.checked = state === "done";
+	showMark(cell, cellMark(entries));
 
 	// The thread of the row follows the cell: a day just closed can finish a streak, and a
 	// checkmark taken back breaks one. A row without a thread returns from here at once.
 	if (cell.parentElement !== null) paintRowStroke(cell.parentElement);
+}
+
+/**
+ * Puts the mark of a day into its cell, or takes it out. The sign is made only for a day that
+ * has one, so a table without marks carries not a single extra element.
+ */
+function showMark(cell: HTMLElement, mark: string | null): void {
+	const slot = cell.querySelector<HTMLElement>(`.${SLOT_CLASS}`);
+	const sign = slot?.querySelector<HTMLElement>(`.${MARK_CLASS}`) ?? null;
+	if (slot === null || mark === null) {
+		cell.removeAttribute(MARK_ATTRIBUTE);
+		sign?.remove();
+		return;
+	}
+
+	cell.setAttr(MARK_ATTRIBUTE, "");
+	if (sign === null) slot.createSpan({ cls: MARK_CLASS, text: mark });
+	else sign.setText(mark);
 }
 
 /**

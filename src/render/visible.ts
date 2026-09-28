@@ -69,6 +69,8 @@ export interface ColumnMetrics {
 	checkbox: number;
 	/** Day caption of the head, with the padding and borders of its cell. */
 	caption: number;
+	/** Widest mark shown in place of a checkmark, with the padding and borders of its cell. */
+	mark: number;
 }
 
 /**
@@ -78,15 +80,16 @@ export interface ColumnMetrics {
  * The square is the aim, not the rule. A theme decides the size of a checkbox and the
  * padding of a cell, and both live inside the column: Terminal, for one, gives a
  * checkbox six and a half character widths, and Ultra Lobster pads a cell by twenty
- * pixels on each side. So the column takes the largest of the three claims on it —
- * a cell may be wider than it is tall, never narrower, and nothing inside it is cut.
+ * pixels on each side. A mark stands where the checkbox did, and an emoji can be wider
+ * than the box. So the column takes the largest of the claims on it — a cell may be
+ * wider than it is tall, never narrower, and nothing inside it is cut.
  *
  * Fitting the caption is also what keeps it readable: Obsidian clips an overflowing
  * caption with an ellipsis (`thead > tr > th { text-overflow: ellipsis }`), and a
  * column wide enough for the caption never lets that rule fire.
  */
 export function columnWidth(metrics: ColumnMetrics, current: number | null): number | null {
-	const claims = [metrics.rowHeight, metrics.checkbox, metrics.caption].filter(
+	const claims = [metrics.rowHeight, metrics.checkbox, metrics.caption, metrics.mark].filter(
 		(value) => Number.isFinite(value) && value > 0,
 	);
 	if (claims.length === 0) return null;

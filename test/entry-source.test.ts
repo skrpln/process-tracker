@@ -53,7 +53,16 @@ describe("toEntry", () => {
 			trackPath: "cleaning.md",
 			date: "2026-09-11",
 			done: true,
+			mark: null,
 		});
+	});
+
+	it("reads the mark of an entry", () => {
+		const entry = readOne({
+			path: "e.md",
+			frontmatter: { track: "[[cleaning]]", date: "2026-09-11", done: true, mark: "🔥 great" },
+		});
+		assert.equal(entry?.mark, "🔥");
 	});
 
 	it("reads a draft as a draft", () => {

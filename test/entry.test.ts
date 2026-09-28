@@ -4,11 +4,13 @@ import { describe, it } from "node:test";
 import type { Entry } from "../src/model/types.ts";
 import {
 	buildEntryIndex,
+	cellMark,
 	cellState,
 	entryKey,
 	findEntries,
 	readDate,
 	readDone,
+	readMark,
 	readTrackLink,
 } from "../src/entry/state.ts";
 
@@ -21,6 +23,7 @@ function entry(overrides: Partial<Entry> & { path: string }): Entry {
 		trackPath: "cleaning.md",
 		date: "2026-09-11",
 		done: true,
+		mark: null,
 		...overrides,
 	};
 }
@@ -155,5 +158,62 @@ describe("cellState", () => {
 		assert.equal(cellState([done, draft]), "draft");
 		assert.equal(cellState([draft, done]), "draft");
 		assert.equal(cellState([done, entry({ path: "c.md", done: true })]), "done");
+	});
+});
+
+describe("readMark", () => {
+	it("keeps the first visible sign of a text", () => {
+		assert.equal(readMark("🔥"), "🔥");
+		assert.equal(readMark("4"), "4");
+		assert.equal(readMark("ok"), "o");
+		assert.equal(readMark("  😐 so-so "), "😐");
+	});
+
+	it("keeps a sign made of several characters whole", () => {
+		assert.equal(readMark("👍🏽"), "👍🏽");
+		assert.equal(readMark("👨‍👩‍👧 family"), "👨‍👩‍👧");
+		assert.equal(readMark("🇷🇺"), "🇷🇺");
+		assert.equal(readMark("1️⃣"), "1️⃣");
+	});
+
+	it("reads a number as it is written", () => {
+		assert.equal(readMark(4), "4");
+		assert.equal(readMark(10), "1");
+		assert.equal(readMark(-2), "-");
+	});
+
+	it("reads the word true as a word", () => {
+		assert.equal(readMark("true"), "t");
+	});
+
+	it("gives no sign for anything else", () => {
+		assert.equal(readMark(""), null);
+		assert.equal(readMark("   "), null);
+		assert.equal(readMark(undefined), null);
+		assert.equal(readMark(null), null);
+		assert.equal(readMark(true), null);
+		assert.equal(readMark(Number.NaN), null);
+		assert.equal(readMark(["🔥"]), null);
+		assert.equal(readMark({ mark: "🔥" }), null);
+	});
+});
+
+describe("cellMark", () => {
+	it("shows the mark of a closed day of one entry", () => {
+		assert.equal(cellMark([entry({ path: "a.md", mark: "🔥" })]), "🔥");
+	});
+
+	it("shows nothing for a day without a mark", () => {
+		assert.equal(cellMark([]), null);
+		assert.equal(cellMark([entry({ path: "a.md" })]), null);
+	});
+
+	it("keeps a draft a draft, mark or not", () => {
+		assert.equal(cellMark([entry({ path: "a.md", done: false, mark: "🔥" })]), null);
+	});
+
+	it("shows no mark for a day of several entries", () => {
+		const day = [entry({ path: "a.md", mark: "🔥" }), entry({ path: "b.md", mark: "4" })];
+		assert.equal(cellMark(day), null);
 	});
 });

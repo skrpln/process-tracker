@@ -90,10 +90,13 @@ stroke: true
 track: "[[Cleaning]]"  # Link to the track note this entry belongs to.
 date: 2026-09-11
 done: true
+mark: 🔥               # Optional. Shown instead of the checkmark.
 ---
 
 anything worth keeping about that day: what you did, links, checklists
 ```
+
+`mark` lets a day say how it went: a checked day shows the first sign of the value — a digit, a letter or an emoji — in place of its checkmark. `mark: 4` shows `4`, `mark: 🔥` shows 🔥; one sign fits in a cell, so `mark: 10` shows `1`. An outlined box keeps its box, and so does a day with several entries.
 
 ### 4. Click a date
 

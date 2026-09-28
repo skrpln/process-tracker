@@ -13,7 +13,7 @@ import { cellAction } from "./entry/actions.ts";
 import { recountDay, touchedDays } from "./entry/refresh.ts";
 import type { CellRef } from "./entry/refresh.ts";
 import { collectEntries, entryAt, toEntry } from "./entry/source.ts";
-import { buildEntryIndex, cellState, findEntries } from "./entry/state.ts";
+import { buildEntryIndex, findEntries } from "./entry/state.ts";
 import { createEntry, setEntryDone } from "./entry/write.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { CellPointerChild } from "./render/pointer.ts";
@@ -265,8 +265,18 @@ export default class ProcessTrackerPlugin extends Plugin {
 			if (entry !== null) rest.push(entry);
 		}
 
-		const entries = recountDay(day, rest, changed);
-		paintCell(cell, cellState(entries), entries.map((entry) => entry.path));
+		paintCell(cell, recountDay(day, rest, changed));
+	}
+
+	/**
+	 * An entry as a write has just left it. The metadata cache catches up a moment after the
+	 * write, so `done` is taken as it was asked; the mark, which the write does not touch, is
+	 * read from the cache, where it has been all along — a draft closed by a click shows its
+	 * mark at once. A note the cache has not read yet has no mark to show until it has.
+	 */
+	private written(path: string, day: CellRef, done: boolean): Entry {
+		const mark = entryAt(this.app, path)?.mark ?? null;
+		return { path, trackPath: day.trackPath, date: day.date, done, mark };
 	}
 
 	/**
@@ -289,7 +299,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 			for (const cell of cellsShowing(table, path)) {
 				const day = readCellRef(cell);
 				if (day === null) continue;
-				this.paint(cell, day, path, { path, trackPath: day.trackPath, date: day.date, done });
+				this.paint(cell, day, path, this.written(path, day, done));
 			}
 		}
 		return true;
@@ -353,7 +363,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 					action.done,
 					this.settings.entryFolder,
 				);
-				paintCell(target.cell, action.done ? "done" : "draft", [file.path]);
+				paintCell(target.cell, [this.written(file.path, target, action.done)]);
 				return;
 			}
 
@@ -369,7 +379,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 			if (action.kind === "toggle") {
 				await setEntryDone(this.app, file.path, action.done);
-				paintCell(target.cell, action.done ? "done" : "draft", [file.path]);
+				paintCell(target.cell, [this.written(file.path, target, action.done)]);
 				return;
 			}
 			await this.app.workspace.getLeaf("tab").openFile(file);
@@ -397,7 +407,10 @@ export default class ProcessTrackerPlugin extends Plugin {
 		}
 
 		if (refused.length === 0) {
-			paintCell(target.cell, done ? "done" : "draft", target.entryPaths);
+			paintCell(
+				target.cell,
+				target.entryPaths.map((path) => this.written(path, target, done)),
+			);
 			return;
 		}
 		throw new Error(

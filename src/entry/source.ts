@@ -2,9 +2,9 @@
 // Adapter module: resolves the `track` link against the vault, nothing else.
 
 import type { App, CachedMetadata, TFile } from "obsidian";
-import { ENTRY_DATE_KEY, ENTRY_DONE_KEY, ENTRY_TRACK_KEY } from "../constants.ts";
+import { ENTRY_DATE_KEY, ENTRY_DONE_KEY, ENTRY_MARK_KEY, ENTRY_TRACK_KEY } from "../constants.ts";
 import type { Entry } from "../model/types.ts";
-import { readDate, readDone, readTrackLink } from "./state.ts";
+import { readDate, readDone, readMark, readTrackLink } from "./state.ts";
 
 /**
  * Every entry note of the vault. A note counts as an entry when it names a track
@@ -47,6 +47,7 @@ export function toEntry(app: App, file: TFile): Entry | null {
 		trackPath: target.path,
 		date,
 		done: readDone(frontmatter[ENTRY_DONE_KEY]),
+		mark: readMark(frontmatter[ENTRY_MARK_KEY]),
 	};
 }
 

@@ -5,8 +5,10 @@ import type { DateColumn } from "../model/types.ts";
 import { formatMonthYear } from "../dates/grid.ts";
 import {
 	BOX_FILL_PROPERTY,
+	BOX_SHIFT_PROPERTY,
 	FILLED_CLASS,
-	STROKE_SHIFT_PROPERTY,
+	MARK_ATTRIBUTE,
+	MARK_CLASS,
 	TRACK_COLOR_ATTRIBUTE,
 	TRACK_COLOR_PROPERTY,
 	paintRow,
@@ -211,10 +213,15 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		this.checkDraft();
 		this.matchFrameShape(dates);
 		this.centreContent(dates);
-		this.centreThread(dates);
+		this.centreBox(dates);
 
 		const width = columnWidth(
-			{ rowHeight, checkbox: this.checkboxClaim(), caption: this.captionClaim() },
+			{
+				rowHeight,
+				checkbox: this.checkboxClaim(),
+				caption: this.captionClaim(),
+				mark: this.markClaim(),
+			},
 			this.columnWidth,
 		);
 		if (width === null) return;
@@ -288,24 +295,35 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	/**
-	 * Moves the thread onto the checkmarks it joins ([[rendering]]).
+	 * Finds where a checkbox stands in its cell, for the thread and for the marks ([[rendering]]).
 	 *
-	 * The line is drawn across the middle of the cell, and a checkbox does not stand there:
-	 * Obsidian sets one `0.2em` below its line in a rendered note and by half its own size in
-	 * live preview, and a theme may move it again. So the box is asked where it is, and the
-	 * difference between its middle and the middle of the cell becomes the shift of the line.
+	 * A checkbox does not stand in the middle of its cell: Obsidian sets one `0.2em` below its
+	 * line in a rendered note and by half its own size in live preview, and a theme may move it
+	 * again. So the box is asked where it is, and the difference between its middle and the
+	 * middle of the cell becomes a shift: the thread is moved by it onto the checkmarks it joins,
+	 * and a mark to the place of the checkmark it replaces — so the line runs through the middle
+	 * of a mark as it does through a box.
 	 *
-	 * Measured only where a thread is drawn: a table without `stroke` has nothing to align.
+	 * Asked of a cell that shows its box: a cell with a mark keeps its box hidden, and a hidden
+	 * box has no place. Measured on every table, since a mark can appear on any of them with a
+	 * click; a table where every day shows a mark keeps the shift it had.
 	 */
-	private centreThread(dates: HTMLElement): void {
-		const cell = dates.querySelector<HTMLElement>("tbody .process-tracker__cell[data-stroke]");
-		const box = cell?.querySelector<HTMLElement>('input[type="checkbox"]') ?? null;
-		if (cell === undefined || cell === null || box === null) return;
+	private centreBox(dates: HTMLElement): void {
+		const box = this.visibleBox(dates);
+		const cell = box?.closest<HTMLElement>(".process-tracker__cell") ?? null;
+		if (box === null || cell === null) return;
 
 		const cellBox = cell.getBoundingClientRect();
-		const mark = box.getBoundingClientRect();
-		const shift = mark.top + mark.height / 2 - (cellBox.top + cellBox.height / 2);
-		dates.style.setProperty(STROKE_SHIFT_PROPERTY, `${Math.round(shift * 100) / 100}px`);
+		const own = box.getBoundingClientRect();
+		const shift = own.top + own.height / 2 - (cellBox.top + cellBox.height / 2);
+		dates.style.setProperty(BOX_SHIFT_PROPERTY, `${Math.round(shift * 100) / 100}px`);
+	}
+
+	/** The checkbox of the first cell that shows one; `null` when every day shows a mark. */
+	private visibleBox(root: HTMLElement): HTMLElement | null {
+		return root.querySelector<HTMLElement>(
+			`tbody .process-tracker__cell:not([${MARK_ATTRIBUTE}]) input[type="checkbox"]`,
+		);
 	}
 
 	/**
@@ -334,9 +352,23 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		const cells = this.sample(".process-tracker__cell");
 		if (cells.length === 0) return 0;
 
-		const box = cells[0].querySelector<HTMLElement>('input[type="checkbox"]');
+		const box = this.visibleBox(this.scroll);
 		const width = box === null ? 0 : box.getBoundingClientRect().width;
 		return width === 0 ? 0 : width + this.widestSideRoom(cells);
+	}
+
+	/**
+	 * The widest mark on the table with the padding and borders of a cell ([[rendering]]).
+	 *
+	 * Every mark is measured: an emoji is wider than a digit, and one of them decides the width
+	 * of every column. A table has as many marks as closed days with one, and one layout serves
+	 * all of them. A mark that appears later with a click is measured with the next layout.
+	 */
+	private markClaim(): number {
+		const marks = Array.from(this.scroll.querySelectorAll<HTMLElement>(`.${MARK_CLASS}`));
+		let widest = 0;
+		for (const mark of marks) widest = Math.max(widest, mark.getBoundingClientRect().width);
+		return widest === 0 ? 0 : widest + this.widestSideRoom(this.sample(".process-tracker__cell"));
 	}
 
 	/**

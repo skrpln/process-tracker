@@ -8,7 +8,7 @@ import type { Entry } from "../src/model/types.ts";
 const day: CellRef = { trackPath: "cleaning.md", date: "2026-09-14" };
 
 function entry(overrides: Partial<Entry> & { path: string }): Entry {
-	return { trackPath: "cleaning.md", date: "2026-09-14", done: true, ...overrides };
+	return { trackPath: "cleaning.md", date: "2026-09-14", done: true, mark: null, ...overrides };
 }
 
 describe("touchedDays", () => {

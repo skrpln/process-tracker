@@ -35,6 +35,25 @@ export function readDone(value: unknown): boolean {
 	return false;
 }
 
+/** Splits a text into what a reader sees as single signs, not into UTF-16 units. */
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/**
+ * Reads the `mark` property as the one sign a cell has room for ([[expectation]] §6): the
+ * first grapheme of the text, so `👍🏽` and `👨‍👩‍👧` stay whole while `10` gives `1`. A number is
+ * read as it is written. A boolean, a list, an object and an empty text give no mark, and the
+ * day keeps its checkmark.
+ */
+export function readMark(value: unknown): string | null {
+	let text: string;
+	if (typeof value === "string") text = value.trim();
+	else if (typeof value === "number" && Number.isFinite(value)) text = String(value);
+	else return null;
+
+	for (const { segment } of GRAPHEMES.segment(text)) return segment;
+	return null;
+}
+
 /**
  * Reads the `track` property as a link path: `[[card]]`, `[[folder/card|alias]]` and a
  * bare name all give `card`. A list takes its first readable item. Resolving the path
@@ -99,4 +118,14 @@ export function byPath(left: Entry, right: Entry): number {
 export function cellState(entries: readonly Entry[]): CellState {
 	if (entries.length === 0) return "empty";
 	return entries.every((entry) => entry.done) ? "done" : "draft";
+}
+
+/**
+ * The sign a day shows instead of its checkmark ([[expectation]] §7): the mark of a closed day
+ * of one entry. A draft keeps its box, and a day of several keeps the checkmark or the draft
+ * of the common rule — whose mark it would be is not the table's to choose.
+ */
+export function cellMark(entries: readonly Entry[]): string | null {
+	if (entries.length !== 1 || !entries[0].done) return null;
+	return entries[0].mark;
 }
