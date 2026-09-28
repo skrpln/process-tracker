@@ -1,5 +1,5 @@
-// Process Tracker — the name, the path and the first text of the journal of a day.
-// Pure module: works on the moments it is given, covered by test/journal.test.ts
+// Process Tracker — the name, the path and the first text of the daily note of a day.
+// Pure module: works on the moments it is given, covered by test/format.test.ts
 // ([[daily-notes]]).
 
 import { normalizeFolder } from "../entry/compose.ts";
@@ -44,26 +44,26 @@ export type TimeUnit =
 	| "s";
 
 /**
- * The name the journal of a day is filed under, the folders of the format included:
+ * The name the daily note of a day is filed under, the folders of the format included:
  * `2026-09-21` for `YYYY-MM-DD`, `2026/09/21` for `YYYY/MM/DD`. Trimmed, as the core Daily
  * notes plugin trims it.
  */
-export function journalName(day: Moment, format: string): string {
+export function dailyNoteName(day: Moment, format: string): string {
 	return day.format(format).trim();
 }
 
 /**
- * Where the journal of that name lies in a folder: the folder, then the name with its own
+ * Where the daily note of that name lies in a folder: the folder, then the name with its own
  * folders, then `.md` — the path the core plugin asks for when it opens the note of today.
  * An empty folder, and `/`, is the vault root.
  */
-export function journalPath(folder: string, name: string): string {
+export function dailyNotePath(folder: string, name: string): string {
 	const clean = normalizeFolder(folder);
 	return clean === "" ? `${name}.md` : `${clean}/${name}.md`;
 }
 
-/** The last part of a name — what a file of that journal is called: `2026-09-21`. */
-export function journalBasename(name: string): string {
+/** The last part of a name — what a file of that daily note is called: `2026-09-21`. */
+export function dailyNoteBasename(name: string): string {
 	return name.slice(name.lastIndexOf("/") + 1);
 }
 
@@ -84,35 +84,35 @@ const NEIGHBOURS = [
  * the year, the month or the day names two of them the same.
  */
 export function nameTellsTheDay(day: Moment, format: string): boolean {
-	const own = journalBasename(journalName(day, format));
+	const own = dailyNoteBasename(dailyNoteName(day, format));
 	return NEIGHBOURS.every(
 		([amount, unit]) =>
-			journalBasename(journalName(day.clone().add(amount, unit), format)) !== own,
+			dailyNoteBasename(dailyNoteName(day.clone().add(amount, unit), format)) !== own,
 	);
 }
 
 /**
- * The text a new journal starts with: its template, with the placeholders filled in.
+ * The text a new daily note starts with: its template, with the placeholders filled in.
  *
  * The placeholders are read the way `obsidian-daily-notes-interface` reads them — and so the
- * Calendar plugin, and every plugin that creates a journal through that library:
+ * Calendar plugin, and every plugin that creates a daily note through that library:
  *
- * - `{{date}}` and `{{title}}` — the name of the journal;
+ * - `{{date}}` and `{{title}}` — the name of the daily note;
  * - `{{time}}` — the time now, `HH:mm`;
- * - `{{date:format}}`, `{{time:format}}` — the day of the journal at the time now, in a
+ * - `{{date:format}}`, `{{time:format}}` — the day of the daily note at the time now, in a
  *   format of its own, shifted by `{{date+1d:format}}` or `{{date-2w:format}}` if asked;
- * - `{{yesterday}}`, `{{tomorrow}}` — the days around it, in the format of the journal.
+ * - `{{yesterday}}`, `{{tomorrow}}` — the days around it, in the format of the daily note.
  *
  * The core Daily notes plugin reads `{{date}}` differently: it is today to it, which is right
- * for the note of today and wrong for a journal written into any other day.
+ * for the note of today and wrong for a daily note written into any other day.
  */
-export function fillJournalTemplate(
+export function fillDailyNoteTemplate(
 	template: string,
 	day: Moment,
 	format: string,
 	now: Moment,
 ): string {
-	const name = journalName(day, format);
+	const name = dailyNoteName(day, format);
 	return template
 		.replace(/{{\s*date\s*}}/gi, name)
 		.replace(/{{\s*time\s*}}/gi, now.format("HH:mm"))

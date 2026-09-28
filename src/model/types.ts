@@ -27,7 +27,7 @@ export interface TrackerOptions {
 	/** Whether a streak of closed days is threaded together ([[expectation]] §9). */
 	stroke: boolean;
 	/**
-	 * Folder the journals of this table are looked for and created in; `""` — the vault root.
+	 * Folder the daily notes of this table are looked for and created in; `""` — the vault root.
 	 * `null` — the folder of the daily notes settings ([[daily-notes]]).
 	 */
 	dailyNoteDir: string | null;

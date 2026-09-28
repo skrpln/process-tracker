@@ -1,51 +1,51 @@
-// Unit tests for the name, the path and the template of a journal.
+// Unit tests for the name, the path and the template of a daily note.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 // The plugin gets moment from Obsidian; outside Obsidian the same library is asked directly.
 import moment from "moment";
 import {
-	fillJournalTemplate,
-	journalBasename,
-	journalName,
-	journalPath,
+	dailyNoteBasename,
+	dailyNoteName,
+	dailyNotePath,
+	fillDailyNoteTemplate,
 	nameTellsTheDay,
-} from "../src/daily/journal.ts";
+} from "../src/daily/format.ts";
 
 const day = (iso: string) => moment(iso, "YYYY-MM-DD", true);
 
-describe("journalName", () => {
+describe("dailyNoteName", () => {
 	it("formats the day", () => {
-		assert.equal(journalName(day("2026-09-21"), "YYYY-MM-DD"), "2026-09-21");
+		assert.equal(dailyNoteName(day("2026-09-21"), "YYYY-MM-DD"), "2026-09-21");
 	});
 
 	it("keeps the folders of a nested format", () => {
-		assert.equal(journalName(day("2026-09-05"), "YYYY/MM/YYYY-MM-DD"), "2026/09/2026-09-05");
+		assert.equal(dailyNoteName(day("2026-09-05"), "YYYY/MM/YYYY-MM-DD"), "2026/09/2026-09-05");
 	});
 
 	it("trims what the format leaves around the name", () => {
-		assert.equal(journalName(day("2026-09-21"), " YYYY-MM-DD "), "2026-09-21");
+		assert.equal(dailyNoteName(day("2026-09-21"), " YYYY-MM-DD "), "2026-09-21");
 	});
 });
 
-describe("journalPath", () => {
+describe("dailyNotePath", () => {
 	it("puts the name into the folder", () => {
-		assert.equal(journalPath("Daily", "2026-09-21"), "Daily/2026-09-21.md");
+		assert.equal(dailyNotePath("Daily", "2026-09-21"), "Daily/2026-09-21.md");
 	});
 
 	it("reads an empty folder and a slash as the vault root", () => {
-		assert.equal(journalPath("", "2026-09-21"), "2026-09-21.md");
-		assert.equal(journalPath("/", "2026-09-21"), "2026-09-21.md");
+		assert.equal(dailyNotePath("", "2026-09-21"), "2026-09-21.md");
+		assert.equal(dailyNotePath("/", "2026-09-21"), "2026-09-21.md");
 	});
 
 	it("drops the slashes at the ends of the folder", () => {
-		assert.equal(journalPath("/Archive/Daily/", "2026/09/21"), "Archive/Daily/2026/09/21.md");
+		assert.equal(dailyNotePath("/Archive/Daily/", "2026/09/21"), "Archive/Daily/2026/09/21.md");
 	});
 });
 
-describe("journalBasename", () => {
+describe("dailyNoteBasename", () => {
 	it("is the name without its folders", () => {
-		assert.equal(journalBasename("2026/09/2026-09-21"), "2026-09-21");
-		assert.equal(journalBasename("2026-09-21"), "2026-09-21");
+		assert.equal(dailyNoteBasename("2026/09/2026-09-21"), "2026-09-21");
+		assert.equal(dailyNoteBasename("2026-09-21"), "2026-09-21");
 	});
 });
 
@@ -75,12 +75,12 @@ describe("nameTellsTheDay", () => {
 	});
 });
 
-describe("fillJournalTemplate", () => {
+describe("fillDailyNoteTemplate", () => {
 	const now = moment("2026-09-21 14:05:09", "YYYY-MM-DD HH:mm:ss", true);
 	const fill = (template: string, iso = "2026-09-18", format = "YYYY-MM-DD") =>
-		fillJournalTemplate(template, day(iso), format, now);
+		fillDailyNoteTemplate(template, day(iso), format, now);
 
-	it("gives the name of the journal for date and title, the time now for time", () => {
+	it("gives the name of the daily note for date and title, the time now for time", () => {
 		assert.equal(fill("# {{title}}\n{{date}} {{time}}"), "# 2026-09-18\n2026-09-18 14:05");
 	});
 
@@ -88,7 +88,7 @@ describe("fillJournalTemplate", () => {
 		assert.equal(fill("{{ Date }} {{TITLE}}"), "2026-09-18 2026-09-18");
 	});
 
-	it("formats the day of the journal, not today, in a format of its own", () => {
+	it("formats the day of the daily note, not today, in a format of its own", () => {
 		assert.equal(fill("{{date:dddd, D MMMM}}"), "Friday, 18 September");
 	});
 
@@ -105,7 +105,7 @@ describe("fillJournalTemplate", () => {
 		assert.equal(fill("{{date+30m:HH:mm}}"), "14:35");
 	});
 
-	it("gives yesterday and tomorrow in the format of the journal", () => {
+	it("gives yesterday and tomorrow in the format of the daily note", () => {
 		assert.equal(
 			fill("{{yesterday}} {{tomorrow}}", "2026-09-18", "DD.MM.YYYY"),
 			"17.09.2026 19.09.2026",

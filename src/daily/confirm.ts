@@ -1,24 +1,24 @@
-// Process Tracker — the question asked before a journal is created ([[daily-notes]]).
+// Process Tracker — the question asked before a daily note is created ([[daily-notes]]).
 
 import { Modal, Setting } from "obsidian";
 import type { App } from "obsidian";
 
 /**
- * Asks whether to create the journal at this path, and answers with the choice. Closing the
+ * Asks whether to create the daily note at this path, and answers with the choice. Closing the
  * window any other way — Escape, a click beside it — is a no.
  */
-export function confirmJournal(app: App, path: string): Promise<boolean> {
+export function confirmDailyNote(app: App, path: string): Promise<boolean> {
 	return new Promise((resolve) => {
-		new JournalModal(app, path, resolve).open();
+		new DailyNoteModal(app, path, resolve).open();
 	});
 }
 
 /**
  * A window of Obsidian's own, so the theme dresses it as it dresses every other question the
- * app asks. The path is shown in full: with `daily_note_dir` the journal goes somewhere other
+ * app asks. The path is shown in full: with `daily_note_dir` the daily note goes somewhere other
  * than the daily notes folder, and the reader sees where before it is there.
  */
-class JournalModal extends Modal {
+class DailyNoteModal extends Modal {
 	private answered = false;
 
 	constructor(

@@ -105,7 +105,7 @@ The caption above a column is a link when the daily note of that day is in your 
 A day without a daily note shows a plain number, so the caption itself tells you whether there is anything to open. Click the number and Process Tracker offers to create the note — it shows the path first and waits for **Create**. The new note opens in a new tab, and the number becomes a link. Days ahead of today can have one too.
 
 > [!tip]
-> The folder, the date format and the template come from the core **Daily notes** plugin, or from [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) when you keep your journal there. With neither plugin enabled, captions are plain numbers.
+> The folder, the date format and the template come from the core **Daily notes** plugin, or from [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) when you keep your daily notes there. With neither plugin enabled, captions are plain numbers.
 
 > [!tip]
 > In the template, `{{date}}` and `{{title}}` are the name of the new note, `{{date:dddd, D MMMM}}` formats the day of that note — not today — and `{{yesterday}}`, `{{tomorrow}}` give the days around it. Templater commands run as in any new note when "Trigger Templater on new file creation" is on.

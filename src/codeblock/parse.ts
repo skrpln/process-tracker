@@ -112,7 +112,7 @@ export function parseStroke(value: string, warnings: string[] = []): boolean {
 }
 
 /**
- * `daily_note_dir: <folder>` — where the journals of this table are looked for and created,
+ * `daily_note_dir: <folder>` — where the daily notes of this table are looked for and created,
  * instead of the folder of the daily notes settings ([[daily-notes]]). Quotes around the
  * value are dropped, and so are the slashes at its ends; `/` is the vault root, returned as an
  * empty string. Whether the folder is in the vault is asked at render, not here.

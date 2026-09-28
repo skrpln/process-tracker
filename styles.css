@@ -248,7 +248,7 @@ body.theme-light .process-tracker {
  * themes reset the family, size or weight of `.internal-link`, and the track names
  * came out in another face, larger than the captions above them.
  *
- * The head is held to the same rule. The caption of a day whose journal is in the vault is
+ * The head is held to the same rule. The caption of a day whose daily note is in the vault is
  * a link too, and a column is as wide as its widest caption: a face of the theme's choosing
  * up there would widen every column of the table, and the linked days would stand taller
  * than the days beside them.
@@ -262,7 +262,7 @@ body.theme-light .process-tracker {
 }
 
 /*
- * A day caption that leads to a journal is a link, and a theme dresses a link in things a
+ * A day caption that leads to a daily note is a link, and a theme dresses a link in things a
  * caption cannot wear: Ultra Lobster makes it a pill — sideways padding, a border, a weight
  * of its own — while Comic and Terminal2K give it a line of their own height. Any of that
  * shows at once, because the caption stands in a row of bare numbers: it sits a pixel or
@@ -369,7 +369,7 @@ body.theme-light .process-tracker {
 }
 
 /*
- * A day with no journal, where a click offers to create one. It looks like every other
+ * A day with no daily note, where a click offers to create one. It looks like every other
  * number of the row; only the pointer says that it answers.
  */
 .process-tracker .process-tracker__dates .process-tracker__day.is-creatable {

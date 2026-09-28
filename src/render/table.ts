@@ -17,7 +17,7 @@ import type { StrokeEdges, StrokeMark } from "./stroke.ts";
  */
 const DRAFT_TOOLTIP = "Not done";
 
-/** Class of a day caption with no journal behind it, where a click can make one. */
+/** Class of a day caption with no daily note behind it, where a click can make one. */
 export const CREATABLE_CLASS = "is-creatable";
 
 /** Class of the scrolling container; the wheel handler of the plugin looks for it by name. */
@@ -90,10 +90,10 @@ export interface TrackerView {
 	stroke: boolean;
 	/** Which way the columns run; the thread of a row is counted along it. */
 	dates: SortDirection;
-	/** Journals of the days in sight: day -> path. A day without one is not in the map. */
+	/** Daily notes of the days in sight: day -> path. A day without one is not in the map. */
 	dailyNotes: ReadonlyMap<string, string>;
-	/** Whether a day without a journal can have one made by a click ([[daily-notes]]). */
-	journalsCreatable: boolean;
+	/** Whether a day without a daily note can have one made by a click ([[daily-notes]]). */
+	dailyNotesCreatable: boolean;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -161,7 +161,7 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	});
 	const probe = renderProbe(dates);
 	renderColumnWidths(dates, view.columns.length);
-	renderDatesHead(dates, view.columns, view.dailyNotes, view.journalsCreatable);
+	renderDatesHead(dates, view.columns, view.dailyNotes, view.dailyNotesCreatable);
 	renderDatesBody(dates, view);
 
 	return { frame, scroll, captionCell, probe };
@@ -235,7 +235,7 @@ function renderNamesBody(table: HTMLTableElement, tracks: TrackCard[]): void {
 function renderDatesHead(
 	table: HTMLTableElement,
 	columns: DateColumn[],
-	journals: ReadonlyMap<string, string>,
+	dailyNotes: ReadonlyMap<string, string>,
 	creatable: boolean,
 ): void {
 	const row = table.createEl("thead").createEl("tr");
@@ -244,7 +244,7 @@ function renderDatesHead(
 			cls: "process-tracker__date",
 			attr: { "data-date": column.iso },
 		});
-		renderDayCaption(cell, formatDay(column), journals.get(column.iso) ?? null, creatable);
+		renderDayCaption(cell, formatDay(column), dailyNotes.get(column.iso) ?? null, creatable);
 		if (column.isToday) cell.addClass("is-today");
 	}
 }
@@ -252,13 +252,13 @@ function renderDatesHead(
 /**
  * The caption of one day ([[expectation]] §9).
  *
- * A day whose journal is in the vault wears it as a link — the same `a.internal-link` a
+ * A day whose daily note is in the vault wears it as a link — the same `a.internal-link` a
  * track name is, so Obsidian's own handler opens it: a click in this tab, a click with the
  * modifier in a new one. Nothing of ours listens for that click; a listener on top of the
  * link opened the note twice when the track names were made links.
  *
- * A day with no journal stays a plain number, and that is the only sign the table gives:
- * the caption itself says whether there is anything to open. Where a journal can be made —
+ * A day with no daily note stays a plain number, and that is the only sign the table gives:
+ * the caption itself says whether there is anything to open. Where a daily note can be made —
  * the daily notes are on and their folder is there — the number answers a click by offering
  * to create one ([[daily-notes]]); the pointer child listens for it, since no link is there
  * for Obsidian to handle.
@@ -269,14 +269,14 @@ function renderDatesHead(
 function renderDayCaption(
 	cell: HTMLElement,
 	text: string,
-	journal: string | null,
+	dailyNote: string | null,
 	creatable: boolean,
 ): void {
-	if (journal !== null) {
+	if (dailyNote !== null) {
 		cell.createEl("a", {
 			cls: "process-tracker__day internal-link",
 			text,
-			attr: { href: journal, "data-href": journal },
+			attr: { href: dailyNote, "data-href": dailyNote },
 		});
 		return;
 	}
@@ -285,13 +285,13 @@ function renderDayCaption(
 }
 
 /**
- * Turns the caption of a day into a link to its journal, just created by a click on it. The
+ * Turns the caption of a day into a link to its daily note, just created by a click on it. The
  * rest of the table stays: the caption is dressed in place, as a render would have drawn it.
  */
-export function dressDayCaption(cell: HTMLElement, journal: string): void {
+export function dressDayCaption(cell: HTMLElement, dailyNote: string): void {
 	const text = cell.querySelector(".process-tracker__day")?.textContent ?? "";
 	cell.empty();
-	renderDayCaption(cell, text, journal, false);
+	renderDayCaption(cell, text, dailyNote, false);
 }
 
 function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {

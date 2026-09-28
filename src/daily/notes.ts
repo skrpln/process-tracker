@@ -1,4 +1,4 @@
-// Process Tracker — the journal of a day, looked up and created in the vault.
+// Process Tracker — the daily note of a day, looked up and created in the vault.
 // Adapter module: the only place that knows about `obsidian-daily-notes-interface`
 // ([[daily-notes]]).
 
@@ -9,13 +9,13 @@ import {
 	getDailyNoteSettings,
 } from "obsidian-daily-notes-interface";
 import {
-	fillJournalTemplate,
-	journalBasename,
-	journalName,
-	journalPath,
+	dailyNoteBasename,
+	dailyNoteName,
+	dailyNotePath,
+	fillDailyNoteTemplate,
 	nameTellsTheDay,
-} from "./journal.ts";
-import type { Moment } from "./journal.ts";
+} from "./format.ts";
+import type { Moment } from "./format.ts";
 
 /** How a column of the table spells a day, and how moment is told to read it back. */
 const ISO_DATE = "YYYY-MM-DD";
@@ -27,14 +27,14 @@ const ISO_DATE = "YYYY-MM-DD";
  */
 const makeMoment = moment as unknown as (input?: string, format?: string, strict?: boolean) => Moment;
 
-/** What the core Daily notes plugin files a journal under when no format is set. */
+/** What the core Daily notes plugin files a daily note under when no format is set. */
 const DEFAULT_FORMAT = "YYYY-MM-DD";
 
-/** Where the journals of one table live, and how they are named. */
-export interface JournalPlace {
+/** Where the daily notes of one table live, and how they are named. */
+export interface DailyNotePlace {
 	folder: TFolder;
 	format: string;
-	/** Path of the template of a new journal, as the settings spell it; empty — none. */
+	/** Path of the template of a new daily note, as the settings spell it; empty — none. */
 	template: string;
 	/**
 	 * Whether a day missed at its path is looked for by name inside the folder. Only a folder
@@ -45,21 +45,21 @@ export interface JournalPlace {
 }
 
 /**
- * Where the journals of a table live, or `null` when the table has none to lead to.
+ * Where the daily notes of a table live, or `null` when the table has none to lead to.
  *
  * The folder is the one the code block names in `daily_note_dir`; without it, the one the
- * journals are kept in — the core Daily notes plugin or Periodic Notes, whichever the vault
+ * daily notes are kept in — the core Daily notes plugin or Periodic Notes, whichever the vault
  * uses, so the reader never repeats a setting already made. A settings folder left empty is
  * the default location for new notes, as it is to the core plugin, and not the vault root.
  *
  * With neither plugin on there is nothing to lead to. A folder that is named but missing is
  * the same answer — and a warning, when it is the code block that named it.
  */
-export function journalPlace(
+export function dailyNotePlace(
 	app: App,
 	dir: string | null,
 	warnings: string[] = [],
-): JournalPlace | null {
+): DailyNotePlace | null {
 	if (!appHasDailyNotesPluginLoaded()) return null;
 
 	// Typed as always there, the settings come back `undefined` when the library could not
@@ -89,30 +89,30 @@ export function journalPlace(
 	return folder === null ? null : { folder, format, template, byName: false };
 }
 
-/** The path the journal of a day has — or will have, once it is created. */
-export function journalPathOf(place: JournalPlace, day: string): string {
-	return normalizePath(journalPath(place.folder.path, journalName(dayOf(day), place.format)));
+/** The path the daily note of a day has — or will have, once it is created. */
+export function dailyNotePathOf(place: DailyNotePlace, day: string): string {
+	return normalizePath(dailyNotePath(place.folder.path, dailyNoteName(dayOf(day), place.format)));
 }
 
 /**
- * The journals of the days asked about: the day as the table spells it — `2026-09-20` —
- * against the path of its note. A day the vault has no journal for is simply missing from
+ * The daily notes of the days asked about: the day as the table spells it — `2026-09-20` —
+ * against the path of its note. A day the vault has no daily note for is simply missing from
  * the map, and that is the whole answer the table needs ([[expectation]] §9).
  *
- * Nothing is walked to find them. Every day is formatted into the path its journal has and
+ * Nothing is walked to find them. Every day is formatted into the path its daily note has and
  * asked for by that path — one lookup a day, whatever the size of the vault. A folder the code
  * block names is searched by name as well, for the days the path missed: an archive is laid
  * out by whoever moved the notes there, not by the format.
  */
 export function findDailyNotes(
 	app: App,
-	place: JournalPlace,
+	place: DailyNotePlace,
 	days: readonly string[],
 ): Map<string, string> {
 	const found = new Map<string, string>();
 	const missed: string[] = [];
 	for (const day of days) {
-		const file = app.vault.getFileByPath(journalPathOf(place, day));
+		const file = app.vault.getFileByPath(dailyNotePathOf(place, day));
 		if (file === null) missed.push(day);
 		else found.set(day, file.path);
 	}
@@ -129,7 +129,7 @@ export function findDailyNotes(
  * Of two files with the name of one day, the first the walk meets wins.
  */
 function findByName(
-	place: JournalPlace,
+	place: DailyNotePlace,
 	days: readonly string[],
 	found: Map<string, string>,
 ): void {
@@ -137,7 +137,7 @@ function findByName(
 	for (const day of days) {
 		const date = dayOf(day);
 		if (!nameTellsTheDay(date, place.format)) continue;
-		wanted.set(journalBasename(journalName(date, place.format)), day);
+		wanted.set(dailyNoteBasename(dailyNoteName(date, place.format)), day);
 	}
 	if (wanted.size === 0) return;
 
@@ -149,20 +149,24 @@ function findByName(
 }
 
 /**
- * Creates the journal of a day at its path and returns it; a journal that has appeared there
+ * Creates the daily note of a day at its path and returns it; one that has appeared there
  * in the meantime is returned as it is ([[daily-notes]]).
  *
- * The template is the one the journals are kept with, filled in for that day. Folders the
+ * The template is the one the daily notes are kept with, filled in for that day. Folders the
  * path goes through are made on the way: a format like `YYYY/MM/DD` files a new month into a
  * folder that does not exist yet.
  */
-export async function createJournal(app: App, place: JournalPlace, day: string): Promise<TFile> {
-	const path = journalPathOf(place, day);
+export async function createDailyNote(
+	app: App,
+	place: DailyNotePlace,
+	day: string,
+): Promise<TFile> {
+	const path = dailyNotePathOf(place, day);
 	const existing = app.vault.getFileByPath(path);
 	if (existing !== null) return existing;
 
 	const template = await readTemplate(app, place.template);
-	const text = fillJournalTemplate(template, dayOf(day), place.format, makeMoment());
+	const text = fillDailyNoteTemplate(template, dayOf(day), place.format, makeMoment());
 
 	const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 	if (parent !== "" && app.vault.getFolderByPath(parent) === null) {
@@ -175,7 +179,7 @@ export async function createJournal(app: App, place: JournalPlace, day: string):
  * The text of the template, read the way the core plugin reads it: a path without an
  * extension is a note. A template that is named but missing stops the whole thing, as the
  * template of an entry does: a typo in the setting would otherwise be paid for with empty
- * journals.
+ * daily notes.
  */
 async function readTemplate(app: App, template: string): Promise<string> {
 	if (template === "") return "";

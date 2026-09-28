@@ -13,7 +13,7 @@ import { CREATABLE_CLASS, entryPathsOf } from "./table.ts";
 const OPEN_DELAY = 300;
 
 /**
- * The links of the table: a track name, and the caption of a day whose journal is in the
+ * The links of the table: a track name, and the caption of a day whose daily note is in the
  * vault ([[expectation]] §10). Both are opened by Obsidian itself; what they need from here
  * is the preview on hover, which a link of a plugin does not get on its own.
  */
@@ -29,8 +29,8 @@ export interface CellTarget {
 	entryPaths: string[];
 }
 
-/** Asked for by a click on the caption of a day with no journal: the caption cell and the day. */
-export type JournalRequest = (caption: HTMLElement, date: string) => void;
+/** Asked for by a click on the caption of a day with no daily note: its cell and the day. */
+export type DailyNoteRequest = (caption: HTMLElement, date: string) => void;
 
 /** The note under the pointer, and the element it hangs on. */
 interface HoverTarget {
@@ -65,7 +65,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		private readonly sourcePath: string,
 		private readonly onClick: (target: CellTarget, mod: boolean) => void,
 		private readonly handlers: DayHandlers,
-		private readonly onJournal: JournalRequest,
+		private readonly onDailyNote: DailyNoteRequest,
 	) {
 		super(containerEl);
 	}
@@ -75,7 +75,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 			const caption = readNewDay(event.target);
 			if (caption !== null) {
 				this.closeDay();
-				this.onJournal(caption.cell, caption.date);
+				this.onDailyNote(caption.cell, caption.date);
 				return;
 			}
 
@@ -106,7 +106,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	 * What the pointer found ([[expectation]] §8): a day of one entry hands its note to the
 	 * core Page preview plugin, a day of several opens the list of the plugin, an empty day
 	 * shows nothing, and a link of the table — a track name, or a day caption that leads to
-	 * a journal — shows the note behind it.
+	 * a daily note — shows the note behind it.
 	 */
 	private onHover(event: MouseEvent): void {
 		const cell = closestOf(event.target, ".process-tracker__cell");
@@ -226,8 +226,8 @@ function readCell(node: EventTarget | null): CellTarget | null {
 }
 
 /**
- * The caption of a day a click can make a journal for ([[daily-notes]]). A caption that is a
- * link is not one of them: Obsidian opens the journal behind it by itself.
+ * The caption of a day a click can make a daily note for ([[daily-notes]]). A caption that is a
+ * link is not one of them: Obsidian opens the daily note behind it by itself.
  */
 function readNewDay(node: EventTarget | null): { cell: HTMLElement; date: string } | null {
 	if (closestOf(node, `.process-tracker__day.${CREATABLE_CLASS}`) === null) return null;
