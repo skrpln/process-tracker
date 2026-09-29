@@ -104,7 +104,7 @@ anything worth keeping about that day: what you did, links, checklists
 
 ### Entries as journal records
 
-Rather not have a note for every day? With `entries: journal` a click writes a record into the journal of the track instead: a section at the end of the track note, under `# Journal`, or the note its `journal` property links to. That note is created with the first record if it does not exist yet.
+Rather not have a note for every day? With `entries: journal` a click writes a record into the journal of the track instead: a section at the end of the track note, under `# Journal`, or the note its `journal` property links to. That note is created with `# Journal` and the first record if it does not exist yet.
 
 **Journal example**:
 ```markdown

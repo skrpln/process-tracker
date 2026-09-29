@@ -272,7 +272,7 @@ describe("createRecord", () => {
 		);
 		const entry = await createRecord(vault.app, "cleaning.md", "2026-09-28", true, fill);
 		assert.deepEqual(vault.created, [
-			{ path: "Logs/Cleaning log.md", text: "## 2026-09-28\n- [x] done\n\n---\n" },
+			{ path: "Logs/Cleaning log.md", text: "# Journal\n\n## 2026-09-28\n- [x] done\n\n---\n" },
 		]);
 		assert.equal(entry.path, "Logs/Cleaning log.md");
 	});

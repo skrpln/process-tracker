@@ -59,7 +59,8 @@ export async function createEntry(
  * ([[entry#Журнал трека|entry]]).
  *
  * The journal is the note the card links to in `journal`, or the card itself. A link that
- * leads nowhere yet is a journal still to be made: the note is created with the record in it.
+ * leads nowhere yet is a journal still to be made: the note is created with `# Journal` and the
+ * record under it.
  * The body is the template of the card without its properties and its Templater commands,
  * filled in for the day of the record by `fill` — the placeholders of a daily note, which only Obsidian's moment can read,
  * so the caller hands it in. A template that is named but missing is left out in silence:
@@ -92,7 +93,7 @@ export async function createRecord(
 			throw new Error(`the journal "${link}" of "${card.basename}" is not a note`);
 		}
 		const path = newJournalPath(app, card, link);
-		const record = insertRecord("", date, done, body, false);
+		const record = insertRecord("", date, done, body, true);
 		await ensureFolder(app, path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 		const made = await app.vault.create(path, record.text);
 		return recordEntry(made.path, trackPath, date, done, record);
