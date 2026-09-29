@@ -4,10 +4,11 @@ import { Keymap, MarkdownRenderChild } from "obsidian";
 import type { App, HoverParent, HoverPopover } from "obsidian";
 import { HOVER_SOURCE } from "../constants.ts";
 import { entryAt } from "../entry/source.ts";
+import { entryPreview } from "../entry/state.ts";
 import type { CellState, Entry } from "../model/types.ts";
 import { DayPopup } from "./popup.ts";
 import type { DayHandlers } from "./popup.ts";
-import { CREATABLE_CLASS, entryPathsOf } from "./table.ts";
+import { CREATABLE_CLASS, entryIdsOf } from "./table.ts";
 
 /** How long the pointer rests on a day before its list opens, as a preview waits too. */
 const OPEN_DELAY = 300;
@@ -25,8 +26,8 @@ export interface CellTarget {
 	trackPath: string;
 	date: string;
 	state: CellState;
-	/** Paths of the notes behind the cell, in the order the list shows them. */
-	entryPaths: string[];
+	/** Addresses of the entries behind the cell, in the order the list shows them. */
+	entryIds: string[];
 }
 
 /** Asked for by a click on the caption of a day with no daily note: its cell and the day. */
@@ -124,8 +125,8 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	}
 
 	private onCellHover(cell: HTMLElement, event: MouseEvent): void {
-		const paths = entryPathsOf(cell);
-		if (paths.length > 1) {
+		const ids = entryIdsOf(cell);
+		if (ids.length > 1) {
 			const open = this.liveDay();
 			// The pointer came back to the cell the list belongs to: the list stays.
 			if (open !== null && open.cell === cell) {
@@ -134,13 +135,14 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 			}
 			// The list of another day is on its way out while this one is on its way in.
 			open?.scheduleClose();
-			this.scheduleOpen(cell, paths);
+			this.scheduleOpen(cell, ids);
 			return;
 		}
 
 		this.cancelOpen();
 		this.liveDay()?.scheduleClose();
-		if (paths.length === 1) this.preview({ element: cell, path: paths[0] }, event);
+		const entry = ids.length === 1 ? entryAt(this.app, ids[0], cell.dataset.track ?? "") : null;
+		if (entry !== null) this.preview({ element: cell, path: entryPreview(entry) }, event);
 	}
 
 	/**
@@ -159,7 +161,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		});
 	}
 
-	private scheduleOpen(cell: HTMLElement, paths: string[]): void {
+	private scheduleOpen(cell: HTMLElement, ids: string[]): void {
 		// A pointer crossing the box and the wrapper inside one cell reports a hover each
 		// time; the wait belongs to the cell, so it is not started over by them.
 		if (this.openingCell === cell) return;
@@ -167,7 +169,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		this.cancelOpen();
 		this.openingCell = cell;
 		const view = cell.ownerDocument.defaultView;
-		this.opening = view?.setTimeout(() => this.openDayList(cell, paths), OPEN_DELAY) ?? 0;
+		this.opening = view?.setTimeout(() => this.openDayList(cell, ids), OPEN_DELAY) ?? 0;
 	}
 
 	/**
@@ -175,13 +177,13 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	 * vault says at the moment the list appears. A day that thinned out to one note in the
 	 * meantime gets no list: the cell itself is repainted by the subscription.
 	 */
-	private openDayList(cell: HTMLElement, paths: string[]): void {
+	private openDayList(cell: HTMLElement, ids: string[]): void {
 		this.opening = 0;
 		this.openingCell = null;
 
 		const entries: Entry[] = [];
-		for (const path of paths) {
-			const entry = entryAt(this.app, path);
+		for (const id of ids) {
+			const entry = entryAt(this.app, id, cell.dataset.track ?? "");
 			if (entry !== null) entries.push(entry);
 		}
 		if (entries.length < 2) return;
@@ -221,7 +223,7 @@ function readCell(node: EventTarget | null): CellTarget | null {
 		trackPath,
 		date,
 		state: (cell.dataset.state ?? "empty") as CellState,
-		entryPaths: entryPathsOf(cell),
+		entryIds: entryIdsOf(cell),
 	};
 }
 

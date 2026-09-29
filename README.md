@@ -18,6 +18,8 @@ tags: process_tracker, some, other, tags
 track_name: Cleaning            # Row title. Without it the file name is used.
 track_color: "#4CAF50"          # Colour of the checkmarks. Without it the theme decides.
 template: "[[Cleaning entry]]"  # Template for new entry notes of this track.
+entries: journal                # Optional: notes (default) or journal, see below.
+journal: "[[Cleaning log]]"     # Optional: where the journal lives. Without it, in this note.
 ---
 ```
 
@@ -42,6 +44,7 @@ dates: asc
 sort: priority desc
 track_color: "#4CAF50"
 stroke: true
+entries: journal
 ```
 ````
 
@@ -55,6 +58,7 @@ stroke: true
 | `track_color` | any CSS colour                                               | theme       | Colours the checkmarks of the table. |
 | `stroke`      | `true`, `false`                                              | `false`     | Threads a streak of checked days together. |
 | `daily_note_dir` | a folder, `/` for the vault root                          | your daily notes folder | Where this table looks for daily notes and creates them. |
+| `entries`     | `notes`, `journal`                                           | the setting | How a click makes an entry for the tracks of this table. |
 
 >[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
@@ -98,6 +102,37 @@ anything worth keeping about that day: what you did, links, checklists
 
 `mark` lets a day say how it went: a checked day shows the first sign of the value — a digit, a letter or an emoji — in place of its checkmark. `mark: 4` shows `4`, `mark: 🔥` shows 🔥; one sign fits in a cell, so `mark: 10` shows `1`. An outlined box keeps its box, and so does a day with several entries.
 
+### Entries as journal records
+
+Rather not have a note for every day? With `entries: journal` a click writes a record into the journal of the track instead: a section at the end of the track note, under `# Journal`, or the note its `journal` property links to. That note is created with the first record if it does not exist yet.
+
+**Journal example**:
+```markdown
+# Journal
+
+## 2026-09-28
+- [x] done
+### 🔥
+anything worth keeping about that day
+
+---
+
+## 2026-09-27
+- [ ] done
+
+---
+```
+
+- A record is a second-level heading that starts with the date; it runs to the next heading of the first or second level. First-level headings are yours — years, months, anything.
+- `done` is the **first checkbox** of the record, wherever it stands in it. The plugin writes it right under the heading; if your template has checkboxes of its own, keep the `done` line above them.
+- The `mark` of a record is its first third-level heading made of a single sign: `### 🔥` shows 🔥, `### 4` shows 4. Headings of more than one sign — `### Steps`, `### 10` — are just headings.
+- New records go on top, ordered by date: a record is written right above the nearest older one, set apart by blank lines and closed with a `---` rule. No year or month headings are made for you.
+- The body of a record is the `template` of the track, without its properties. `{{date}}`, `{{time}}`, `{{date:format}}` and shifts like `{{date+1d:format}}` are filled in for the day of the record. Templater commands `<% %>` are **left out**: Templater acts on new files, and a record is written into an existing one, so they could not run. A line that holds nothing but commands — a `tp.file.move` that files entry notes, say — goes with them, so one template serves both modes.
+- A click opens the journal at the record, and hovering a cell previews the record alone. The body of the record, the mark included, can be edited in the preview; its date heading cannot. `Cmd`/`Ctrl` + click switches the checkbox and leaves the rest of the journal as it is; a record without a checkbox gets one. Checking the box in the journal itself updates the table.
+- Two records with the same heading are two entries of that day. Obsidian links a heading to the first of them, so their previews show the first; the list of the day opens each at its own line.
+
+The mode only decides how new entries are made. The table always shows both kinds, so a track can switch modes and keep its history. The track note says it first with `entries`, then the code block, then the plugin settings.
+
 ### 4. Click a date
 
 The caption above a column is a link when the daily note of that day is in your vault: a click opens it in this tab, `Cmd`/`Ctrl` + click in a new one, and hovering it gives the same preview a cell does.
@@ -121,6 +156,7 @@ A day without a daily note shows a plain number, so the caption itself tells you
 | ------------ | ------------------------------------------------------------ | ----------------- |
 | Track tag    | Only notes with this tag become tracks. `#` is optional, and nested tags count: `process_tracker/health` matches `process_tracker`. | `process_tracker` |
 | Entry folder | Where new entry notes go.                                    | vault root        |
+| New entries  | Separate notes, or records in the journal of the track. The `entries` property of a track note and of a code block override it. | separate notes |
 
 ## Bugs and questions
 

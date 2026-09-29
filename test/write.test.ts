@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App, TFile } from "obsidian";
-import { createEntry, setEntryDone } from "../src/entry/write.ts";
+import { createEntry, createRecord, setEntryDone } from "../src/entry/write.ts";
 
 interface Note {
 	path: string;
@@ -20,7 +20,7 @@ interface Vault {
 }
 
 /** A vault where a link resolves to the note whose file name matches it. */
-function vaultWith(notes: Note[], folders: string[] = []): Vault {
+function vaultWith(notes: Note[], folders: string[] = [], newFileFolder = "/"): Vault {
 	const byPath = new Map(notes.map((note) => [note.path, note]));
 	const created: { path: string; text: string }[] = [];
 	const made: string[] = [];
@@ -29,7 +29,8 @@ function vaultWith(notes: Note[], folders: string[] = []): Vault {
 		const note = byPath.get(path);
 		if (note === undefined) return null;
 		const name = path.slice(path.lastIndexOf("/") + 1);
-		return { path, basename: name.replace(/\.md$/, "") } as TFile;
+		const extension = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "";
+		return { path, basename: name.replace(/\.md$/, ""), extension } as TFile;
 	};
 
 	const app = {
@@ -44,8 +45,14 @@ function vaultWith(notes: Note[], folders: string[] = []): Vault {
 			cachedRead: async (file: TFile) => byPath.get(file.path)?.content ?? "",
 			create: async (path: string, text: string) => {
 				created.push({ path, text });
-				byPath.set(path, { path });
+				byPath.set(path, { path, content: text });
 				return { path } as TFile;
+			},
+			process: async (file: TFile, fn: (text: string) => string) => {
+				const note = byPath.get(file.path);
+				if (note === undefined) throw new Error("no such note");
+				note.content = fn(note.content ?? "");
+				return note.content;
 			},
 		},
 		metadataCache: {
@@ -58,6 +65,7 @@ function vaultWith(notes: Note[], folders: string[] = []): Vault {
 		},
 		fileManager: {
 			generateMarkdownLink: (file: TFile) => `[[${file.basename}]]`,
+			getNewFileParent: () => ({ path: newFileFolder }),
 			processFrontMatter: async (file: TFile, fn: (frontmatter: Record<string, unknown>) => void) => {
 				const note = byPath.get(file.path);
 				if (note === undefined) throw new Error("no such note");
@@ -171,5 +179,138 @@ describe("setEntryDone", () => {
 	it("says so when the note is gone", async () => {
 		const vault = vaultWith([]);
 		await assert.rejects(() => setEntryDone(vault.app, "e.md", true), /entry note "e.md"/);
+	});
+});
+
+/** Fills the placeholders the way the plugin does, as far as these tests need. */
+const fill = (template: string, date: string) => template.replace(/{{date}}/g, date);
+
+describe("createRecord", () => {
+	const journalCard = (extra: Partial<Note> = {}): Note => ({
+		path: "cleaning.md",
+		frontmatter: { tags: "process_tracker" },
+		content: "---\ntags: process_tracker\n---\nsteps\n",
+		...extra,
+	});
+
+	it("writes the record into the card, opening # Journal", async () => {
+		const vault = vaultWith([journalCard()]);
+		const entry = await createRecord(vault.app, "cleaning.md", "2026-09-28", false, fill);
+		assert.equal(
+			vault.notes.get("cleaning.md")?.content,
+			"---\ntags: process_tracker\n---\nsteps\n\n# Journal\n\n## 2026-09-28\n- [ ] done\n\n---\n",
+		);
+		assert.deepEqual(entry, {
+			path: "cleaning.md",
+			trackPath: "cleaning.md",
+			date: "2026-09-28",
+			done: false,
+			mark: null,
+			record: { nth: 0, heading: "2026-09-28", line: 7 },
+		});
+	});
+
+	it("writes the body of the template without its properties and commands, filled in", async () => {
+		const vault = vaultWith([
+			journalCard({
+				frontmatter: { template: "[[entry]]" },
+				frontmatterLinks: [{ key: "template", link: "entry" }],
+				content: "# Journal\n",
+			}),
+			{
+				path: "entry.md",
+				content:
+					'---\nmood:\n---\n<%* await tp.file.move("x/" + tp.file.title) %>\n' +
+					"Day {{date}}, <% tp.date.now() %>\n",
+			},
+		]);
+		await createRecord(vault.app, "cleaning.md", "2026-09-28", true, fill);
+		assert.equal(
+			vault.notes.get("cleaning.md")?.content,
+			"# Journal\n\n## 2026-09-28\n- [x] done\nDay 2026-09-28, \n\n---\n",
+		);
+	});
+
+	it("writes the heading and the box alone when the template is gone", async () => {
+		const vault = vaultWith([
+			journalCard({ frontmatter: { template: "[[gone]]" }, content: "# Journal\n" }),
+		]);
+		await createRecord(vault.app, "cleaning.md", "2026-09-28", false, fill);
+		assert.equal(
+			vault.notes.get("cleaning.md")?.content,
+			"# Journal\n\n## 2026-09-28\n- [ ] done\n\n---\n",
+		);
+	});
+
+	it("writes into the journal the card links to", async () => {
+		const vault = vaultWith([
+			journalCard({
+				frontmatter: { journal: "[[Cleaning log]]" },
+				frontmatterLinks: [{ key: "journal", link: "Cleaning log" }],
+			}),
+			{ path: "Cleaning log.md", content: "# 2026\n## 2026-09-20\n" },
+		]);
+		const entry = await createRecord(vault.app, "cleaning.md", "2026-09-28", false, fill);
+		assert.equal(
+			vault.notes.get("Cleaning log.md")?.content,
+			"# 2026\n\n## 2026-09-28\n- [ ] done\n\n---\n\n## 2026-09-20\n",
+		);
+		assert.equal(entry.path, "Cleaning log.md");
+		assert.equal(entry.trackPath, "cleaning.md");
+	});
+
+	it("makes the journal the card links to when there is none yet", async () => {
+		const vault = vaultWith(
+			[
+				journalCard({
+					frontmatter: { journal: "[[Cleaning log]]" },
+					frontmatterLinks: [{ key: "journal", link: "Cleaning log" }],
+				}),
+			],
+			[],
+			"Logs",
+		);
+		const entry = await createRecord(vault.app, "cleaning.md", "2026-09-28", true, fill);
+		assert.deepEqual(vault.created, [
+			{ path: "Logs/Cleaning log.md", text: "## 2026-09-28\n- [x] done\n\n---\n" },
+		]);
+		assert.equal(entry.path, "Logs/Cleaning log.md");
+	});
+
+	it("makes a journal linked with a folder at that path from the root", async () => {
+		const vault = vaultWith(
+			[
+				journalCard({
+					frontmatter: { journal: "[[Logs/Cleaning]]" },
+					frontmatterLinks: [{ key: "journal", link: "Logs/Cleaning" }],
+				}),
+			],
+			[],
+			"Elsewhere",
+		);
+		await createRecord(vault.app, "cleaning.md", "2026-09-28", false, fill);
+		assert.equal(vault.created[0].path, "Logs/Cleaning.md");
+		assert.deepEqual(vault.folders, ["Logs"]);
+	});
+});
+
+describe("setEntryDone of a record", () => {
+	it("switches the first box of the record at its address", async () => {
+		const vault = vaultWith([
+			{ path: "log.md", content: "## 2026-09-28\n- [ ] done\n## 2026-09-28\n- [ ] done\n" },
+		]);
+		await setEntryDone(vault.app, "log.md#2026-09-28#1", true);
+		assert.equal(
+			vault.notes.get("log.md")?.content,
+			"## 2026-09-28\n- [ ] done\n## 2026-09-28\n- [x] done\n",
+		);
+	});
+
+	it("says so when the record is gone", async () => {
+		const vault = vaultWith([{ path: "log.md", content: "" }]);
+		await assert.rejects(
+			() => setEntryDone(vault.app, "log.md#2026-09-28#0", true),
+			/no longer in the journal/,
+		);
 	});
 });

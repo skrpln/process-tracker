@@ -54,6 +54,28 @@ export function normalizeFolder(folder: string): string {
 	return folder.trim().replace(/^\/+|\/+$/g, "");
 }
 
+/** Stands in for a removed command, so its line can tell it held one. No text holds it. */
+const COMMAND = "\u0000";
+const COMMANDS = /\u0000/g;
+
+/**
+ * What a record of a journal is written from: the body of the template, without its properties
+ * and without its Templater commands ([[entry#Создание записи|entry]]).
+ *
+ * The properties are the business of a note of its own, and a record has none. The commands
+ * would not run: Templater acts on a file as it is created, and a record is written into one
+ * that exists — left in place, `<%* tp.file.move(...) %>` would stay in the journal as text.
+ * A line that held nothing but commands goes with them; a line with text of its own keeps it.
+ */
+export function recordBody(template: string): string {
+	const marked = split(template).body.replace(/<%[\s\S]*?%>/g, COMMAND);
+	return marked
+		.split("\n")
+		.filter((line) => !line.includes(COMMAND) || line.replace(COMMANDS, "").trim() !== "")
+		.map((line) => line.replace(COMMANDS, ""))
+		.join("\n");
+}
+
 /** Splits a note into its frontmatter lines, fences excluded, and everything below. */
 function split(text: string): { head: string[]; body: string } {
 	const lines = text.split("\n");

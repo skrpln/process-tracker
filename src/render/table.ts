@@ -4,7 +4,7 @@
 import { setTooltip } from "obsidian";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import type { CellRef } from "../entry/refresh.ts";
-import { cellMark, cellState, findEntries } from "../entry/state.ts";
+import { cellMark, cellState, entryId, findEntries } from "../entry/state.ts";
 import type { EntryIndex } from "../entry/state.ts";
 import type { CellState, DateColumn, Entry, SortDirection, TrackCard } from "../model/types.ts";
 import { resolveTrackColor } from "../tracks/color.ts";
@@ -73,10 +73,13 @@ export const STROKE_EDGES_ATTRIBUTE = "data-stroke-edges";
 export const STROKE_ATTRIBUTE = "data-stroke";
 
 /**
- * How the paths of a day are written into one attribute: one per line. A vault path holds
+ * How the addresses of a day are written into one attribute: one per line. A vault path holds
  * no newline, so the list splits back exactly as it was written.
  */
-const PATH_SEPARATOR = "\n";
+const ID_SEPARATOR = "\n";
+
+/** A row of the date cells, which names its track in `data-track`. */
+const ROW_SELECTOR = ".process-tracker__dates tr[data-track]";
 
 /** Everything the table needs; assembled by the plugin entry point. */
 export interface TrackerView {
@@ -297,7 +300,7 @@ export function dressDayCaption(cell: HTMLElement, dailyNote: string): void {
 function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	const body = table.createEl("tbody");
 	for (const track of view.tracks) {
-		const row = body.createEl("tr");
+		const row = body.createEl("tr", { attr: { "data-track": track.path } });
 		requestColor(row, resolveTrackColor(track.color, view.trackColor));
 		const thread = rowStroke(row, view, track.path);
 		view.columns.forEach((column, index) => {
@@ -427,8 +430,8 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
  * The box shows what the vault says: checked when every entry of the day is done, unchecked
  * for a draft or an empty day. The state also goes on the cell as `data-state`, where the
  * stylesheet picks the draft up and where the click handling reads it back — together with
- * `data-track`, `data-date` and `data-entry`, which address the cell and name the notes
- * behind it, one path per line.
+ * `data-track`, `data-date` and `data-entry`, which address the cell and name the entries
+ * behind it, one address per line — a path for a note, a path and a place for a record.
  *
  * A day with several entries looks like any other day: there is no mark for it, because
  * several entries are a state of affairs and not an error ([[expectation]] §7).
@@ -456,7 +459,7 @@ function renderCheckCell(
 	});
 	if (column.isToday) cell.addClass("is-today");
 	markStroke(cell, stroke);
-	writeEntryPaths(cell, entries.map((entry) => entry.path));
+	writeEntryIds(cell, entries.map(entryId));
 
 	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
 	// so centring it never has to argue with the way a theme styles a checkbox.
@@ -477,7 +480,7 @@ function renderCheckCell(
 export function paintCell(cell: HTMLElement, entries: readonly Entry[]): void {
 	const state = cellState(entries);
 	cell.setAttr("data-state", state);
-	writeEntryPaths(cell, entries.map((entry) => entry.path));
+	writeEntryIds(cell, entries.map(entryId));
 	setTooltip(cell, draftTooltip(state, entries.length));
 
 	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
@@ -516,20 +519,46 @@ function draftTooltip(state: CellState, count: number): string {
 	return state === "draft" && count === 1 ? DRAFT_TOOLTIP : "";
 }
 
-/** The notes behind a cell, in the order the popup lists them. */
-export function entryPathsOf(cell: HTMLElement): string[] {
+/** The addresses of the entries behind a cell, in the order the popup lists them. */
+export function entryIdsOf(cell: HTMLElement): string[] {
 	const written = cell.dataset.entry ?? "";
-	return written === "" ? [] : written.split(PATH_SEPARATOR);
+	return written === "" ? [] : written.split(ID_SEPARATOR);
 }
 
-function writeEntryPaths(cell: HTMLElement, paths: readonly string[]): void {
-	if (paths.length === 0) cell.removeAttribute("data-entry");
-	else cell.setAttr("data-entry", paths.join(PATH_SEPARATOR));
+function writeEntryIds(cell: HTMLElement, ids: readonly string[]): void {
+	if (ids.length === 0) cell.removeAttribute("data-entry");
+	else cell.setAttr("data-entry", ids.join(ID_SEPARATOR));
 }
 
-/** The cells of this table that show the note at this path right now. */
-export function cellsShowing(root: HTMLElement, path: string): HTMLElement[] {
-	return cellsOf(root, "[data-entry]").filter((cell) => entryPathsOf(cell).includes(path));
+/** The cells of this table that show the entry at this address right now. */
+export function cellsShowing(root: HTMLElement, id: string): HTMLElement[] {
+	return cellsOf(root, "[data-entry]").filter((cell) => entryIdsOf(cell).includes(id));
+}
+
+/**
+ * The rows of this table the journal at this path can change: the rows of the tracks that
+ * keep it — `keeps` answers that — and the rows whose cells show a record of it, which covers
+ * a journal just deleted or no longer linked ([[entry#Журнал трека|entry]]).
+ */
+export function rowsOfJournal(
+	root: HTMLElement,
+	path: string,
+	keeps: (trackPath: string) => boolean,
+): HTMLElement[] {
+	const rows = new Set<HTMLElement>();
+	for (const row of Array.from(root.querySelectorAll<HTMLElement>(ROW_SELECTOR))) {
+		if (keeps(row.dataset.track ?? "")) rows.add(row);
+	}
+	// Asked of the browser in one selector: the cells are many, the journals on them are few.
+	for (const cell of cellsOf(root, `[data-entry*=${quote(`${path}#`)}]`)) {
+		if (cell.parentElement !== null) rows.add(cell.parentElement);
+	}
+	return Array.from(rows);
+}
+
+/** The cells of one row, in the order of the columns. */
+export function cellsOfRow(row: HTMLElement): HTMLElement[] {
+	return cellsOf(row, "");
 }
 
 /** The cell of one day, or `null`: the day may lie outside the columns, the track outside the rows. */

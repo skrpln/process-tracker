@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	DEFAULT_SETTINGS,
+	normalizeEntriesMode,
 	normalizeEntryFolder,
 	normalizeSettings,
 	normalizeTrackTag,
@@ -40,6 +41,7 @@ describe("normalizeSettings", () => {
 		assert.deepEqual(normalizeSettings({ trackTag: "#habits", entryFolder: "entry" }), {
 			trackTag: "habits",
 			entryFolder: "entry",
+			entries: "notes",
 		});
 	});
 
@@ -59,5 +61,22 @@ describe("normalizeSettings", () => {
 
 	it("keeps the vault root chosen under the new key", () => {
 		assert.equal(normalizeSettings({ entryFolder: "", evidenceFolder: "Журнал" }).entryFolder, "");
+	});
+});
+
+describe("normalizeEntriesMode", () => {
+	it("keeps the two modes", () => {
+		assert.equal(normalizeEntriesMode("notes"), "notes");
+		assert.equal(normalizeEntriesMode("journal"), "journal");
+	});
+
+	it("answers notes for a mode it does not know", () => {
+		assert.equal(normalizeEntriesMode("diary"), "notes");
+		assert.equal(normalizeEntriesMode(undefined), "notes");
+	});
+
+	it("is read from data.json with the rest", () => {
+		assert.equal(normalizeSettings({ entries: "journal" }).entries, "journal");
+		assert.equal(normalizeSettings({ entries: 1 }).entries, "notes");
 	});
 });

@@ -9,6 +9,7 @@ function card(overrides: Partial<TrackCard> & { basename: string }): TrackCard {
 		path: `${overrides.basename}.md`,
 		name: overrides.basename,
 		color: null,
+		entries: null,
 		tags: ["process_tracker"],
 		frontmatter: {},
 		ctime: 0,

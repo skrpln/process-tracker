@@ -4,6 +4,7 @@ import { after, before, describe, it } from "node:test";
 import {
 	parseCodeBlock,
 	parseColor,
+	parseEntries,
 	parseFolder,
 	parseSort,
 	parseStartDate,
@@ -23,6 +24,7 @@ describe("parseCodeBlock", () => {
 			trackColor: null,
 			stroke: false,
 			dailyNoteDir: null,
+			entries: null,
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -267,5 +269,25 @@ describe("daily_note_dir", () => {
 		const { options, warnings } = parseCodeBlock("daily_note_dir:");
 		assert.equal(options.dailyNoteDir, null);
 		assert.equal(warnings.length, 1);
+	});
+});
+
+describe("entries", () => {
+	it("reads the mode of the table", () => {
+		const { options, warnings } = parseCodeBlock("entries: journal");
+		assert.equal(options.entries, "journal");
+		assert.deepEqual(warnings, []);
+	});
+
+	it("warns about an unknown mode and leaves it to the settings", () => {
+		const { options, warnings } = parseCodeBlock("entries: diary");
+		assert.equal(options.entries, null);
+		assert.deepEqual(warnings, ['Unknown value "entries: diary", the mode of the settings is used.']);
+	});
+
+	it("warns on its own", () => {
+		const warnings: string[] = [];
+		assert.equal(parseEntries("Notes", warnings), "notes");
+		assert.deepEqual(warnings, []);
 	});
 });

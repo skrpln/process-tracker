@@ -3,6 +3,8 @@
 
 import { getAllTags } from "obsidian";
 import type { App, TFile } from "obsidian";
+import { TRACK_ENTRIES_KEY } from "../constants.ts";
+import { readEntriesMode } from "../entry/mode.ts";
 import type { TrackCard } from "../model/types.ts";
 import { readCardColor } from "./color.ts";
 import { trackDisplayName } from "./select.ts";
@@ -28,6 +30,7 @@ export function toTrackCard(app: App, file: TFile): TrackCard {
 		basename: file.basename,
 		name: trackDisplayName(frontmatter, file.basename),
 		color: readCardColor(frontmatter),
+		entries: readEntriesMode(frontmatter[TRACK_ENTRIES_KEY]),
 		tags,
 		frontmatter,
 		ctime: file.stat.ctime,

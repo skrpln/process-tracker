@@ -3,32 +3,48 @@
 
 import { Notice, Plugin } from "obsidian";
 import type { MarkdownPostProcessorContext, TFile } from "obsidian";
-import type { Entry } from "./model/types.ts";
+import type { EntriesMode, Entry } from "./model/types.ts";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
 import { confirmDailyNote } from "./daily/confirm.ts";
-import { createDailyNote, dailyNotePathOf, dailyNotePlace, findDailyNotes } from "./daily/notes.ts";
+import {
+	createDailyNote,
+	dailyNotePathOf,
+	dailyNotePlace,
+	fillDayTemplate,
+	findDailyNotes,
+} from "./daily/notes.ts";
 import { buildDateColumns } from "./dates/grid.ts";
 import { cellAction } from "./entry/actions.ts";
-import { recountDay, touchedDays } from "./entry/refresh.ts";
+import { resolveEntriesMode } from "./entry/mode.ts";
+import { belongsTo, recountDay, touchedDays } from "./entry/refresh.ts";
 import type { CellRef } from "./entry/refresh.ts";
-import { collectEntries, entryAt, toEntry } from "./entry/source.ts";
-import { buildEntryIndex, findEntries } from "./entry/state.ts";
-import { createEntry, setEntryDone } from "./entry/write.ts";
+import {
+	collectEntries,
+	collectJournalEntries,
+	entryAt,
+	journalEntries,
+	journalsOf,
+	toEntry,
+} from "./entry/source.ts";
+import { buildEntryIndex, byId, entryId, findEntries, readEntryId } from "./entry/state.ts";
+import { createEntry, createRecord, setEntryDone } from "./entry/write.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { CellPointerChild } from "./render/pointer.ts";
 import type { CellTarget } from "./render/pointer.ts";
 import {
 	SCROLL_CLASS,
 	cellOf,
+	cellsOfRow,
 	cellsShowing,
 	dressDayCaption,
-	entryPathsOf,
+	entryIdsOf,
 	paintCell,
 	readCellRef,
 	renderError,
 	renderTracker,
 	renderWarnings,
+	rowsOfJournal,
 } from "./render/table.ts";
 import { wheelScroll } from "./render/wheel.ts";
 import { ProcessTrackerSettingTab } from "./settings-tab.ts";
@@ -36,7 +52,7 @@ import { DEFAULT_SETTINGS, normalizeSettings } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
 import { applyTrackFilter } from "./tracks/dataview.ts";
 import { selectTracks } from "./tracks/select.ts";
-import { collectTrackCards } from "./tracks/source.ts";
+import { collectTrackCards, toTrackCard } from "./tracks/source.ts";
 
 export default class ProcessTrackerPlugin extends Plugin {
 	settings: ProcessTrackerSettings = { ...DEFAULT_SETTINGS };
@@ -111,10 +127,16 @@ export default class ProcessTrackerPlugin extends Plugin {
 			const place = dailyNotePlace(this.app, options.dailyNoteDir, warnings);
 			const days = columns.map((column) => column.iso);
 
+			// Notes are found wherever they lie; records only in the journals of these tracks.
+			const entries = [
+				...collectEntries(this.app),
+				...collectJournalEntries(this.app, tracks.map((track) => track.path)),
+			];
+
 			const elements = renderTracker(element, {
 				tracks,
 				columns,
-				entries: buildEntryIndex(collectEntries(this.app)),
+				entries: buildEntryIndex(entries),
 				dailyNotes: place === null ? new Map() : findDailyNotes(this.app, place, days),
 				dailyNotesCreatable: place !== null,
 				trackColor: options.trackColor,
@@ -145,12 +167,12 @@ export default class ProcessTrackerPlugin extends Plugin {
 						this.app,
 						context.sourcePath,
 						(target, mod) => {
-							void this.runCellAction(target, mod);
+							void this.runCellAction(target, mod, options.entries);
 						},
 						{
-							toggle: (path, done) => this.toggleEntry(path, done),
-							open: (path) => {
-								void this.openEntry(path);
+							toggle: (entry, done) => this.toggleEntry(entry, done),
+							open: (entry) => {
+								void this.openEntry(entryId(entry), entry.trackPath);
 							},
 						},
 						(caption, date) => {
@@ -220,14 +242,52 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 * touches. No index is rebuilt and no table is redrawn, so the cost does not grow with the
 	 * vault; with no table on screen the handler returns before it reads anything at all.
 	 *
-	 * Track cards are not watched. A tag taken off a card changes the rows of the table, not a
-	 * cell in it, and that is the business of the next render ([[architecture]]).
+	 * A journal is a note of many entries, so a change to it recounts the rows of the tracks that
+	 * keep it, not a day ([[entry#Журнал трека|entry]]).
+	 *
+	 * Track cards are not watched as cards. A tag taken off a card changes the rows of the table,
+	 * not a cell in it, and that is the business of the next render ([[architecture]]); a card
+	 * that keeps its own journal is a journal to this handler.
 	 */
 	private refresh(file: TFile, gone = false): void {
 		if (this.tables.size === 0) return;
 
 		const entry = gone ? null : toEntry(this.app, file);
-		for (const table of this.tables) this.recount(table, file.path, entry);
+		for (const table of this.tables) {
+			this.recount(table, file.path, entry);
+			this.recountJournal(table, file.path);
+		}
+	}
+
+	/**
+	 * Recounts, in one table, every row whose track keeps the changed note as its journal.
+	 *
+	 * The records of the row are read again from the metadata cache — the headings and the boxes
+	 * of two notes at most — and the notes the cells name are read as `paint` reads them. Lines
+	 * move with every record written above them, so the whole row is repainted, not the day the
+	 * change was in: the addresses in the cells have to follow.
+	 */
+	private recountJournal(table: HTMLElement, path: string): void {
+		const keeps = (trackPath: string): boolean =>
+			journalsOf(this.app, trackPath).some((journal) => journal.path === path);
+
+		for (const row of rowsOfJournal(table, path, keeps)) {
+			const trackPath = row.dataset.track ?? "";
+			const records = journalEntries(this.app, trackPath);
+
+			for (const cell of cellsOfRow(row)) {
+				const day = readCellRef(cell);
+				if (day === null) continue;
+
+				const entries = records.filter((record) => record.date === day.date);
+				for (const id of entryIdsOf(cell)) {
+					if (readEntryId(id).record !== null) continue;
+					const note = entryAt(this.app, id, trackPath);
+					if (note !== null && belongsTo(note, day)) entries.push(note);
+				}
+				paintCell(cell, entries.sort(byId));
+			}
+		}
 	}
 
 	/**
@@ -259,9 +319,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 */
 	private paint(cell: HTMLElement, day: CellRef, known: string, changed: Entry | null): void {
 		const rest: Entry[] = [];
-		for (const path of entryPathsOf(cell)) {
-			if (path === known) continue;
-			const entry = entryAt(this.app, path);
+		for (const id of entryIdsOf(cell)) {
+			if (id === known) continue;
+			const entry = entryAt(this.app, id, day.trackPath);
 			if (entry !== null) rest.push(entry);
 		}
 
@@ -272,34 +332,42 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 * An entry as a write has just left it. The metadata cache catches up a moment after the
 	 * write, so `done` is taken as it was asked; the mark, which the write does not touch, is
 	 * read from the cache, where it has been all along — a draft closed by a click shows its
-	 * mark at once. A note the cache has not read yet has no mark to show until it has.
+	 * mark at once. An entry the cache has not read yet has no mark to show until it has.
 	 */
-	private written(path: string, day: CellRef, done: boolean): Entry {
-		const mark = entryAt(this.app, path)?.mark ?? null;
-		return { path, trackPath: day.trackPath, date: day.date, done, mark };
+	private written(id: string, day: CellRef, done: boolean): Entry {
+		const known = entryAt(this.app, id, day.trackPath);
+		if (known !== null) return { ...known, done };
+
+		const address = readEntryId(id);
+		const record =
+			address.record === null
+				? null
+				: { nth: address.record.nth, heading: day.date, line: 0 };
+		return { path: address.path, trackPath: day.trackPath, date: day.date, done, mark: null, record };
 	}
 
 	/**
-	 * Switches one note of a day, asked for by the list the day opens on hover.
+	 * Switches one entry of a day, asked for by the list the day opens on hover.
 	 *
-	 * The cells showing that note are repainted at once, with the note taken as it was just
-	 * asked to be: `processFrontMatter` has written the file, but the metadata cache catches
-	 * up a moment later, and reading it here would answer with the state before the write.
-	 * The answer says whether the file took the change, so the box of the list can follow it.
+	 * The cells showing that entry are repainted at once, with the entry taken as it was just
+	 * asked to be: the file is written, but the metadata cache catches up a moment later, and
+	 * reading it here would answer with the state before the write. The answer says whether
+	 * the file took the change, so the box of the list can follow it.
 	 */
-	private async toggleEntry(path: string, done: boolean): Promise<boolean> {
+	private async toggleEntry(entry: Entry, done: boolean): Promise<boolean> {
+		const id = entryId(entry);
 		try {
-			await setEntryDone(this.app, path, done);
+			await setEntryDone(this.app, id, done);
 		} catch (error) {
 			new Notice(`Process Tracker: ${message(error)}`);
 			return false;
 		}
 
 		for (const table of this.tables) {
-			for (const cell of cellsShowing(table, path)) {
+			for (const cell of cellsShowing(table, id)) {
 				const day = readCellRef(cell);
 				if (day === null) continue;
-				this.paint(cell, day, path, this.written(path, day, done));
+				this.paint(cell, day, id, this.written(id, day, done));
 			}
 		}
 		return true;
@@ -334,14 +402,22 @@ export default class ProcessTrackerPlugin extends Plugin {
 		}
 	}
 
-	/** Opens one note of a day in a new tab, as a click on a cell of one entry does. */
-	private async openEntry(path: string): Promise<void> {
+	/**
+	 * Opens one entry in a new tab, as a click on a cell of one entry does: a note as it is, a
+	 * record as its journal scrolled to the heading. The line is asked of the metadata cache at
+	 * the moment of the click; a record the cache has not read yet opens its journal at the top.
+	 */
+	private async openEntry(id: string, trackPath: string): Promise<void> {
+		const path = readEntryId(id).path;
 		const file = this.app.vault.getFileByPath(path);
 		if (file === null) {
 			new Notice(`Process Tracker: the entry note "${path}" is gone`);
 			return;
 		}
-		await this.app.workspace.getLeaf("tab").openFile(file);
+
+		const line = entryAt(this.app, id, trackPath)?.record?.line;
+		const state = line === undefined ? undefined : { eState: { line } };
+		await this.app.workspace.getLeaf("tab").openFile(file, state);
 	}
 
 	/**
@@ -350,20 +426,17 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 * position, and noticing changes made elsewhere in the vault is the business of the
 	 * subscription to `metadataCache`.
 	 */
-	private async runCellAction(target: CellTarget, mod: boolean): Promise<void> {
-		const action = cellAction(target.state, target.entryPaths.length, mod);
+	private async runCellAction(
+		target: CellTarget,
+		mod: boolean,
+		blockMode: EntriesMode | null,
+	): Promise<void> {
+		const action = cellAction(target.state, target.entryIds.length, mod);
 		if (action.kind === "nothing") return;
 
 		try {
 			if (action.kind === "create") {
-				const file = await createEntry(
-					this.app,
-					target.trackPath,
-					target.date,
-					action.done,
-					this.settings.entryFolder,
-				);
-				paintCell(target.cell, [this.written(file.path, target, action.done)]);
+				await this.createFor(target, action.done, blockMode);
 				return;
 			}
 
@@ -372,20 +445,57 @@ export default class ProcessTrackerPlugin extends Plugin {
 				return;
 			}
 
-			const file = this.entryFile(target);
-			if (file === null) {
-				throw new Error(`the entry note of ${target.date} is no longer where the table left it`);
+			const id = this.liveEntryId(target);
+			if (id === null) {
+				throw new Error(`the entry of ${target.date} is no longer where the table left it`);
 			}
 
 			if (action.kind === "toggle") {
-				await setEntryDone(this.app, file.path, action.done);
-				paintCell(target.cell, [this.written(file.path, target, action.done)]);
+				await setEntryDone(this.app, id, action.done);
+				paintCell(target.cell, [this.written(id, target, action.done)]);
 				return;
 			}
-			await this.app.workspace.getLeaf("tab").openFile(file);
+			await this.openEntry(id, target.trackPath);
 		} catch (error) {
 			new Notice(`Process Tracker: ${message(error)}`);
 		}
+	}
+
+	/**
+	 * Makes the entry of an empty day — a note, or a record in the journal of the track — by
+	 * the mode of the track: its card first, then the code block, then the settings
+	 * ([[entry#Журнал трека|entry]]). The card is read at the click, not at the render, so a
+	 * mode just changed in it counts at once.
+	 */
+	private async createFor(
+		target: CellTarget,
+		done: boolean,
+		blockMode: EntriesMode | null,
+	): Promise<void> {
+		const card = this.app.vault.getFileByPath(target.trackPath);
+		const cardMode = card === null ? null : toTrackCard(this.app, card).entries;
+		const mode = resolveEntriesMode(cardMode, blockMode, this.settings.entries);
+
+		if (mode === "journal") {
+			const record = await createRecord(
+				this.app,
+				target.trackPath,
+				target.date,
+				done,
+				fillDayTemplate,
+			);
+			paintCell(target.cell, [record]);
+			return;
+		}
+
+		const file = await createEntry(
+			this.app,
+			target.trackPath,
+			target.date,
+			done,
+			this.settings.entryFolder,
+		);
+		paintCell(target.cell, [this.written(file.path, target, done)]);
 	}
 
 	/**
@@ -398,9 +508,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 */
 	private async toggleDay(target: CellTarget, done: boolean): Promise<void> {
 		const refused: string[] = [];
-		for (const path of target.entryPaths) {
+		for (const id of target.entryIds) {
 			try {
-				await setEntryDone(this.app, path, done);
+				await setEntryDone(this.app, id, done);
 			} catch (error) {
 				refused.push(message(error));
 			}
@@ -409,35 +519,39 @@ export default class ProcessTrackerPlugin extends Plugin {
 		if (refused.length === 0) {
 			paintCell(
 				target.cell,
-				target.entryPaths.map((path) => this.written(path, target, done)),
+				target.entryIds.map((id) => this.written(id, target, done)),
 			);
 			return;
 		}
 		throw new Error(
-			`${refused.length} of ${target.entryPaths.length} notes of ${target.date} ` +
+			`${refused.length} of ${target.entryIds.length} entries of ${target.date} ` +
 				`did not take the change: ${refused[0]}`,
 		);
 	}
 
 	/**
-	 * The one note behind a cell — asked for only where the cell holds exactly one.
+	 * The address of the one entry behind a cell — asked for only where the cell holds one.
 	 *
 	 * The path written into the cell can go stale between renders — Templater moves a new
 	 * note while it renders it — so a path that leads nowhere is answered by looking the day
 	 * up in the vault again, not by opening a link, which would quietly create an empty note
 	 * at the old address. A day that has meanwhile grown a second entry is not chosen from:
 	 * the click reports that the day moved on, and the next render draws it as it is.
+	 *
+	 * A record is taken as the cell names it: its address holds no line to go stale, and the
+	 * write finds it again in the text of the journal.
 	 */
-	private entryFile(target: CellTarget): TFile | null {
-		const written = target.entryPaths[0];
+	private liveEntryId(target: CellTarget): string | null {
+		const written = target.entryIds[0];
 		if (written !== undefined) {
-			const file = this.app.vault.getFileByPath(written);
-			if (file !== null) return file;
+			const address = readEntryId(written);
+			if (address.record !== null) return written;
+			if (this.app.vault.getFileByPath(address.path) !== null) return written;
 		}
 
 		const index = buildEntryIndex(collectEntries(this.app));
 		const day = findEntries(index, target.trackPath, target.date);
-		return day.length === 1 ? this.app.vault.getFileByPath(day[0].path) : null;
+		return day.length === 1 ? day[0].path : null;
 	}
 }
 

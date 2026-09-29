@@ -191,6 +191,15 @@ async function readTemplate(app: App, template: string): Promise<string> {
 	return await app.vault.cachedRead(file);
 }
 
+/**
+ * A template filled in for a day, with the placeholders of a daily note — `{{date}}`,
+ * `{{time}}`, `{{date:format}}`, `{{date+1d:format}}` — and the day written as `YYYY-MM-DD`.
+ * A record of a track journal is written from its template this way ([[entry]]).
+ */
+export function fillDayTemplate(template: string, day: string): string {
+	return fillDailyNoteTemplate(template, dayOf(day), ISO_DATE, makeMoment());
+}
+
 /** A column of the table as a moment: the local calendar day, read strictly. */
 function dayOf(day: string): Moment {
 	return makeMoment(day, ISO_DATE, true);

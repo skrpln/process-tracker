@@ -3,7 +3,8 @@
 
 import { MAX_DAYS } from "../constants.ts";
 import { normalizeFolder } from "../entry/compose.ts";
-import type { SortDirection, SortSpec, TrackerOptions } from "../model/types.ts";
+import { readEntriesMode } from "../entry/mode.ts";
+import type { EntriesMode, SortDirection, SortSpec, TrackerOptions } from "../model/types.ts";
 import { readColor } from "../tracks/color.ts";
 
 export interface ParseResult {
@@ -29,6 +30,7 @@ const KNOWN_KEYS = [
 	"track_color",
 	"stroke",
 	"daily_note_dir",
+	"entries",
 ];
 
 /** Parses `key: value` lines of a code block into tracker options. */
@@ -43,6 +45,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		trackColor: null,
 		stroke: DEFAULT_STROKE,
 		dailyNoteDir: null,
+		entries: null,
 	};
 	const seen = new Set<string>();
 
@@ -79,6 +82,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "track_color") options.trackColor = parseColor(value, warnings);
 		if (key === "stroke") options.stroke = parseStroke(value, warnings);
 		if (key === "daily_note_dir") options.dailyNoteDir = parseFolder(value);
+		if (key === "entries") options.entries = parseEntries(value, warnings);
 	}
 
 	return { options, warnings };
@@ -109,6 +113,19 @@ export function parseStroke(value: string, warnings: string[] = []): boolean {
 
 	warnings.push(`Unknown value "stroke: ${value}", "${DEFAULT_STROKE}" is used.`);
 	return DEFAULT_STROKE;
+}
+
+/**
+ * `entries: notes | journal` — how the entries of this table are made, for the tracks whose
+ * card says nothing ([[entry#Журнал трека|entry]]). An unknown value is said out loud, as an
+ * unreadable colour is, and the settings decide instead.
+ */
+export function parseEntries(value: string, warnings: string[] = []): EntriesMode | null {
+	const mode = readEntriesMode(value);
+	if (mode === null) {
+		warnings.push(`Unknown value "entries: ${value}", the mode of the settings is used.`);
+	}
+	return mode;
 }
 
 /**

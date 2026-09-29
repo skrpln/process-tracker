@@ -1,24 +1,52 @@
 // Process Tracker — the settings tab of the plugin ([[architecture]]).
-// Adapter module: describes two fields and writes them into the settings, nothing else.
+// Adapter module: describes three fields and writes them into the settings, nothing else.
 
 import { PluginSettingTab, Setting } from "obsidian";
 import type { App, SettingDefinitionItem } from "obsidian";
 import type ProcessTrackerPlugin from "./main.ts";
-import { DEFAULT_SETTINGS, normalizeEntryFolder, normalizeTrackTag } from "./settings.ts";
+import type { EntriesMode } from "./model/types.ts";
+import {
+	DEFAULT_SETTINGS,
+	normalizeEntriesMode,
+	normalizeEntryFolder,
+	normalizeTrackTag,
+} from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
 
-/** One field of the tab: what it is called, what it says, how a typed value is cleaned up. */
-interface Field {
+/** One field of the tab: what it is called, what it says, how a value is cleaned up. */
+interface FieldBase {
 	key: keyof ProcessTrackerSettings;
 	name: string;
 	desc: string;
-	placeholder: string;
 	normalize: (value: unknown) => string;
 }
 
-/** The two settings of [[expectation]] §10: the tag of a track card, the folder of entries. */
+interface TextField extends FieldBase {
+	type: "text";
+	placeholder: string;
+}
+
+interface DropdownField extends FieldBase {
+	type: "dropdown";
+	/** Stored value -> what the reader sees. */
+	options: Record<string, string>;
+}
+
+type Field = TextField | DropdownField;
+
+/** The words the dropdown of the mode shows; the keys are what `data.json` stores. */
+const ENTRIES_OPTIONS: Record<EntriesMode, string> = {
+	notes: "Separate notes",
+	journal: "Records in the track journal",
+};
+
+/**
+ * The settings of [[expectation]] §10: the tag of a track card, the folder of entries, and how
+ * new entries are made.
+ */
 const FIELDS: readonly Field[] = [
 	{
+		type: "text",
 		key: "trackTag",
 		name: "Track tag",
 		desc:
@@ -28,6 +56,7 @@ const FIELDS: readonly Field[] = [
 		normalize: normalizeTrackTag,
 	},
 	{
+		type: "text",
 		key: "entryFolder",
 		name: "Entry folder",
 		desc:
@@ -36,10 +65,20 @@ const FIELDS: readonly Field[] = [
 		placeholder: "Vault root",
 		normalize: normalizeEntryFolder,
 	},
+	{
+		type: "dropdown",
+		key: "entries",
+		name: "New entries",
+		desc:
+			"How a click makes an entry: a note of its own, or a record in the journal of " +
+			"the track. The entries property of a track card and of a code block override it.",
+		options: ENTRIES_OPTIONS,
+		normalize: normalizeEntriesMode,
+	},
 ];
 
 /**
- * Every keystroke is cleaned up and saved — Obsidian has no Save button, and a settings tab
+ * Every change is cleaned up and saved — Obsidian has no Save button, and a settings tab
  * that loses what was typed is worse than none.
  *
  * The fields are described once and drawn two ways. Obsidian 1.13 and later draw them from
@@ -62,7 +101,10 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 			(field): SettingDefinitionItem => ({
 				name: field.name,
 				desc: field.desc,
-				control: { type: "text", key: field.key, placeholder: field.placeholder },
+				control:
+					field.type === "text"
+						? { type: "text", key: field.key, placeholder: field.placeholder }
+						: { type: "dropdown", key: field.key, options: field.options },
 			}),
 		);
 	}
@@ -75,22 +117,27 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 	async setControlValue(key: string, value: unknown): Promise<void> {
 		const field = fieldOf(key);
 		if (field === undefined) return;
-		this.plugin.settings[field.key] = field.normalize(value);
+		// Each field cleans its own value, so the value fits the key it came with.
+		(this.plugin.settings as unknown as Record<string, string>)[field.key] = field.normalize(value);
 		await this.plugin.saveSettings();
 	}
 
 	display(): void {
 		this.containerEl.empty();
 		for (const field of FIELDS) {
-			new Setting(this.containerEl)
-				.setName(field.name)
-				.setDesc(field.desc)
-				.addText((text) =>
-					text
-						.setPlaceholder(field.placeholder)
-						.setValue(this.plugin.settings[field.key])
-						.onChange((value) => this.setControlValue(field.key, value)),
+			const setting = new Setting(this.containerEl).setName(field.name).setDesc(field.desc);
+			const value = this.plugin.settings[field.key];
+			const save = (changed: string) => this.setControlValue(field.key, changed);
+
+			if (field.type === "text") {
+				setting.addText((text) =>
+					text.setPlaceholder(field.placeholder).setValue(value).onChange(save),
 				);
+			} else {
+				setting.addDropdown((dropdown) =>
+					dropdown.addOptions(field.options).setValue(value).onChange(save),
+				);
+			}
 		}
 	}
 }

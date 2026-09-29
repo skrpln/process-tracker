@@ -1,7 +1,7 @@
 // Unit tests for the name and the text of a new entry note.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { composeEntry, entryFileName, entryPath } from "../src/entry/compose.ts";
+import { composeEntry, entryFileName, entryPath, recordBody } from "../src/entry/compose.ts";
 
 const fields = { track: "[[cleaning]]", date: "2026-09-13", done: false };
 
@@ -97,5 +97,30 @@ describe("entryPath", () => {
 
 	it("tolerates slashes around the folder", () => {
 		assert.equal(entryPath("/Журнал/", "e"), "Журнал/e.md");
+	});
+});
+
+describe("recordBody", () => {
+	it("leaves the properties of the template out", () => {
+		assert.equal(recordBody("---\nmood:\n---\ntext\n"), "text\n");
+	});
+
+	it("takes out a line that held nothing but Templater commands", () => {
+		assert.equal(
+			recordBody('<%* await tp.file.move("x/" + tp.file.title) %>\ntext\n  <% tp.file.cursor() %>  \n'),
+			"text\n",
+		);
+	});
+
+	it("keeps the text of a line around a command", () => {
+		assert.equal(recordBody("Started <% tp.date.now() %> sharp"), "Started  sharp");
+	});
+
+	it("takes out a command that runs over several lines, with its lines", () => {
+		assert.equal(recordBody("a\n<%*\nconst x = 1;\ntR += x;\n%>\nb"), "a\nb");
+	});
+
+	it("keeps blank lines and a body without commands as they are", () => {
+		assert.equal(recordBody("a\n\nb"), "a\n\nb");
 	});
 });

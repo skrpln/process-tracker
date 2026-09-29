@@ -35,3 +35,12 @@ export const ENTRY_DONE_KEY = "done";
 
 /** Frontmatter key of an entry note whose first visible sign a closed day shows instead of the checkmark. */
 export const ENTRY_MARK_KEY = "mark";
+
+/** Frontmatter key of a track card that says how its new entries are made: `notes` or `journal`. */
+export const TRACK_ENTRIES_KEY = "entries";
+
+/** Frontmatter key of a track card that links to the journal of the track. */
+export const TRACK_JOURNAL_KEY = "journal";
+
+/** The heading of the section a track card keeps its own journal under, `# Journal`. */
+export const JOURNAL_SECTION = "Journal";

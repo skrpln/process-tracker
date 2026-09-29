@@ -4,16 +4,17 @@ import { setTooltip } from "obsidian";
 import type { App, HoverParent, HoverPopover } from "obsidian";
 import { HOVER_SOURCE } from "../constants.ts";
 import type { Entry } from "../model/types.ts";
+import { entryPreview } from "../entry/state.ts";
 
 /** How long the list waits after the pointer left it, so a slow hand can still reach it. */
 const CLOSE_DELAY = 200;
 
 /** What the list asks the plugin to do; both answers come back from the vault. */
 export interface DayHandlers {
-	/** A box was pressed: switch that note. `true` when the note took the change. */
-	toggle(path: string, done: boolean): Promise<boolean>;
-	/** A link was clicked: open that note in a new tab, as a click on a cell does. */
-	open(path: string): void;
+	/** A box was pressed: switch that entry. `true` when the file took the change. */
+	toggle(entry: Entry, done: boolean): Promise<boolean>;
+	/** A link was clicked: open that entry in a new tab, as a click on a cell does. */
+	open(entry: Entry): void;
 }
 
 /**
@@ -130,14 +131,17 @@ export class DayPopup implements HoverParent {
 			// here only once the file has taken it.
 			const wanted = box.checked;
 			event.preventDefault();
-			void this.handlers.toggle(entry.path, wanted).then((written) => {
+			void this.handlers.toggle(entry, wanted).then((written) => {
 				box.checked = written ? wanted : !wanted;
 			});
 		});
 
+		// A record is named the way Obsidian names a link to a heading: `Cleaning > 2026-09-28`.
+		const preview = entryPreview(entry);
+		const name = basename(entry.path);
 		const link = row.createEl("a", {
 			cls: "internal-link",
-			text: basename(entry.path),
+			text: entry.record === null ? name : `${name} > ${entry.record.heading}`,
 			attr: { href: entry.path, "data-href": entry.path },
 		});
 		// Two notes of one day can share a basename; the path says which is which.
@@ -148,7 +152,7 @@ export class DayPopup implements HoverParent {
 			// new one, and a row of the list is the same click ([[expectation]] §8).
 			event.preventDefault();
 			event.stopPropagation();
-			this.handlers.open(entry.path);
+			this.handlers.open(entry);
 			this.close();
 		});
 		link.addEventListener("mouseover", (event: MouseEvent) => {
@@ -157,7 +161,7 @@ export class DayPopup implements HoverParent {
 				source: HOVER_SOURCE,
 				hoverParent: this,
 				targetEl: link,
-				linktext: entry.path,
+				linktext: preview,
 				sourcePath: this.sourcePath,
 			});
 		});

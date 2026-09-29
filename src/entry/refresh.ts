@@ -2,7 +2,7 @@
 // Pure module: no Obsidian API and no DOM, covered by test/refresh.test.ts.
 
 import type { Entry } from "../model/types.ts";
-import { byPath } from "./state.ts";
+import { byId } from "./state.ts";
 
 /** A cell of a rendered table, addressed the way the renderer writes it into the DOM. */
 export interface CellRef {
@@ -42,7 +42,7 @@ export function touchedDays(claimed: CellRef[], entry: Entry | null): CellRef[] 
 export function recountDay(day: CellRef, known: Entry[], changed: Entry | null): Entry[] {
 	const entries = known.filter((entry) => belongsTo(entry, day));
 	if (changed !== null && belongsTo(changed, day)) entries.push(changed);
-	return entries.sort(byPath);
+	return entries.sort(byId);
 }
 
 /** Whether an entry is one of this day of this track. */

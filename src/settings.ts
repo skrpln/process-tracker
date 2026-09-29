@@ -2,17 +2,22 @@
 // Pure module: the values and their cleanup; the tab that edits them is in settings-tab.ts.
 
 import { DEFAULT_TRACK_TAG } from "./constants.ts";
+import { readEntriesMode } from "./entry/mode.ts";
+import type { EntriesMode } from "./model/types.ts";
 
 export interface ProcessTrackerSettings {
 	/** Tag that marks a track card, without the leading `#`. */
 	trackTag: string;
 	/** Folder for new entry notes; empty string means the vault root. */
 	entryFolder: string;
+	/** How new entries are made where neither the card nor the code block says. */
+	entries: EntriesMode;
 }
 
 export const DEFAULT_SETTINGS: ProcessTrackerSettings = {
 	trackTag: DEFAULT_TRACK_TAG,
 	entryFolder: "",
+	entries: "notes",
 };
 
 /**
@@ -29,6 +34,11 @@ export function normalizeEntryFolder(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
+/** A stored mode the plugin does not know — written by a newer version, say — is `notes`. */
+export function normalizeEntriesMode(value: unknown): EntriesMode {
+	return readEntriesMode(value) ?? DEFAULT_SETTINGS.entries;
+}
+
 /**
  * Merges stored data with defaults, dropping unknown or malformed values.
  *
@@ -42,5 +52,6 @@ export function normalizeSettings(data: unknown): ProcessTrackerSettings {
 	return {
 		trackTag: normalizeTrackTag(stored.trackTag),
 		entryFolder: normalizeEntryFolder(stored.entryFolder ?? stored.evidenceFolder),
+		entries: normalizeEntriesMode(stored.entries),
 	};
 }

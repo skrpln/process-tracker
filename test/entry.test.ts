@@ -4,13 +4,18 @@ import { describe, it } from "node:test";
 import type { Entry } from "../src/model/types.ts";
 import {
 	buildEntryIndex,
+	byId,
 	cellMark,
 	cellState,
+	entryId,
 	entryKey,
+	entryPreview,
 	findEntries,
 	readDate,
 	readDone,
+	readEntryId,
 	readMark,
+	readSoleSign,
 	readTrackLink,
 } from "../src/entry/state.ts";
 
@@ -24,6 +29,7 @@ function entry(overrides: Partial<Entry> & { path: string }): Entry {
 		date: "2026-09-11",
 		done: true,
 		mark: null,
+		record: null,
 		...overrides,
 	};
 }
@@ -215,5 +221,55 @@ describe("cellMark", () => {
 	it("shows no mark for a day of several entries", () => {
 		const day = [entry({ path: "a.md", mark: "🔥" }), entry({ path: "b.md", mark: "4" })];
 		assert.equal(cellMark(day), null);
+	});
+});
+
+describe("entry addresses", () => {
+	const note = entry({ path: "notes/cleaning 2026-09-11.md" });
+	const record = entry({
+		path: "Cleaning.md",
+		record: { nth: 1, heading: "2026-09-11 🔥", line: 4 },
+	});
+
+	it("addresses a note by its path, a record by its journal, date and number", () => {
+		assert.equal(entryId(note), "notes/cleaning 2026-09-11.md");
+		assert.equal(entryId(record), "Cleaning.md#2026-09-11#1");
+	});
+
+	it("reads an address back", () => {
+		assert.deepEqual(readEntryId("Cleaning.md#2026-09-11#1"), {
+			path: "Cleaning.md",
+			record: { date: "2026-09-11", nth: 1 },
+		});
+		assert.deepEqual(readEntryId("notes/a#b.md"), { path: "notes/a#b.md", record: null });
+	});
+
+	it("previews a note as it is, a record as the section of its heading", () => {
+		assert.equal(entryPreview(note), "notes/cleaning 2026-09-11.md");
+		assert.equal(entryPreview(record), "Cleaning.md#2026-09-11 🔥");
+	});
+
+	it("orders the records of one journal as they stand, after the note of the same path", () => {
+		const first = entry({ path: "J.md", record: { nth: 0, heading: "", line: 9 } });
+		const second = entry({ path: "J.md", record: { nth: 1, heading: "", line: 2 } });
+		assert.deepEqual([second, first, entry({ path: "A.md" })].sort(byId).map(entryId), [
+			"A.md",
+			"J.md#2026-09-11#0",
+			"J.md#2026-09-11#1",
+		]);
+	});
+});
+
+describe("readSoleSign", () => {
+	it("reads a text of one sign, however many characters it takes", () => {
+		assert.equal(readSoleSign(" 🔥 "), "🔥");
+		assert.equal(readSoleSign("👨‍👩‍👧"), "👨‍👩‍👧");
+		assert.equal(readSoleSign("A"), "A");
+	});
+
+	it("reads nothing from a text of several signs or of none", () => {
+		assert.equal(readSoleSign("10"), null);
+		assert.equal(readSoleSign("Steps"), null);
+		assert.equal(readSoleSign("  "), null);
 	});
 });
