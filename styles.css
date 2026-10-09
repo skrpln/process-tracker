@@ -196,13 +196,17 @@ body.theme-light .process-tracker {
 	font-weight: var(--font-normal);
 }
 
-/* The month name is set in capitals; the year needs none. */
-.process-tracker .process-tracker__table .process-tracker__period-month {
+/*
+ * The corner title is set in capitals, as the month always was; a year needs none and does
+ * not change. A long title wraps instead of widening the column, and its last line stands
+ * on the line of the day captions: both heads are aligned by the bottom, and their rows are
+ * of one height, set by the render child.
+ */
+.process-tracker .process-tracker__table .process-tracker__period {
 	text-transform: uppercase;
-}
-
-.process-tracker .process-tracker__table .process-tracker__period-year {
-	margin-left: 0.35em;
+	text-align: var(--pt-names-align, center);
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
 /* The grid belongs to the body only. Each cell paints its right and bottom edge;
@@ -236,6 +240,7 @@ body.theme-light .process-tracker {
  */
 .process-tracker .process-tracker__table .process-tracker__track {
 	max-width: var(--pt-col-track);
+	text-align: var(--pt-names-align, center);
 	border-right: 1px solid var(--pt-border);
 	font-weight: var(--font-normal);
 	white-space: nowrap;

@@ -45,6 +45,8 @@ sort: priority desc
 track_color: "#4CAF50"
 stroke: true
 entries: journal
+title: Morning · {{month}} {{year}}
+align: left
 ```
 ````
 
@@ -59,13 +61,16 @@ entries: journal
 | `stroke`      | `true`, `false`                                              | `false`     | Threads a streak of checked days together. |
 | `daily_note_dir` | a folder, `/` for the vault root                          | your daily notes folder | Where this table looks for daily notes and creates them. |
 | `entries`     | `notes`, `journal`                                           | the setting | How a click makes an entry for the tracks of this table. |
+| `title`       | text, `{{month}}`, `{{year}}`, `[[links]]`                   | `{{month}} {{year}}` | The caption in the corner above the track names. |
+| `align`       | `left`, `center`, `right`                                    | `center`    | Aligns the track names and the title. |
 
 >[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
 > - the filter only narrows tracks: a note without the track tag never becomes a row, whatever the filter says;
 > - without Dataview the table still works and shows every track in the vault;
 > - `track_color` colours this table only, and only the tracks whose own card names no colour: the card always wins. A value that is not a colour is ignored, and a note about it appears under the table;
-> - `stroke` draws a thin line through three or more checked days in a row, in the colour of the checkmarks. A day with an entry that is not done breaks the streak, exactly as an empty day does. The streak is counted over your vault and not over the days in sight: scroll into the middle of a long one and the line still runs off both edges of the table.
+> - `stroke` draws a thin line through three or more checked days in a row, in the colour of the checkmarks. A day with an entry that is not done breaks the streak, exactly as an empty day does. The streak is counted over your vault and not over the days in sight: scroll into the middle of a long one and the line still runs off both edges of the table;
+> - `title` replaces the month and the year in the corner. `{{month}}` and `{{year}}` are those of the days in sight and follow the scroll; `[[links]]` work and show their preview, any other markdown stays as written. A long title wraps, and its last line stands on the line of the day numbers. `title: ""` leaves the corner empty.
 
 ### 3. Click a cell
 

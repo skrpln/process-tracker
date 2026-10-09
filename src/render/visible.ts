@@ -99,6 +99,22 @@ export function columnWidth(metrics: ColumnMetrics, current: number | null): num
 	return width;
 }
 
+/**
+ * How many screen pixels one CSS pixel of the table takes: the width it shows on screen over
+ * the width it is laid out with. `1` when the two cannot be compared.
+ *
+ * A canvas zooms by a transform on the whole board (`scale(v)`), and a transform is what a
+ * client rect reports and what a style never sees: measured on a board zoomed out to 95%, a
+ * row of 26.5 px came back 25.2, was written back as the height of every row, and only the
+ * rows that could shrink did — the names stayed taller than the checkboxes beside them
+ * ([[rendering#Замеры|Замеры]]). Every client rect is divided by this before it becomes a style.
+ */
+export function screenScale(screenWidth: number, layoutWidth: number): number {
+	if (!Number.isFinite(screenWidth) || !Number.isFinite(layoutWidth)) return 1;
+	if (screenWidth <= 0 || layoutWidth <= 0) return 1;
+	return screenWidth / layoutWidth;
+}
+
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
 }

@@ -39,7 +39,17 @@ export interface TrackerOptions {
 	dailyNoteDir: string | null;
 	/** How the entries of this table are made, for the tracks whose card says nothing. */
 	entries: EntriesMode | null;
+	/**
+	 * Text of the corner above the track names, with `{{month}}` and `{{year}}` filled in as
+	 * the columns scroll; `""` — an empty corner ([[codeblock-syntax]]).
+	 */
+	title: string;
+	/** How the track names and the corner title stand in their column. */
+	align: NamesAlign;
 }
+
+/** Alignment of the first column: the track names and the corner title. */
+export type NamesAlign = "left" | "center" | "right";
 
 /** A track card: a vault note tagged with the plugin tag. */
 export interface TrackCard {

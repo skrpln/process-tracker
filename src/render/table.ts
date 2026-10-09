@@ -2,11 +2,19 @@
 // Knows nothing about the vault: everything it needs comes as data.
 
 import { setTooltip } from "obsidian";
+import { fillTitle, titleParts } from "../codeblock/title.ts";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import type { CellRef } from "../entry/refresh.ts";
 import { cellMark, cellState, entryId, findEntries } from "../entry/state.ts";
 import type { EntryIndex } from "../entry/state.ts";
-import type { CellState, DateColumn, Entry, SortDirection, TrackCard } from "../model/types.ts";
+import type {
+	CellState,
+	DateColumn,
+	Entry,
+	NamesAlign,
+	SortDirection,
+	TrackCard,
+} from "../model/types.ts";
 import { resolveTrackColor } from "../tracks/color.ts";
 import { streakEdges, strokeMarks } from "./stroke.ts";
 import type { StrokeEdges, StrokeMark } from "./stroke.ts";
@@ -97,6 +105,10 @@ export interface TrackerView {
 	dailyNotes: ReadonlyMap<string, string>;
 	/** Whether a day without a daily note can have one made by a click ([[daily-notes]]). */
 	dailyNotesCreatable: boolean;
+	/** Text of the corner, placeholders unfilled ([[codeblock-syntax]]). */
+	title: string;
+	/** How the track names and the corner title stand in their column. */
+	align: NamesAlign;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -151,11 +163,12 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	}
 
 	const frame = root.createDiv({ cls: "process-tracker__frame" });
+	frame.style.setProperty("--pt-names-align", view.align);
 
 	const names = frame.createEl("table", {
 		cls: "process-tracker__table process-tracker__names",
 	});
-	const captionCell = renderNamesHead(names, view.columns[0]);
+	const captionCell = renderNamesHead(names, view.columns[0], view.title);
 	renderNamesBody(names, view.tracks);
 
 	const scroll = frame.createDiv({ cls: SCROLL_CLASS });
@@ -213,16 +226,20 @@ function renderColumnWidths(table: HTMLTableElement, dateColumns: number): void 
 }
 
 /**
- * The corner caption: the month and the year of the columns in sight. It stands above
- * the track names, out of the scrolling frame, so nothing can carry it away — the
- * render child only rewrites its text as the columns go by.
+ * The corner caption: the title of the block, by default the month and the year of the
+ * columns in sight. It stands above the track names, out of the scrolling frame, so nothing
+ * can carry it away — the render child only rewrites it as the columns go by.
  */
-function renderNamesHead(table: HTMLTableElement, first: DateColumn | undefined): HTMLElement {
+function renderNamesHead(
+	table: HTMLTableElement,
+	first: DateColumn | undefined,
+	title: string,
+): HTMLElement {
 	const cell = table
 		.createEl("thead")
 		.createEl("tr")
 		.createEl("th", { cls: "process-tracker__period" });
-	renderPeriodCaption(cell, first === undefined ? "" : formatMonthYear(first));
+	renderPeriodCaption(cell, title, first === undefined ? "" : formatMonthYear(first));
 	return cell;
 }
 
@@ -598,17 +615,26 @@ function renderEmptyState(root: HTMLElement, trackTag: string, trackFilter: stri
 }
 
 /**
- * Writes the corner caption as two parts, so the year can be set in the face of the
- * day captions while the month keeps the heading face. Used by the render child too,
- * which rewrites the caption as the table scrolls.
+ * Writes the corner caption: the title with the month and the year of `label` filled in.
+ * Used by the render child too, which rewrites the caption as the table scrolls.
+ *
+ * A link of the title is the same `a.internal-link` a track name is: Obsidian opens it, and
+ * the pointer child hands it to the preview ([[rendering]]).
  */
-export function renderPeriodCaption(cell: HTMLElement, label: string): void {
+export function renderPeriodCaption(cell: HTMLElement, title: string, label: string): void {
 	cell.empty();
-	if (label === "") return;
-
 	const { month, year } = splitMonthYear(label);
-	cell.createSpan({ cls: "process-tracker__period-month", text: month });
-	if (year !== "") cell.createSpan({ cls: "process-tracker__period-year", text: year });
+	for (const part of titleParts(fillTitle(title, month, year))) {
+		if (part.link === undefined) {
+			cell.appendText(part.text);
+			continue;
+		}
+		cell.createEl("a", {
+			cls: "internal-link",
+			text: part.text,
+			attr: { href: part.link, "data-href": part.link },
+		});
+	}
 }
 
 /** Parse problems and unsupported parameters, shown under the table. */

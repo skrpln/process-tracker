@@ -2,6 +2,7 @@
 
 import { MarkdownRenderChild } from "obsidian";
 import type { DateColumn } from "../model/types.ts";
+import { followsScroll } from "../codeblock/title.ts";
 import { formatMonthYear } from "../dates/grid.ts";
 import {
 	BOX_FILL_PROPERTY,
@@ -17,7 +18,7 @@ import {
 	unpaintRow,
 } from "./table.ts";
 import type { ThemeProbe } from "./table.ts";
-import { captionLabel, columnWidth, visibleColumnRange } from "./visible.ts";
+import { captionLabel, columnWidth, screenScale, visibleColumnRange } from "./visible.ts";
 
 /** The tables the reader has on screen; the plugin repaints their cells through it. */
 export interface LiveTables {
@@ -44,6 +45,11 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	private columnWidth: number | null = null;
 	/** Set once the table has a layout to measure; cleared whenever its size changes. */
 	private measured = false;
+	/**
+	 * Screen pixels per CSS pixel, asked before every update: a canvas zooms without resizing
+	 * anything, so no observer reports it. Every client rect is divided by it ([[rendering]]).
+	 */
+	private zoom = 1;
 
 	constructor(
 		containerEl: HTMLElement,
@@ -54,6 +60,8 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		/** The hidden elements the theme answers through ([[rendering]]). */
 		private readonly probe: ThemeProbe,
 		private readonly columns: DateColumn[],
+		/** The title of the corner, placeholders unfilled. */
+		private readonly title: string,
 		private readonly tables: LiveTables,
 	) {
 		super(containerEl);
@@ -168,7 +176,11 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	private update(): void {
+		this.zoom = screenScale(this.frame.getBoundingClientRect().width, this.frame.offsetWidth);
 		if (!this.measured) this.measure();
+
+		// A title without a placeholder says the same whatever is in sight.
+		if (!followsScroll(this.title)) return;
 
 		const date = this.scroll.querySelector<HTMLElement>(".process-tracker__date");
 		if (date === null) return;
@@ -176,7 +188,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		const range = visibleColumnRange({
 			scrollLeft: this.scroll.scrollLeft,
 			viewWidth: this.scroll.clientWidth,
-			columnWidth: date.getBoundingClientRect().width,
+			columnWidth: date.getBoundingClientRect().width / this.zoom,
 			total: this.columns.length,
 		});
 		if (range === null) return;
@@ -186,7 +198,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		if (label === this.label) return;
 
 		this.label = label;
-		renderPeriodCaption(this.captionCell, label);
+		renderPeriodCaption(this.captionCell, this.title, label);
 	}
 
 	/**
@@ -315,7 +327,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 
 		const cellBox = cell.getBoundingClientRect();
 		const own = box.getBoundingClientRect();
-		const shift = own.top + own.height / 2 - (cellBox.top + cellBox.height / 2);
+		const shift = (own.top + own.height / 2 - (cellBox.top + cellBox.height / 2)) / this.zoom;
 		dates.style.setProperty(BOX_SHIFT_PROPERTY, `${Math.round(shift * 100) / 100}px`);
 	}
 
@@ -339,7 +351,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 
 		let tallest = 0;
 		for (const row of Array.from(this.frame.querySelectorAll<HTMLElement>(rows))) {
-			tallest = Math.max(tallest, row.getBoundingClientRect().height);
+			tallest = Math.max(tallest, row.getBoundingClientRect().height / this.zoom);
 		}
 		if (tallest <= 0) return 0;
 
@@ -353,7 +365,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		if (cells.length === 0) return 0;
 
 		const box = this.visibleBox(this.scroll);
-		const width = box === null ? 0 : box.getBoundingClientRect().width;
+		const width = box === null ? 0 : box.getBoundingClientRect().width / this.zoom;
 		return width === 0 ? 0 : width + this.widestSideRoom(cells);
 	}
 
@@ -367,7 +379,9 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	private markClaim(): number {
 		const marks = Array.from(this.scroll.querySelectorAll<HTMLElement>(`.${MARK_CLASS}`));
 		let widest = 0;
-		for (const mark of marks) widest = Math.max(widest, mark.getBoundingClientRect().width);
+		for (const mark of marks) {
+			widest = Math.max(widest, mark.getBoundingClientRect().width / this.zoom);
+		}
 		return widest === 0 ? 0 : widest + this.widestSideRoom(this.sample(".process-tracker__cell"));
 	}
 
@@ -394,7 +408,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 			// The text, not its wrapper: the wrapper is a block as wide as the cell, and
 			// measuring it would only confirm the width the column already has.
 			range.selectNodeContents(caption.querySelector(".process-tracker__day") ?? caption);
-			widest = Math.max(widest, range.getBoundingClientRect().width);
+			widest = Math.max(widest, range.getBoundingClientRect().width / this.zoom);
 		}
 
 		return widest === 0 ? 0 : widest + this.widestSideRoom(this.sample(".process-tracker__date"));

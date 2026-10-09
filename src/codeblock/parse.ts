@@ -4,8 +4,15 @@
 import { MAX_DAYS } from "../constants.ts";
 import { normalizeFolder } from "../entry/compose.ts";
 import { readEntriesMode } from "../entry/mode.ts";
-import type { EntriesMode, SortDirection, SortSpec, TrackerOptions } from "../model/types.ts";
+import type {
+	EntriesMode,
+	NamesAlign,
+	SortDirection,
+	SortSpec,
+	TrackerOptions,
+} from "../model/types.ts";
 import { readColor } from "../tracks/color.ts";
+import { DEFAULT_TITLE } from "./title.ts";
 
 export interface ParseResult {
 	options: TrackerOptions;
@@ -21,6 +28,11 @@ export const DEFAULT_DATES: SortDirection = "desc";
 /** No thread until the block asks for one: a tracker says enough with its checkmarks. */
 export const DEFAULT_STROKE = false;
 
+/** Track names stand in the middle of their column, as they always have. */
+export const DEFAULT_ALIGN: NamesAlign = "center";
+
+const ALIGNMENTS: readonly NamesAlign[] = ["left", "center", "right"];
+
 const KNOWN_KEYS = [
 	"track",
 	"start",
@@ -31,6 +43,8 @@ const KNOWN_KEYS = [
 	"stroke",
 	"daily_note_dir",
 	"entries",
+	"title",
+	"align",
 ];
 
 /** Parses `key: value` lines of a code block into tracker options. */
@@ -46,6 +60,8 @@ export function parseCodeBlock(source: string): ParseResult {
 		stroke: DEFAULT_STROKE,
 		dailyNoteDir: null,
 		entries: null,
+		title: DEFAULT_TITLE,
+		align: DEFAULT_ALIGN,
 	};
 	const seen = new Set<string>();
 
@@ -83,6 +99,8 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "stroke") options.stroke = parseStroke(value, warnings);
 		if (key === "daily_note_dir") options.dailyNoteDir = parseFolder(value);
 		if (key === "entries") options.entries = parseEntries(value, warnings);
+		if (key === "title") options.title = parseTitle(value);
+		if (key === "align") options.align = parseAlign(value, warnings);
 	}
 
 	return { options, warnings };
@@ -126,6 +144,24 @@ export function parseEntries(value: string, warnings: string[] = []): EntriesMod
 		warnings.push(`Unknown value "entries: ${value}", the mode of the settings is used.`);
 	}
 	return mode;
+}
+
+/**
+ * `title: <text>` — the corner above the track names. The text is taken as written, quotes
+ * around it dropped, so `title: ""` leaves the corner empty: a line with nothing after the
+ * colon is an empty parameter and keeps the default, like any other.
+ */
+export function parseTitle(value: string): string {
+	return value.replace(/^(["'])(.*)\1$/, "$2");
+}
+
+/** `align: left | center | right` — how the first column stands. */
+export function parseAlign(value: string, warnings: string[] = []): NamesAlign {
+	const align = ALIGNMENTS.find((known) => known === value.toLowerCase());
+	if (align !== undefined) return align;
+
+	warnings.push(`Unknown value "align: ${value}", "${DEFAULT_ALIGN}" is used.`);
+	return DEFAULT_ALIGN;
 }
 
 /**

@@ -14,11 +14,11 @@ import { CREATABLE_CLASS, entryIdsOf } from "./table.ts";
 const OPEN_DELAY = 300;
 
 /**
- * The links of the table: a track name, and the caption of a day whose daily note is in the
- * vault ([[expectation]] §10). Both are opened by Obsidian itself; what they need from here
+ * The links of the table: a track name, the caption of a day whose daily note is in the
+ * vault ([[expectation]] §10), and a link of the corner title. Both are opened by Obsidian itself; what they need from here
  * is the preview on hover, which a link of a plugin does not get on its own.
  */
-const LINK_SELECTOR = ".process-tracker__track a, .process-tracker__date a";
+const LINK_SELECTOR = ".process-tracker__track a, .process-tracker__date a, .process-tracker__period a";
 
 /** The cell a click landed on, read back from the DOM. */
 export interface CellTarget {

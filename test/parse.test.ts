@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import {
+	parseAlign,
 	parseCodeBlock,
 	parseColor,
 	parseEntries,
@@ -9,6 +10,7 @@ import {
 	parseSort,
 	parseStartDate,
 	parseStroke,
+	parseTitle,
 } from "../src/codeblock/parse.ts";
 import { MAX_DAYS } from "../src/constants.ts";
 
@@ -25,6 +27,8 @@ describe("parseCodeBlock", () => {
 			stroke: false,
 			dailyNoteDir: null,
 			entries: null,
+			title: "{{month}} {{year}}",
+			align: "center",
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -289,5 +293,53 @@ describe("entries", () => {
 		const warnings: string[] = [];
 		assert.equal(parseEntries("Notes", warnings), "notes");
 		assert.deepEqual(warnings, []);
+	});
+});
+
+describe("title", () => {
+	it("is the month and the year by default", () => {
+		assert.equal(parseCodeBlock("").options.title, "{{month}} {{year}}");
+	});
+
+	it("is taken as written, colons included", () => {
+		const { options, warnings } = parseCodeBlock("title: Утро: {{month}} [[Habits|h]]");
+		assert.equal(options.title, "Утро: {{month}} [[Habits|h]]");
+		assert.deepEqual(warnings, []);
+	});
+
+	it("drops the quotes around it", () => {
+		assert.equal(parseTitle('"Morning"'), "Morning");
+		assert.equal(parseTitle("'Morning'"), "Morning");
+		assert.equal(parseTitle('"Morning'), '"Morning');
+	});
+
+	it("is empty when the block says so with quotes", () => {
+		const { options, warnings } = parseCodeBlock('title: ""');
+		assert.equal(options.title, "");
+		assert.deepEqual(warnings, []);
+	});
+
+	it("keeps the default for a line with nothing after the colon", () => {
+		const { options, warnings } = parseCodeBlock("title:");
+		assert.equal(options.title, "{{month}} {{year}}");
+		assert.equal(warnings.length, 1);
+	});
+});
+
+describe("parseAlign", () => {
+	it("reads the three alignments, in any case", () => {
+		assert.equal(parseAlign("left"), "left");
+		assert.equal(parseAlign("Center"), "center");
+		assert.equal(parseAlign("RIGHT"), "right");
+	});
+
+	it("is centred by default", () => {
+		assert.equal(parseCodeBlock("").options.align, "center");
+	});
+
+	it("warns about an unknown value and stays centred", () => {
+		const { options, warnings } = parseCodeBlock("align: middle");
+		assert.equal(options.align, "center");
+		assert.equal(warnings.length, 1);
 	});
 });

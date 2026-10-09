@@ -5,6 +5,7 @@ import {
 	captionLabel,
 	dominantLabel,
 	columnWidth,
+	screenScale,
 	visibleColumnRange,
 } from "../src/render/visible.ts";
 
@@ -136,5 +137,25 @@ describe("columnWidth", () => {
 
 	it("ignores a measurement that has not arrived yet", () => {
 		assert.equal(columnWidth({ rowHeight: 26.4, checkbox: 0, caption: Number.NaN, mark: 0 }, null), 26.4);
+	});
+});
+
+describe("screenScale", () => {
+	it("is one in a note, where nothing is transformed", () => {
+		assert.equal(screenScale(500, 500), 1);
+	});
+
+	it("follows a canvas zoomed out", () => {
+		assert.equal(screenScale(475, 500), 0.95);
+	});
+
+	it("follows a canvas zoomed in", () => {
+		assert.equal(screenScale(1000, 500), 2);
+	});
+
+	it("is one for a table without a layout", () => {
+		assert.equal(screenScale(0, 0), 1);
+		assert.equal(screenScale(475, 0), 1);
+		assert.equal(screenScale(Number.NaN, 500), 1);
 	});
 });

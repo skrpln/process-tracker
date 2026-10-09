@@ -142,6 +142,8 @@ export default class ProcessTrackerPlugin extends Plugin {
 				trackColor: options.trackColor,
 				stroke: options.stroke,
 				dates: options.dates,
+				title: options.title,
+				align: options.align,
 				trackTag: this.settings.trackTag,
 				trackFilter: options.track,
 			});
@@ -157,6 +159,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 						elements.captionCell,
 						elements.probe,
 						columns,
+						options.title,
 						this.tables,
 					),
 				);
