@@ -115,6 +115,20 @@ export function screenScale(screenWidth: number, layoutWidth: number): number {
 	return screenWidth / layoutWidth;
 }
 
+/**
+ * The height a row is laid out with, in CSS pixels.
+ *
+ * The computed `height` of a rendered box is its used height, and a transform never reaches
+ * it: on a zoomed canvas it answers the same number as in a note, with no scale to guess. A
+ * screen measurement divided by the scale stays as the fallback, for a box whose style gives
+ * no number ([[rendering#Замеры|Замеры]]).
+ */
+export function layoutHeight(computed: string, screenHeight: number, scale: number): number {
+	const height = Number.parseFloat(computed);
+	if (Number.isFinite(height) && height > 0) return height;
+	return screenHeight / scale;
+}
+
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
 }

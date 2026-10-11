@@ -5,6 +5,7 @@ import {
 	captionLabel,
 	dominantLabel,
 	columnWidth,
+	layoutHeight,
 	screenScale,
 	visibleColumnRange,
 } from "../src/render/visible.ts";
@@ -157,5 +158,20 @@ describe("screenScale", () => {
 		assert.equal(screenScale(0, 0), 1);
 		assert.equal(screenScale(475, 0), 1);
 		assert.equal(screenScale(Number.NaN, 500), 1);
+	});
+});
+
+describe("layoutHeight", () => {
+	it("takes the computed height, which no canvas zoom touches", () => {
+		assert.equal(layoutHeight("26.5px", 25.175, 0.95), 26.5);
+	});
+
+	it("falls back to the screen height over the scale when the style gives no number", () => {
+		assert.equal(layoutHeight("auto", 50, 2), 25);
+		assert.equal(layoutHeight("", 24, 0.75), 32);
+	});
+
+	it("does not take a zero height for an answer", () => {
+		assert.equal(layoutHeight("0px", 30, 1), 30);
 	});
 });

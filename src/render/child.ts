@@ -18,7 +18,13 @@ import {
 	unpaintRow,
 } from "./table.ts";
 import type { ThemeProbe } from "./table.ts";
-import { captionLabel, columnWidth, screenScale, visibleColumnRange } from "./visible.ts";
+import {
+	captionLabel,
+	columnWidth,
+	layoutHeight,
+	screenScale,
+	visibleColumnRange,
+} from "./visible.ts";
 
 /** The tables the reader has on screen; the plugin repaints their cells through it. */
 export interface LiveTables {
@@ -177,7 +183,8 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 
 	private update(): void {
 		this.zoom = screenScale(this.frame.getBoundingClientRect().width, this.frame.offsetWidth);
-		if (!this.measured) this.measure();
+		// Rows out of step are measured again, whatever made them drift.
+		if (!this.measured || !this.inStep()) this.measure();
 
 		// A title without a placeholder says the same whatever is in sight.
 		if (!followsScroll(this.title)) return;
@@ -345,18 +352,44 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	 * row of checkboxes are measured by the theme separately, and half a pixel of
 	 * difference sends the two halves of the tracker out of step. So the height is
 	 * measured with nothing imposed, and then imposed on both.
+	 *
+	 * The height of a row is a floor, not a size: a row the value is too small for keeps the
+	 * height of its content, and only the rows that can shrink obey. So the rows are read
+	 * back once the value is set, and a row still taller than the others raises it — the
+	 * halves leave this method of one height, whatever the measurement got wrong.
 	 */
 	private matchHeights(rows: string, variable: string): number {
+		const all = Array.from(this.frame.querySelectorAll<HTMLElement>(rows));
 		this.frame.style.removeProperty(variable);
 
-		let tallest = 0;
-		for (const row of Array.from(this.frame.querySelectorAll<HTMLElement>(rows))) {
-			tallest = Math.max(tallest, row.getBoundingClientRect().height / this.zoom);
-		}
-		if (tallest <= 0) return 0;
+		const heights = (): number[] => all.map((row) => this.heightOf(row));
+		let height = Math.max(0, ...heights());
+		if (height <= 0) return 0;
 
-		this.frame.style.setProperty(variable, `${Math.ceil(tallest * 100) / 100}px`);
-		return tallest;
+		for (let pass = 0; pass < 3; pass++) {
+			this.frame.style.setProperty(variable, `${Math.ceil(height * 100) / 100}px`);
+			const after = heights();
+			height = Math.max(...after);
+			if (height - Math.min(...after) < 0.01) break;
+		}
+		return height;
+	}
+
+	/** The height a row is laid out with, in CSS pixels whatever the zoom of a canvas. */
+	private heightOf(row: HTMLElement): number {
+		const computed = this.win.getComputedStyle(row).height;
+		return layoutHeight(computed, row.getBoundingClientRect().height, this.zoom);
+	}
+
+	/**
+	 * Do the last rows of the two tables end on one line? Both rectangles are on screen in
+	 * the same transform, so they are compared as they are, with half a pixel of slack.
+	 */
+	private inStep(): boolean {
+		const rows = Array.from(this.frame.querySelectorAll<HTMLElement>("tbody tr:last-child"));
+		if (rows.length < 2) return true;
+		const bottoms = rows.map((row) => row.getBoundingClientRect().bottom);
+		return Math.max(...bottoms) - Math.min(...bottoms) < 0.5 * this.zoom;
 	}
 
 	/** The checkbox of a cell with the padding and borders around it. */
