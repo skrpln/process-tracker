@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App } from "obsidian";
 import type { TrackCard } from "../src/model/types.ts";
-import { applyTrackFilter, getDataviewApi } from "../src/tracks/dataview.ts";
+import { applyTrackFilter, dataviewState, getDataviewApi } from "../src/tracks/dataview.ts";
 
 function card(basename: string, folder = ""): TrackCard {
 	const path = `${folder}${basename}.md`;
@@ -26,6 +26,7 @@ interface ApiStub {
 	page?: (path: string) => unknown;
 	evaluate?: (expression: string, context: unknown) => { successful: boolean; value?: unknown; error?: unknown };
 	value?: { isTruthy(value: unknown): boolean };
+	index?: { initialized?: boolean };
 }
 
 /** An app whose Dataview plugin answers the way the stub says. */
@@ -56,6 +57,31 @@ describe("getDataviewApi", () => {
 	it("returns null when the api lacks the calls the plugin makes", () => {
 		const app = { plugins: { plugins: { dataview: { api: { pages: () => [] } } } } } as unknown as App;
 		assert.equal(getDataviewApi(app), null);
+	});
+});
+
+describe("dataviewState", () => {
+	it("is ready once the index has read every note", () => {
+		assert.equal(dataviewState(appWith({ index: { initialized: true } })), "ready");
+	});
+
+	it("is indexing while the index is still reading the vault", () => {
+		assert.equal(dataviewState(appWith({ index: { initialized: false } })), "indexing");
+	});
+
+	it("takes an api that says nothing of its index for a ready one", () => {
+		assert.equal(dataviewState(appWith({})), "ready");
+	});
+
+	it("is indexing while an enabled plugin has not loaded its api yet", () => {
+		const app = { plugins: { plugins: {}, enabledPlugins: new Set(["dataview"]) } } as unknown as App;
+		assert.equal(dataviewState(app), "indexing");
+	});
+
+	it("is absent when the plugin is not enabled", () => {
+		const app = { plugins: { plugins: {}, enabledPlugins: new Set(["templater-obsidian"]) } } as unknown as App;
+		assert.equal(dataviewState(app), "absent");
+		assert.equal(dataviewState(appWith(null)), "absent");
 	});
 });
 

@@ -22,10 +22,35 @@ interface DataviewApi {
 	page(path: string, originFile?: string): unknown;
 	evaluate(expression: string, context: unknown, originFile?: string): EvaluationResult;
 	value?: { isTruthy(value: unknown): boolean };
+	/** `false` until Dataview has read every note; until then `pages` leaves the rest out. */
+	index?: { initialized?: boolean };
 }
 
 interface AppWithPlugins extends App {
-	plugins?: { plugins?: Record<string, { api?: unknown } | undefined> };
+	plugins?: {
+		plugins?: Record<string, { api?: unknown } | undefined>;
+		enabledPlugins?: Set<string>;
+	};
+}
+
+/**
+ * Where Dataview stands: `ready` answers queries in full, `indexing` is on but answers with
+ * whatever it has read so far — or not at all, while the plugin is still loading — and
+ * `absent` is not on and never will be in this session.
+ */
+export type DataviewState = "ready" | "indexing" | "absent";
+
+/**
+ * Asked before a `track` filter is applied ([[track-selection]]). A filter applied while
+ * Dataview is indexing comes back empty — its pages are left out of `pages` until they are
+ * read — and that answer must not be taken for the truth.
+ */
+export function dataviewState(app: App): DataviewState {
+	const api = getDataviewApi(app);
+	if (api !== null) return api.index?.initialized === false ? "indexing" : "ready";
+	return (app as AppWithPlugins).plugins?.enabledPlugins?.has("dataview") === true
+		? "indexing"
+		: "absent";
 }
 
 /** The Dataview API, or `null` when the plugin is missing, disabled or still loading. */

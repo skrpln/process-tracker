@@ -10,14 +10,10 @@ import { readCardColor } from "./color.ts";
 import { trackDisplayName } from "./select.ts";
 
 /**
- * Maps every markdown note of the vault to a `TrackCard`.
- * Filtering by tag happens later, in `selectTracks`, so that the pure layer
- * stays testable and this adapter stays trivial.
+ * One note as a `TrackCard`. The render maps every note of the vault through it, in the same
+ * pass that finds the entries; filtering by tag happens later, in `selectTracks`, so that the
+ * pure layer stays testable and this adapter stays trivial.
  */
-export function collectTrackCards(app: App): TrackCard[] {
-	return app.vault.getMarkdownFiles().map((file) => toTrackCard(app, file));
-}
-
 export function toTrackCard(app: App, file: TFile): TrackCard {
 	const cache = app.metadataCache.getFileCache(file);
 	const frontmatter = (cache?.frontmatter ?? {}) as Record<string, unknown>;

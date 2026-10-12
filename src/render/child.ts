@@ -25,6 +25,7 @@ import {
 	screenScale,
 	visibleColumnRange,
 } from "./visible.ts";
+import { wheelScroll } from "./wheel.ts";
 
 /** The tables the reader has on screen; the plugin repaints their cells through it. */
 export interface LiveTables {
@@ -36,9 +37,10 @@ export interface LiveTables {
 const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
 /**
- * Runs the two things the table cannot do in CSS alone: keeps a date column as wide
- * as a row is tall, and keeps the month caption above the pinned column in step with
- * horizontal scrolling. Obsidian unloads the child together with the block, so the
+ * Runs what the table cannot do in CSS alone: keeps the rows of its two halves of one
+ * height, keeps a date column as wide as a row is tall, keeps the month caption above the
+ * pinned column in step with horizontal scrolling, and turns the wheel over the table into
+ * scrolling of its columns. Obsidian unloads the child together with the block, so the
  * listeners and the pending animation frame never outlive the table.
  *
  * The same lifetime answers the other question — which tables are on screen right now —
@@ -47,6 +49,11 @@ const TRANSPARENT = "rgba(0, 0, 0, 0)";
 export class TrackerRenderChild extends MarkdownRenderChild {
 	/** Handle of the animation frame an update is waiting for; 0 when none is. */
 	private pending = 0;
+	/** The window that frame was asked of: the table may have moved to another since. */
+	private pendingWin: Window | null = null;
+	/** Watches both tables for a change of size; belongs to the document they are in. */
+	private observer: ResizeObserver | null = null;
+	private observedDoc: Document | null = null;
 	private label: string;
 	private columnWidth: number | null = null;
 	/** Set once the table has a layout to measure; cleared whenever its size changes. */
@@ -79,22 +86,76 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		this.register(() => this.tables.delete(this.scroll));
 
 		this.registerDomEvent(this.scroll, "scroll", () => this.schedule(), { passive: true });
-
-		// A resize is the moment the theme may have changed under the table: fonts,
-		// padding, the size of a checkbox. Everything measured is measured again.
-		const observer = new this.win.ResizeObserver(() => {
-			this.measured = false;
-			this.schedule();
+		// Non-passive on the table alone: the rest of the window keeps scrolling without
+		// waiting for the plugin ([[rendering#Колесо над таблицей|Колесо над таблицей]]).
+		this.registerDomEvent(this.frame, "wheel", (event: WheelEvent) => this.onWheel(event), {
+			passive: false,
 		});
-		observer.observe(this.frame);
-		this.register(() => observer.disconnect());
 
+		// The table has just appeared on screen, in a document whose stylesheets have arrived:
+		// Obsidian fires this off an animation of its own stylesheet. A canvas card being
+		// edited moves the note into a frame of its own, and the styles reach it a moment
+		// later; a reading view hidden behind the editor comes back with it ([[rendering]]).
+		this.register(this.frame.onNodeInserted(() => this.remeasure()));
+		this.register(() => this.observer?.disconnect());
+		this.watch();
 		this.schedule();
 	}
 
 	onunload(): void {
-		if (this.pending !== 0) this.win.cancelAnimationFrame(this.pending);
+		if (this.pending !== 0) this.pendingWin?.cancelAnimationFrame(this.pending);
 		this.pending = 0;
+	}
+
+	/** Everything measured is measured again, with the next frame. */
+	private remeasure(): void {
+		this.measured = false;
+		this.schedule();
+	}
+
+	/**
+	 * Watches the frame and each of the two tables for a change of size ([[rendering]]).
+	 *
+	 * A resize is the moment the theme may have changed under the table: fonts, padding, the
+	 * size of a checkbox. Each table is watched on its own: the rows of one half can grow while
+	 * the frame, as tall as the taller half, stays the size it was — and the halves would stand
+	 * out of step with nothing to say so.
+	 *
+	 * The observer is made by the window the table is in, and made again when the table moves
+	 * to another: a canvas renders a card being edited in a document of its own.
+	 */
+	private watch(): void {
+		const doc = this.frame.ownerDocument;
+		if (doc === this.observedDoc) return;
+
+		this.observer?.disconnect();
+		this.observedDoc = doc;
+		this.observer = new this.win.ResizeObserver(() => this.remeasure());
+		const targets = [
+			this.frame,
+			this.frame.querySelector<HTMLElement>(".process-tracker__names"),
+			this.scroll.querySelector<HTMLElement>(".process-tracker__dates"),
+		];
+		for (const target of targets) if (target !== null) this.observer.observe(target);
+	}
+
+	/**
+	 * Scrolls the columns while the pointer stands over the table ([[rendering]]).
+	 *
+	 * Over the table the wheel would otherwise go to whoever holds it — a canvas pans the board,
+	 * a note scrolls away — and a mouse, with one wheel and no sideways gesture, would have no
+	 * way to reach the columns at all. A canvas card that is not focused lays its own layer over
+	 * the content, so the wheel never reaches the table there and the card stays still.
+	 *
+	 * A wheel with Ctrl or Cmd held is left alone: that is a pinch on a trackpad, and the canvas
+	 * zooms the board by it.
+	 */
+	private onWheel(event: WheelEvent): void {
+		if (event.ctrlKey || event.metaKey) return;
+
+		event.preventDefault();
+		event.stopPropagation();
+		this.scroll.scrollLeft += wheelScroll(event, this.scroll.clientWidth);
 	}
 
 	/**
@@ -175,13 +236,20 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	/** At most one update per frame, however many scroll events arrive. */
 	private schedule(): void {
 		if (this.pending !== 0) return;
-		this.pending = this.win.requestAnimationFrame(() => {
+		this.pendingWin = this.win;
+		this.pending = this.pendingWin.requestAnimationFrame(() => {
 			this.pending = 0;
 			this.update();
 		});
 	}
 
 	private update(): void {
+		this.watch();
+		// A hidden table — the reading view behind a canvas editor — or one not in a document
+		// yet has nothing to measure, and keeps the heights it has: stripped, it would come
+		// back on screen out of step for a frame.
+		if (this.frame.getClientRects().length === 0) return;
+
 		this.zoom = screenScale(this.frame.getBoundingClientRect().width, this.frame.offsetWidth);
 		// Rows out of step are measured again, whatever made them drift.
 		if (!this.measured || !this.inStep()) this.measure();

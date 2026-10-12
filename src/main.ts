@@ -1,9 +1,9 @@
 // Process Tracker — plugin entry point.
 // Wires the pure layers together: parse -> select -> date grid -> render.
 
-import { Notice, Plugin } from "obsidian";
-import type { MarkdownPostProcessorContext, TFile } from "obsidian";
-import type { EntriesMode, Entry } from "./model/types.ts";
+import { Notice, Plugin, debounce } from "obsidian";
+import type { EventRef, Events, MarkdownPostProcessorContext, TFile } from "obsidian";
+import type { EntriesMode, Entry, TrackCard, TrackerOptions } from "./model/types.ts";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
 import { confirmDailyNote } from "./daily/confirm.ts";
@@ -29,11 +29,11 @@ import {
 } from "./entry/source.ts";
 import { buildEntryIndex, byId, entryId, findEntries, readEntryId } from "./entry/state.ts";
 import { createEntry, createRecord, setEntryDone } from "./entry/write.ts";
+import { TrackerBlock } from "./render/block.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { CellPointerChild } from "./render/pointer.ts";
 import type { CellTarget } from "./render/pointer.ts";
 import {
-	SCROLL_CLASS,
 	cellOf,
 	cellsOfRow,
 	cellsShowing,
@@ -46,22 +46,25 @@ import {
 	renderWarnings,
 	rowsOfJournal,
 } from "./render/table.ts";
-import { wheelScroll } from "./render/wheel.ts";
 import { ProcessTrackerSettingTab } from "./settings-tab.ts";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
-import { applyTrackFilter } from "./tracks/dataview.ts";
+import { applyTrackFilter, dataviewState } from "./tracks/dataview.ts";
 import { selectTracks } from "./tracks/select.ts";
-import { collectTrackCards, toTrackCard } from "./tracks/source.ts";
+import { toTrackCard } from "./tracks/source.ts";
+
+/**
+ * How long Dataview has to stay silent before a block drawn during indexing asks for its rows
+ * again: long enough to sit out the stream of notes it reads at startup, short enough to go
+ * unnoticed.
+ */
+const INDEX_QUIET_MS = 500;
 
 export default class ProcessTrackerPlugin extends Plugin {
 	settings: ProcessTrackerSettings = { ...DEFAULT_SETTINGS };
 
 	/** Tables the reader has on screen; each one leaves when Obsidian unloads its block. */
 	private readonly tables = new Set<HTMLElement>();
-
-	/** Documents already listening for the wheel: the main window, popout windows. */
-	private readonly wheelDocuments = new WeakSet<Document>();
 
 	async onload(): Promise<void> {
 		this.settings = normalizeSettings(await this.loadData());
@@ -98,22 +101,28 @@ export default class ProcessTrackerPlugin extends Plugin {
 		element: HTMLElement,
 		context: MarkdownPostProcessorContext,
 	): void {
-		element.empty();
-		this.watchWheel(element.ownerDocument);
+		const block = new TrackerBlock(element);
+		context.addChild(block);
+
+		const draw = (): string | null => this.drawBlock(source, block, context.sourcePath);
+		const shown = draw();
+		if (shown !== null && dataviewState(this.app) === "indexing") {
+			this.followIndexing(block, shown, () => this.rowsOf(source, context.sourcePath), draw);
+		}
+	}
+
+	/**
+	 * Draws the table of a block in place of whatever it showed. Answers with the rows it drew,
+	 * as a key, when the rows depend on Dataview — a `track` filter — and `null` otherwise.
+	 */
+	private drawBlock(source: string, block: TrackerBlock, sourcePath: string): string | null {
+		block.clear();
+		const element = block.containerEl;
 		try {
 			const { options, warnings } = parseCodeBlock(source);
 
-			// The tag filter comes first: the `track` expression then works on a handful
-			// of track cards instead of the whole vault.
-			const cards = collectTrackCards(this.app);
-			const tagged = selectTracks(cards, this.settings.trackTag, options.sort);
-			const tracks = applyTrackFilter(
-				this.app,
-				tagged,
-				options.track,
-				context.sourcePath,
-				warnings,
-			);
+			const { cards, notes } = this.scanVault();
+			const tracks = this.filterTracks(cards, options, sourcePath, warnings);
 			const columns = buildDateColumns({
 				start: options.start,
 				today: new Date(),
@@ -129,7 +138,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 			// Notes are found wherever they lie; records only in the journals of these tracks.
 			const entries = [
-				...collectEntries(this.app),
+				...notes,
 				...collectJournalEntries(this.app, tracks.map((track) => track.path)),
 			];
 
@@ -151,8 +160,8 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 			if (elements !== null) {
 				// The day captions carry no month, so the corner caption follows the scroll.
-				context.addChild(
-						new TrackerRenderChild(
+				block.hold(
+					new TrackerRenderChild(
 						element,
 						elements.frame,
 						elements.scroll,
@@ -163,12 +172,12 @@ export default class ProcessTrackerPlugin extends Plugin {
 						this.tables,
 					),
 				);
-				context.addChild(
+				block.hold(
 					new CellPointerChild(
 						element,
 						elements.frame,
 						this.app,
-						context.sourcePath,
+						sourcePath,
 						(target, mod) => {
 							void this.runCellAction(target, mod, options.entries);
 						},
@@ -184,57 +193,101 @@ export default class ProcessTrackerPlugin extends Plugin {
 					),
 				);
 			}
+			return options.track === null ? null : rowKey(tracks);
 		} catch (error) {
 			renderError(element, error instanceof Error ? error.message : String(error));
+			return null;
 		}
 	}
 
 	/**
-	 * Starts listening for the wheel in the document a table has just rendered in — the main
-	 * window, or a popout one. One listener serves every table of that document; a document
-	 * without a tracker never gets one.
+	 * The rows of a block: cards with the plugin tag, in order, narrowed by `track`. The tag
+	 * filter comes first: the `track` expression then works on a handful of track cards instead
+	 * of the whole vault.
 	 */
-	private watchWheel(doc: Document): void {
-		if (this.wheelDocuments.has(doc)) return;
-		this.wheelDocuments.add(doc);
+	private filterTracks(
+		cards: TrackCard[],
+		options: TrackerOptions,
+		sourcePath: string,
+		warnings: string[],
+	): TrackCard[] {
+		const tagged = selectTracks(cards, this.settings.trackTag, options.sort);
+		return applyTrackFilter(this.app, tagged, options.track, sourcePath, warnings);
+	}
 
-		this.registerDomEvent(doc, "wheel", (event: WheelEvent) => this.onWheel(event), {
-			capture: true,
-			passive: false,
-		});
+	/** The rows a block would draw now, as a key; `null` when the block cannot be read. */
+	private rowsOf(source: string, sourcePath: string): string | null {
+		try {
+			const { options } = parseCodeBlock(source);
+			const cards = this.app.vault.getMarkdownFiles().map((file) => toTrackCard(this.app, file));
+			return rowKey(this.filterTracks(cards, options, sourcePath, []));
+		} catch {
+			return null;
+		}
 	}
 
 	/**
-	 * Scrolls the columns while the pointer stands over a table ([[rendering]]).
+	 * Draws a block again once Dataview has read the notes it was still reading when the block
+	 * was drawn ([[track-selection]]).
 	 *
-	 * The listener belongs to the document, not to the table, and catches the event on its way
-	 * down: over a table the wheel would otherwise go to whoever holds it — a canvas pans the
-	 * board, a note scrolls away — and a mouse, with one wheel and no sideways gesture, would
-	 * have no way to reach the columns at all.
+	 * Until a note is read, Dataview leaves it out of `pages`, so a `track` filter asked early
+	 * comes back short — or empty. Reading view draws a block once and keeps it, and a canvas card
+	 * or a note open at startup went on showing "nothing matches" long after.
 	 *
-	 * What the wheel landed on decides nothing; where the pointer stands decides everything,
-	 * and `elementFromPoint` answers that honestly: a table clipped by a small canvas card
-	 * counts only where the card shows it, and a card that is not focused answers with the
-	 * overlay the canvas lays over its content — so an unfocused card stays still, as a card
-	 * that is not focused should.
-	 *
-	 * A wheel with Ctrl or Cmd held is left alone: that is a pinch on a trackpad, and the
-	 * canvas zooms the board by it.
+	 * Dataview says that it has read everything only once every note has come back; one note that
+	 * never does, and the word never comes. What it does say, every time, is that it has read one
+	 * more note. So the block waits for those to fall quiet, asks for its rows again, and is drawn
+	 * again only if they have changed. Rows that stayed the same end the wait — and so does the
+	 * word that the index is ready.
 	 */
-	private onWheel(event: WheelEvent): void {
-		if (event.ctrlKey || event.metaKey) return;
+	private followIndexing(
+		block: TrackerBlock,
+		shown: string,
+		rows: () => string | null,
+		draw: () => string | null,
+	): void {
+		// Dataview speaks on the metadata cache, under names Obsidian does not type.
+		const cache: Events = this.app.metadataCache;
+		const refs: EventRef[] = [];
+		const stop = (): void => {
+			for (const ref of refs) cache.offref(ref);
+		};
+		const settle = (): void => {
+			const now = rows();
+			if (now === null || now === shown) {
+				stop();
+				return;
+			}
+			shown = draw() ?? now;
+			if (dataviewState(this.app) !== "indexing") stop();
+		};
 
-		const doc = (event.currentTarget ?? event.target) as Document;
-		const top = doc.elementFromPoint?.(event.clientX, event.clientY) ?? null;
-		// Over the track names too: they are a table of their own now, outside the
-		// scrolling frame, and the wheel over them still belongs to the columns.
-		const frame = top === null ? null : top.closest<HTMLElement>(".process-tracker__frame");
-		const scroll = frame === null ? null : frame.querySelector<HTMLElement>(`.${SCROLL_CLASS}`);
-		if (scroll === null) return;
+		const quiet = debounce(settle, INDEX_QUIET_MS, true);
+		refs.push(cache.on("dataview:metadata-change", () => quiet()));
+		refs.push(
+			cache.on("dataview:index-ready", () => {
+				quiet.cancel();
+				settle();
+				stop();
+			}),
+		);
+		for (const ref of refs) block.registerEvent(ref);
+		block.register(() => quiet.cancel());
+	}
 
-		event.preventDefault();
-		event.stopPropagation();
-		scroll.scrollLeft += wheelScroll(event, scroll.clientWidth);
+	/**
+	 * Track cards and entry notes in one pass over the vault: both are read off the same
+	 * metadata cache, and a render must not walk thousands of notes twice.
+	 */
+	private scanVault(): { cards: TrackCard[]; notes: Entry[] } {
+		const cards: TrackCard[] = [];
+		const notes: Entry[] = [];
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			cards.push(toTrackCard(this.app, file));
+			const entry = toEntry(this.app, file);
+			if (entry !== null) notes.push(entry);
+		}
+		return { cards, notes };
 	}
 
 	/**
@@ -556,6 +609,11 @@ export default class ProcessTrackerPlugin extends Plugin {
 		const day = findEntries(index, target.trackPath, target.date);
 		return day.length === 1 ? day[0].path : null;
 	}
+}
+
+/** The rows of a table as one string, to tell whether two drawings show the same tracks. */
+function rowKey(tracks: TrackCard[]): string {
+	return tracks.map((track) => track.path).join("\n");
 }
 
 function message(error: unknown): string {
