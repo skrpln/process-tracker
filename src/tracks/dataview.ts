@@ -5,7 +5,7 @@
 import type { App } from "obsidian";
 import type { TrackCard } from "../model/types.ts";
 import { isDue, toPeriod } from "./due.ts";
-import type { ClosedDays, DurationUnits, Period } from "./due.ts";
+import type { ClosedDays, Period } from "./due.ts";
 import { splitTrackQuery } from "./query.ts";
 
 /** Result of `DataviewApi.evaluate`: a success carries a value, a failure an error. */
@@ -180,7 +180,7 @@ export function readPeriod(api: DataviewApi, value: unknown): Period | null {
 	try {
 		const duration = api.duration(value);
 		if (duration === null || typeof duration !== "object") return null;
-		return toPeriod(duration as DurationUnits);
+		return toPeriod(duration);
 	} catch {
 		return null;
 	}
