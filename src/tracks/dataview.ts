@@ -1,8 +1,11 @@
-// Process Tracker — the Dataview adapter behind the `track` parameter.
-// The only module that talks to the Dataview plugin; logic lives in tracks/query.ts.
+// Process Tracker — the Dataview adapter behind the `track` parameter and the periods of
+// `show: due`. The only module that talks to the Dataview plugin; logic lives in
+// tracks/query.ts and tracks/due.ts.
 
 import type { App } from "obsidian";
 import type { TrackCard } from "../model/types.ts";
+import { isDue, toPeriod } from "./due.ts";
+import type { ClosedDays, DurationUnits, Period } from "./due.ts";
 import { splitTrackQuery } from "./query.ts";
 
 /** Result of `DataviewApi.evaluate`: a success carries a value, a failure an error. */
@@ -14,13 +17,15 @@ interface EvaluationResult {
 
 /**
  * The slice of the Dataview API the plugin uses. Dataview ships its types in a
- * separate package; declaring the three members we call keeps the plugin free of
+ * separate package; declaring the few members we call keeps the plugin free of
  * a build dependency on it.
  */
 interface DataviewApi {
 	pages(source: string, originFile?: string): Iterable<unknown>;
 	page(path: string, originFile?: string): unknown;
 	evaluate(expression: string, context: unknown, originFile?: string): EvaluationResult;
+	/** A text as a Luxon duration — `dur` of the query language; `null` when it is none. */
+	duration?(text: string): unknown;
 	value?: { isTruthy(value: unknown): boolean };
 	/** `false` until Dataview has read every note; until then `pages` leaves the rest out. */
 	index?: { initialized?: boolean };
@@ -158,6 +163,58 @@ function filterByCondition(
 	}
 	warnings.push(`"${condition}" could not be read on every card: ${firstError}.`);
 	return rows;
+}
+
+/**
+ * The period a track card names, or `null` when the value is none
+ * ([[track-selection#Регулярность|Регулярность]]).
+ *
+ * The text is read by Dataview itself — `duration` is `dur` of its query language — so the
+ * plugin understands exactly the forms Dataview does: `3 days`, `2w`, `6 mo`, `1 month 2 weeks`.
+ * Only a text is asked about: Dataview answers anything else with an exception, and a bare
+ * number has no unit to be a period of. What Dataview read is then held to whole days
+ * (`toPeriod`), so `3 hours` is turned down here, not there.
+ */
+export function readPeriod(api: DataviewApi, value: unknown): Period | null {
+	if (typeof value !== "string" || typeof api.duration !== "function") return null;
+	try {
+		const duration = api.duration(value);
+		if (duration === null || typeof duration !== "object") return null;
+		return toPeriod(duration as DurationUnits);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Narrows the rows to the regular tracks whose day has come — `show: due`
+ * ([[track-selection#Регулярность|Регулярность]]).
+ *
+ * The period of a track is the `recurrence` property of its card, under the name the settings
+ * give it. A track that names no period, or one that cannot be read, is left out and nothing
+ * is said — as with the colour of a card: a card lives a life of its own, and a table set over
+ * every track would list under itself all the tracks that were never meant to be regular.
+ * Without Dataview no period can be read at all; that is said, and every row stays, as with a
+ * `track` it cannot be asked.
+ */
+export function applyDueFilter(
+	app: App,
+	tracks: TrackCard[],
+	property: string,
+	days: ClosedDays,
+	today: string,
+	warnings: string[],
+): TrackCard[] {
+	const api = getDataviewApi(app);
+	if (api === null || typeof api.duration !== "function") {
+		warnings.push('Dataview is not available, so "show: due" is ignored: every track is shown.');
+		return tracks;
+	}
+
+	return tracks.filter((card) => {
+		const period = readPeriod(api, card.frontmatter[property]);
+		return period !== null && isDue(card.path, period, days, today);
+	});
 }
 
 function pagePath(page: unknown): string | null {

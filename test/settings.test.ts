@@ -118,6 +118,7 @@ describe("property names", () => {
 			template: "template",
 			entries: "entries",
 			journal: "journal",
+			recurrence: "recurrence",
 		});
 	});
 

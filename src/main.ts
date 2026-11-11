@@ -21,7 +21,7 @@ import {
 	fillDayTemplate,
 	findDailyNotes,
 } from "./daily/notes.ts";
-import { buildDateColumns } from "./dates/grid.ts";
+import { buildDateColumns, toIsoDate } from "./dates/grid.ts";
 import { cellAction } from "./entry/actions.ts";
 import { resolveEntriesMode } from "./entry/mode.ts";
 import { recountNested } from "./entry/nested.ts";
@@ -43,6 +43,7 @@ import {
 	findEntries,
 	readEntryId,
 } from "./entry/state.ts";
+import type { EntryIndex } from "./entry/state.ts";
 import { createEntry, createRecord, setEntryDone } from "./entry/write.ts";
 import { TrackerBlock } from "./render/block.ts";
 import { TrackerRenderChild } from "./render/child.ts";
@@ -68,7 +69,8 @@ import {
 import { ProcessTrackerSettingTab } from "./settings-tab.ts";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
-import { applyTrackFilter, dataviewState } from "./tracks/dataview.ts";
+import { applyDueFilter, applyTrackFilter, dataviewState } from "./tracks/dataview.ts";
+import { closedDays } from "./tracks/due.ts";
 import { trackParents } from "./tracks/links.ts";
 import { selectTracks } from "./tracks/select.ts";
 import { toTrackCard } from "./tracks/source.ts";
@@ -80,6 +82,16 @@ import { buildTrackTree, descendantsOf } from "./tracks/tree.ts";
  * unnoticed.
  */
 const INDEX_QUIET_MS = 500;
+
+/** The rows of a block, and what their cells are counted from. */
+interface BlockRows {
+	tracks: TrackCard[];
+	/** The tracks below each row that has any ([[nested-tracks]]). */
+	descendants: Map<string, string[]>;
+	entries: EntryIndex;
+	/** How many tracks `show: due` left out of the rows. */
+	notDue: number;
+}
 
 /** One entry the plugin has just written: its address, and what it is after the write. */
 interface Write {
@@ -146,7 +158,8 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 	/**
 	 * Draws the table of a block in place of whatever it showed. Answers with the rows it drew,
-	 * as a key, when the rows depend on Dataview — a `track` filter — and `null` otherwise.
+	 * as a key, when the rows depend on Dataview — a `track` filter, the periods of `show: due`
+	 * — and `null` otherwise.
 	 */
 	private drawBlock(
 		source: string,
@@ -159,13 +172,16 @@ export default class ProcessTrackerPlugin extends Plugin {
 		try {
 			const { options, warnings } = parseCodeBlock(source);
 
-			const { cards, notes } = this.scanVault();
-			const tagged = selectTracks(cards, this.settings.trackTag, options.sort);
-			const tracks = applyTrackFilter(this.app, tagged, options.track, sourcePath, warnings);
-			const descendants = this.descendantsOf(tracks, tagged);
+			const today = new Date();
+			const { tracks, descendants, entries, notDue } = this.rowsFor(
+				options,
+				sourcePath,
+				today,
+				warnings,
+			);
 			const columns = buildDateColumns({
 				start: options.start,
-				today: new Date(),
+				today,
 				days: options.days ?? DEFAULT_DAYS,
 				order: options.dates,
 			});
@@ -176,21 +192,10 @@ export default class ProcessTrackerPlugin extends Plugin {
 			const place = dailyNotePlace(this.app, options.dailyNoteDir, warnings);
 			const days = columns.map((column) => column.iso);
 
-			// Notes are found wherever they lie; records only in the journals of these tracks
-			// and of the tracks below them, whose entries count in the cells of the rows.
-			const journals = new Set(tracks.map((track) => track.path));
-			for (const below of descendants.values()) {
-				for (const path of below) journals.add(path);
-			}
-			const entries = [
-				...notes,
-				...collectJournalEntries(this.app, Array.from(journals), this.names),
-			];
-
 			const elements = renderTracker(element, {
 				tracks,
 				columns,
-				entries: buildEntryIndex(entries),
+				entries,
 				descendants,
 				dailyNotes: place === null ? new Map() : findDailyNotes(this.app, place, days),
 				dailyNotesCreatable: place !== null,
@@ -203,6 +208,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 				width: options.width,
 				trackTag: this.settings.trackTag,
 				trackFilter: options.track,
+				notDue,
 			});
 			renderWarnings(element, warnings);
 
@@ -251,7 +257,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 					),
 				);
 			}
-			return options.track === null ? null : rowKey(tracks);
+			return options.track === null && options.show !== "due" ? null : rowKey(tracks);
 		} catch (error) {
 			renderError(element, error instanceof Error ? error.message : String(error));
 			return null;
@@ -259,18 +265,48 @@ export default class ProcessTrackerPlugin extends Plugin {
 	}
 
 	/**
-	 * The rows of a block: cards with the plugin tag, in order, narrowed by `track`. The tag
-	 * filter comes first: the `track` expression then works on a handful of track cards instead
-	 * of the whole vault.
+	 * The rows of a block and the entries their cells are counted from.
+	 *
+	 * The cards with the plugin tag come first, in order, and `track` narrows them: its
+	 * expression then works on a handful of track cards instead of the whole vault. `show: due`
+	 * goes last: it asks when each track was last closed, so the entries have to be gathered by
+	 * then, the journals of the tracks it is about to leave out among them
+	 * ([[track-selection#Регулярность|Регулярность]]).
 	 */
-	private filterTracks(
-		cards: TrackCard[],
+	private rowsFor(
 		options: TrackerOptions,
 		sourcePath: string,
+		today: Date,
 		warnings: string[],
-	): TrackCard[] {
+	): BlockRows {
+		const { cards, notes } = this.scanVault();
 		const tagged = selectTracks(cards, this.settings.trackTag, options.sort);
-		return applyTrackFilter(this.app, tagged, options.track, sourcePath, warnings);
+		const filtered = applyTrackFilter(this.app, tagged, options.track, sourcePath, warnings);
+		const descendants = this.descendantsOf(filtered, tagged);
+
+		// Notes are found wherever they lie; records only in the journals of these tracks
+		// and of the tracks below them, whose entries count in the cells of the rows.
+		const journals = new Set(filtered.map((track) => track.path));
+		for (const below of descendants.values()) {
+			for (const path of below) journals.add(path);
+		}
+		const entries = buildEntryIndex([
+			...notes,
+			...collectJournalEntries(this.app, Array.from(journals), this.names),
+		]);
+
+		const tracks =
+			options.show === "due"
+				? applyDueFilter(
+						this.app,
+						filtered,
+						this.names.recurrence,
+						closedDays(entries, descendants),
+						toIsoDate(today),
+						warnings,
+					)
+				: filtered;
+		return { tracks, descendants, entries, notDue: filtered.length - tracks.length };
 	}
 
 	/**
@@ -297,14 +333,14 @@ export default class ProcessTrackerPlugin extends Plugin {
 		return descendants;
 	}
 
-	/** The rows a block would draw now, as a key; `null` when the block cannot be read. */
+	/**
+	 * The rows a block would draw now, as a key; `null` when the block cannot be read. They are
+	 * chosen as a drawing chooses them, `show: due` included, or the two would never agree.
+	 */
 	private rowsOf(source: string, sourcePath: string): string | null {
 		try {
 			const { options } = parseCodeBlock(source);
-			const cards = this.app.vault
-				.getMarkdownFiles()
-				.map((file) => toTrackCard(this.app, file, this.names));
-			return rowKey(this.filterTracks(cards, options, sourcePath, []));
+			return rowKey(this.rowsFor(options, sourcePath, new Date(), []).tracks);
 		} catch {
 			return null;
 		}

@@ -7,6 +7,7 @@ import { readEntriesMode } from "../entry/mode.ts";
 import type {
 	EntriesMode,
 	NamesAlign,
+	ShowMode,
 	SortDirection,
 	SortSpec,
 	TrackerOptions,
@@ -28,6 +29,9 @@ export const DEFAULT_DATES: SortDirection = "desc";
 /** No thread until the block asks for one: a tracker says enough with its checkmarks. */
 export const DEFAULT_STROKE = false;
 
+/** Every track is a row until the block asks for the ones that are due. */
+export const DEFAULT_SHOW: ShowMode = "all";
+
 const ALIGNMENTS: readonly NamesAlign[] = ["left", "center", "right"];
 
 const KNOWN_KEYS = [
@@ -43,6 +47,7 @@ const KNOWN_KEYS = [
 	"title",
 	"align",
 	"width",
+	"show",
 ];
 
 /** Parses `key: value` lines of a code block into tracker options. */
@@ -61,6 +66,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		title: DEFAULT_TITLE,
 		align: null,
 		width: null,
+		show: DEFAULT_SHOW,
 	};
 	const seen = new Set<string>();
 
@@ -101,6 +107,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "title") options.title = parseTitle(value);
 		if (key === "align") options.align = parseAlign(value, warnings);
 		if (key === "width") options.width = parseWidth(value, warnings);
+		if (key === "show") options.show = parseShow(value, warnings);
 	}
 
 	return { options, warnings };
@@ -196,6 +203,19 @@ export function parseWidth(value: string, warnings: string[] = []): number | nul
 		return MIN_WIDTH;
 	}
 	return width;
+}
+
+/**
+ * `show: all | due` — which tracks become rows: every one, or only the regular tracks whose
+ * day has come ([[track-selection#Регулярность|Регулярность]]). Two words and no third meaning
+ * to guess at, as with `stroke`: anything else is said out loud, and every track is shown.
+ */
+export function parseShow(value: string, warnings: string[] = []): ShowMode {
+	const word = value.toLowerCase();
+	if (word === "all" || word === "due") return word;
+
+	warnings.push(`Unknown value "show: ${value}", "${DEFAULT_SHOW}" is used.`);
+	return DEFAULT_SHOW;
 }
 
 /**

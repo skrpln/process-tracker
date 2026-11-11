@@ -170,6 +170,11 @@ export interface TrackerView {
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
 	trackFilter: string | null;
+	/**
+	 * How many tracks `show: due` left out. Only used by the empty state, to tell a day with
+	 * nothing due from a table with no tracks.
+	 */
+	notDue: number;
 }
 
 /** Elements the render child needs to follow the scrolling table. */
@@ -217,7 +222,7 @@ export interface ThemeProbe {
 export function renderTracker(container: HTMLElement, view: TrackerView): TrackerElements | null {
 	const root = container.createDiv({ cls: "process-tracker" });
 	if (view.tracks.length === 0) {
-		renderEmptyState(root, view.trackTag, view.trackFilter);
+		renderEmptyState(root, view);
 		return null;
 	}
 
@@ -785,13 +790,15 @@ function quote(value: string): string {
 
 /**
  * With a `track` filter in the block the tag is rarely what is missing, so the
- * message names the filter instead of asking for a tag that is probably there.
+ * message names the filter instead of asking for a tag that is probably there. A block of
+ * `show: due` that had tracks to choose from and kept none is not missing anything at all.
  */
-function renderEmptyState(root: HTMLElement, trackTag: string, trackFilter: string | null): void {
-	const text =
-		trackFilter === null
-			? `No track cards found. Tag a note with #${trackTag} to add a track.`
-			: `No track card matches "track: ${trackFilter}".`;
+function renderEmptyState(root: HTMLElement, view: TrackerView): void {
+	let text = `No track card matches "track: ${view.trackFilter}".`;
+	if (view.notDue > 0) text = "No track is due today.";
+	else if (view.trackFilter === null) {
+		text = `No track cards found. Tag a note with #${view.trackTag} to add a track.`;
+	}
 	root.createDiv({ cls: "process-tracker__empty", text });
 }
 

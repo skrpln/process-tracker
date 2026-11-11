@@ -21,6 +21,7 @@ template: "[[Cleaning entry]]"  # Template for new entry notes of this track.
 entries: journal                # Optional: notes (default) or journal, see below.
 journal: "[[Cleaning log]]"     # Optional: where the journal lives. Without it, in this note.
 track: "[[Home]]"               # Optional: the parent track, see "Tracks inside tracks".
+recurrence: 6 months            # Optional: how often to repeat it, see "Regular tracks".
 ---
 ```
 
@@ -66,6 +67,7 @@ width: 180
 | `title`       | text, `{{month}}`, `{{year}}`, `[[links]]`                   | `{{month}} {{year}}` | The caption in the corner above the track names. |
 | `align`       | `left`, `center`, `right`                                    | the setting | Aligns the track names and the title. |
 | `width`       | a whole number of pixels, from `40`                          | `12em`      | Width of the column of track names. |
+| `show`        | `all`, `due`                                                 | `all`       | Every track, or only the regular tracks that are due. |
 
 >[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
@@ -183,6 +185,48 @@ A track note that also has `done` is a long task: a track with a row and a journ
 > [!note]
 > The tree under the entry of the track itself is added to the preview of the core **Page preview** plugin, so it needs that plugin on. A day with no entry of its own shows the tree in a popup of Process Tracker.
 
+### Regular tracks
+
+Some things come round on a schedule: change the bed linen every week, defrost the fridge twice a year. Give such a track a `recurrence` — how often it is to be repeated:
+
+```yaml
+---
+tags: process_tracker
+recurrence: 6 months
+---
+```
+
+Then add `show: due` to a code block, and the table keeps only the tracks that are due:
+
+- the last checked day plus `recurrence` is today or earlier — checked on a Monday with `1 week`, the track is back next Monday;
+- the track was never checked;
+- the track was checked today — it stays for the rest of the day, so a row does not vanish as you check it.
+
+````markdown
+```process-tracker
+track: FROM "Home"
+show: due
+```
+````
+
+`recurrence` is a number and a unit, or several such pairs in a row:
+
+| Period | Written as                            |
+| ------ | ------------------------------------- |
+| days   | `3 days`, `1 day`, `3d`               |
+| weeks  | `2 weeks`, `2 wk`, `2w`               |
+| months | `6 months`, `6 mo`                    |
+| years  | `1 year`, `2 yrs`                     |
+| a mix  | `1 month 2 weeks`, `1 month, 2 weeks` |
+
+> [!tip]
+> - The period is read by [Dataview](https://github.com/blacksmithgu/obsidian-dataview), so `show: due` needs it; without Dataview every track is shown.
+> - Months go by the calendar: 31 January and `1 month` is 28 February.
+> - A bare number is not a period. `1m` is a minute and `1y` is not understood; hours and minutes mean nothing in a table of days.
+> - A track with no `recurrence`, or with one that cannot be read, is not shown.
+> - The last checked day is looked for in the whole vault, not only in the days of the table, and a day checked by a track below counts — see "Tracks inside tracks".
+> - "Today" is the real today, wherever `start` and `days` put the window.
+
 ### 4. Click a date
 
 The caption above a column is a link when the daily note of that day is in your vault: a click opens it in this tab, `Cmd`/`Ctrl` + click in a new one, and hovering it gives the same preview a cell does.
@@ -208,7 +252,7 @@ A day without a daily note shows a plain number, so the caption itself tells you
 | Entry folder | Where new entry notes go.                                    | vault root        |
 | New entries  | Separate notes, or records in the journal of the track. The `entries` property of a track note and of a code block override it. | separate notes |
 | First column alignment | How the track names and the corner title stand. The `align` option of a code block overrides it. | center |
-| Entry properties, Track properties | The names of the properties the plugin reads and writes, one field each: `track`, `done`, `created`, `closed`, `date`, `mark` of an entry note, `track_name`, `track_color`, `template`, `entries`, `journal` of a track note. The link of a track to its parent goes by the same name as `track`. Rename one to match the properties your notes already use; an empty field means the default name. | the names above |
+| Entry properties, Track properties | The names of the properties the plugin reads and writes, one field each: `track`, `done`, `created`, `closed`, `date`, `mark` of an entry note, `track_name`, `track_color`, `template`, `entries`, `journal`, `recurrence` of a track note. The link of a track to its parent goes by the same name as `track`. Rename one to match the properties your notes already use; an empty field means the default name. | the names above |
 
 ## Bugs and questions
 

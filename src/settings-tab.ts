@@ -146,6 +146,12 @@ const PROPERTY_GROUPS: readonly { heading: string; fields: readonly PropertyFiel
 			{ key: "template", desc: "Links a track to the template of its new entries." },
 			{ key: "entries", desc: "How a click makes an entry of a track: notes or journal." },
 			{ key: "journal", desc: "Links a track to its journal." },
+			{
+				key: "recurrence",
+				desc:
+					"How often a track is to be repeated: 3 days, 2 weeks, 6 months. " +
+					"A code block with show: due asks for it.",
+			},
 		],
 	},
 ];

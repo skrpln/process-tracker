@@ -40,6 +40,7 @@ export const DEFAULT_PROPERTY_NAMES: Readonly<PropertyNames> = {
 	template: "template",
 	entries: "entries",
 	journal: "journal",
+	recurrence: "recurrence",
 };
 
 /** The heading of the section a track card keeps its own journal under, `# Journal`. */

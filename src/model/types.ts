@@ -8,6 +8,12 @@ export type SortDirection = "asc" | "desc";
  */
 export type EntriesMode = "notes" | "journal";
 
+/**
+ * Which tracks a table shows ([[expectation]] §4): all of them, or only the regular ones whose
+ * day has come ([[track-selection#Регулярность|Регулярность]]).
+ */
+export type ShowMode = "all" | "due";
+
 /** Sort field: `name`, `ctime`, `mtime` or any frontmatter property of a track card. */
 export interface SortSpec {
 	field: string;
@@ -54,6 +60,8 @@ export interface TrackerOptions {
 	 * ([[codeblock-syntax]]). `null` — the width of the stylesheet.
 	 */
 	width: number | null;
+	/** Which of the tracks become rows: every one, or the ones that are due. */
+	show: ShowMode;
 }
 
 /** Alignment of the first column: the track names and the corner title. */
@@ -108,6 +116,8 @@ export interface PropertyNames {
 	entries: string;
 	/** Of a track card: the link to the journal of the track. */
 	journal: string;
+	/** Of a track card: how often the track is to be repeated, `6 months`. */
+	recurrence: string;
 }
 
 /**

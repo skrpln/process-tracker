@@ -7,6 +7,7 @@ import {
 	parseColor,
 	parseEntries,
 	parseFolder,
+	parseShow,
 	parseSort,
 	parseStartDate,
 	parseStroke,
@@ -31,6 +32,7 @@ describe("parseCodeBlock", () => {
 			title: "{{month}} {{year}}",
 			align: null,
 			width: null,
+			show: "all",
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -373,5 +375,30 @@ describe("width", () => {
 			assert.equal(options.width, MIN_WIDTH, `width: ${value}`);
 			assert.equal(warnings.length, 1, `width: ${value}`);
 		}
+	});
+});
+
+describe("show", () => {
+	it("shows every track until the block asks otherwise", () => {
+		assert.equal(parseCodeBlock("days: 3").options.show, "all");
+	});
+
+	it("reads both words, in any case", () => {
+		assert.equal(parseCodeBlock("show: due").options.show, "due");
+		assert.equal(parseCodeBlock("show: DUE").options.show, "due");
+		assert.equal(parseCodeBlock("show: all").options.show, "all");
+	});
+
+	it("warns about anything else and shows every track", () => {
+		const { options, warnings } = parseCodeBlock("show: overdue");
+		assert.equal(options.show, "all");
+		assert.equal(warnings.length, 1);
+		assert.match(warnings[0], /show: overdue/);
+	});
+
+	it("warns on its own, so the same value can be checked outside a block", () => {
+		const warnings: string[] = [];
+		assert.equal(parseShow("today", warnings), "all");
+		assert.equal(warnings.length, 1);
 	});
 });

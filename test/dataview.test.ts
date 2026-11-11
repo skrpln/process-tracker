@@ -4,9 +4,16 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App } from "obsidian";
 import type { TrackCard } from "../src/model/types.ts";
-import { applyTrackFilter, dataviewState, getDataviewApi } from "../src/tracks/dataview.ts";
+import {
+	applyDueFilter,
+	applyTrackFilter,
+	dataviewState,
+	getDataviewApi,
+	readPeriod,
+} from "../src/tracks/dataview.ts";
+import type { ClosedDays } from "../src/tracks/due.ts";
 
-function card(basename: string, folder = ""): TrackCard {
+function card(basename: string, folder = "", frontmatter: Record<string, unknown> = {}): TrackCard {
 	const path = `${folder}${basename}.md`;
 	return {
 		path,
@@ -15,7 +22,7 @@ function card(basename: string, folder = ""): TrackCard {
 		color: null,
 		entries: null,
 		tags: ["process_tracker"],
-		frontmatter: {},
+		frontmatter,
 		ctime: 0,
 		mtime: 0,
 	};
@@ -27,6 +34,7 @@ interface ApiStub {
 	evaluate?: (expression: string, context: unknown) => { successful: boolean; value?: unknown; error?: unknown };
 	value?: { isTruthy(value: unknown): boolean };
 	index?: { initialized?: boolean };
+	duration?: (text: string) => unknown;
 }
 
 /** An app whose Dataview plugin answers the way the stub says. */
@@ -219,5 +227,139 @@ describe("applyTrackFilter", () => {
 		const original = [...tracks];
 		applyTrackFilter(app, tracks, 'FROM "health"', "note.md", []);
 		assert.deepEqual(tracks, original);
+	});
+});
+
+/**
+ * A duration as Dataview hands it over, for the few forms the tests write: `3 days`, `2 weeks`,
+ * `6 months`, `1 year`, `3 hours`. The grammar is Dataview's own business; what is tested here is
+ * what the plugin does with its answer.
+ */
+function duration(text: string): unknown {
+	const match = /^(\d+(?:\.\d+)?) (day|week|month|year|hour)s?$/.exec(text);
+	return match === null ? null : { [`${match[2]}s`]: Number(match[1]) };
+}
+
+/** The api of an app whose Dataview answers the way the stub says. */
+function apiOf(stub: ApiStub): NonNullable<ReturnType<typeof getDataviewApi>> {
+	const api = getDataviewApi(appWith(stub));
+	assert.ok(api !== null);
+	return api;
+}
+
+describe("readPeriod", () => {
+	const api = apiOf({ duration });
+
+	it("reads a period the way Dataview reads a duration", () => {
+		assert.deepEqual(readPeriod(api, "3 days"), { months: 0, days: 3 });
+		assert.deepEqual(readPeriod(api, "2 weeks"), { months: 0, days: 14 });
+		assert.deepEqual(readPeriod(api, "6 months"), { months: 6, days: 0 });
+		assert.deepEqual(readPeriod(api, "1 year"), { months: 12, days: 0 });
+	});
+
+	it("turns down what Dataview does not read as a duration", () => {
+		assert.equal(readPeriod(api, "soon"), null);
+		assert.equal(readPeriod(api, ""), null);
+	});
+
+	it("turns down a number with no unit, and anything that is not a text", () => {
+		assert.equal(readPeriod(api, 7), null);
+		assert.equal(readPeriod(api, ["3 days"]), null);
+		assert.equal(readPeriod(api, null), null);
+	});
+
+	it("turns down hours: a table of days cannot count them", () => {
+		assert.equal(readPeriod(api, "3 hours"), null);
+	});
+
+	it("turns down everything when Dataview cannot read durations", () => {
+		assert.equal(readPeriod(apiOf({}), "3 days"), null);
+	});
+
+	it("takes a failure of Dataview for no period", () => {
+		const broken = apiOf({
+			duration: () => {
+				throw new Error("no implementation of dur");
+			},
+		});
+		assert.equal(readPeriod(broken, "3 days"), null);
+	});
+});
+
+describe("applyDueFilter", () => {
+	const TODAY = "2026-11-12";
+
+	/** The closed days of the tracks, as the test names them: path -> the last closed day. */
+	function lastClosed(last: Record<string, string>): ClosedDays {
+		return {
+			closed: (trackPath, date) => last[trackPath] === date,
+			last: (trackPath) => last[trackPath] ?? null,
+		};
+	}
+
+	const bedding = card("bedding", "", { recurrence: "1 week" });
+	const fridge = card("fridge", "", { recurrence: "6 months" });
+	const plants = card("plants", "", { recurrence: "3 days" });
+	const regular = [bedding, fridge, plants];
+
+	function names(rows: TrackCard[]): string[] {
+		return rows.map((row) => row.basename);
+	}
+
+	it("keeps the tracks whose day has come and the tracks never closed", () => {
+		const warnings: string[] = [];
+		const days = lastClosed({ "bedding.md": "2026-11-05", "fridge.md": "2026-11-01" });
+		const rows = applyDueFilter(appWith({ duration }), regular, "recurrence", days, TODAY, warnings);
+		assert.deepEqual(names(rows), ["bedding", "plants"]);
+		assert.deepEqual(warnings, []);
+	});
+
+	it("keeps a track closed today", () => {
+		const days = lastClosed({ "bedding.md": TODAY, "fridge.md": TODAY, "plants.md": "2026-11-11" });
+		const rows = applyDueFilter(appWith({ duration }), regular, "recurrence", days, TODAY, []);
+		assert.deepEqual(names(rows), ["bedding", "fridge"]);
+	});
+
+	it("hides the tracks with no period and says nothing of them", () => {
+		const warnings: string[] = [];
+		const tracks = [card("cleaning"), bedding, card("water", "", { recurrence: null }), card("tea", "", { recurrence: " " })];
+		const rows = applyDueFilter(appWith({ duration }), tracks, "recurrence", lastClosed({}), TODAY, warnings);
+		assert.deepEqual(names(rows), ["bedding"]);
+		assert.deepEqual(warnings, []);
+	});
+
+	it("hides a track whose period cannot be read, in silence too", () => {
+		const warnings: string[] = [];
+		const tracks = [
+			card("windows", "", { recurrence: "soon" }),
+			card("oven", "", { recurrence: "3 hours" }),
+			card("filter", "", { recurrence: 7 }),
+			bedding,
+		];
+		const rows = applyDueFilter(appWith({ duration }), tracks, "recurrence", lastClosed({}), TODAY, warnings);
+		assert.deepEqual(names(rows), ["bedding"]);
+		assert.deepEqual(warnings, []);
+	});
+
+	it("reads the period under the name the settings give the property", () => {
+		const tracks = [card("bedding", "", { every: "1 week" }), card("fridge", "", { recurrence: "1 week" })];
+		const rows = applyDueFilter(appWith({ duration }), tracks, "every", lastClosed({}), TODAY, []);
+		assert.deepEqual(names(rows), ["bedding"]);
+	});
+
+	it("keeps every row and warns when Dataview is not there to read the periods", () => {
+		for (const app of [appWith(null), appWith({})]) {
+			const warnings: string[] = [];
+			const days = lastClosed({ "bedding.md": "2026-11-11" });
+			assert.deepEqual(applyDueFilter(app, regular, "recurrence", days, TODAY, warnings), regular);
+			assert.equal(warnings.length, 1);
+			assert.match(warnings[0], /Dataview is not available/);
+		}
+	});
+
+	it("never touches the array it is given", () => {
+		const original = [...regular];
+		applyDueFilter(appWith({ duration }), regular, "recurrence", lastClosed({ "bedding.md": "2026-11-11" }), TODAY, []);
+		assert.deepEqual(regular, original);
 	});
 });
