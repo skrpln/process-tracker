@@ -228,7 +228,7 @@ show: due
 > - A bare number is not a period. `1m` is a minute and `1y` is not understood; hours and minutes mean nothing in a table of days.
 > - A track with no `recurrence`, or with one that cannot be read, is not shown.
 > - The last checked day is looked for in the whole vault, not only in the days of the table, and a day checked by a track below counts — see "Tracks inside tracks".
-> - "Today" is the real today, wherever `start` and `days` put the window.
+> - "Today" is the real today, wherever `start` and `days` put the window. In a checklist it is the day of the list — see "A checklist for the day".
 
 ### A checklist for the day
 
