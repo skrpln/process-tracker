@@ -129,6 +129,34 @@ export function layoutHeight(computed: string, screenHeight: number, scale: numb
 	return screenHeight / scale;
 }
 
+/** One moment of the first column being dragged by the line between the names and the dates. */
+export interface WidthDrag {
+	/** Width of the column when the drag began, in CSS pixels. */
+	start: number;
+	/** How far the pointer has gone since, in screen pixels; to the left is negative. */
+	moved: number;
+	/** Screen pixels per CSS pixel: the zoom of a canvas, `1` in a note. */
+	scale: number;
+	/** The narrowest the column may be. */
+	min: number;
+	/** The widest: what the frame leaves once one date column has its place. */
+	max: number;
+}
+
+/**
+ * The width a dragged column takes, in whole CSS pixels ([[rendering#Ширина первого столбца|Ширина первого столбца]]).
+ *
+ * The pointer reports its way in screen pixels, and on a zoomed canvas those are not the
+ * pixels a width is written in: the way is divided by the scale, as every screen measurement
+ * of the table is. Where a narrow frame leaves no room between the two limits, the lower one
+ * stands — a column that cannot be read is worse than dates that have to be scrolled to.
+ */
+export function draggedWidth(drag: WidthDrag): number {
+	const scale = Number.isFinite(drag.scale) && drag.scale > 0 ? drag.scale : 1;
+	const width = Math.round(drag.start + drag.moved / scale);
+	return clamp(width, drag.min, Math.max(drag.min, drag.max));
+}
+
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
 }

@@ -56,14 +56,61 @@ body.theme-light .process-tracker {
 
 /*
  * Two tables side by side: the track names, then the columns of dates in a frame of
- * their own. The gap between them is the old double line — two cell borders with two
- * pixels of the page showing between, so the separator works in a vault where the page
- * is transparent as well as in one where it is painted.
+ * their own. Between them stands the old double line — two cell borders with two pixels
+ * of the page showing between, so the separator works in a vault where the page is
+ * transparent as well as in one where it is painted. Those two pixels are an element now,
+ * the line the first column is dragged by.
  */
 .process-tracker__frame {
 	display: flex;
 	align-items: flex-start;
-	gap: 2px;
+}
+
+/*
+ * The line between the names and the dates ([[rendering]]). It is as thin as the gap it
+ * replaced and as tall as the tables; what the pointer catches is a wider strip laid over
+ * the edges of both tables, and only along the rows — above them the tables have no line
+ * to take hold of. The strip answers the pointer, the element itself does not.
+ *
+ * `z-index` lifts the strip over the window of the dates: a window cut to the card of its
+ * theme by `clip-path` is painted as a layer of its own, after the line, and would cover
+ * the half of the strip that lies on it.
+ */
+.process-tracker__resizer {
+	position: relative;
+	z-index: 1;
+	flex: 0 0 2px;
+	align-self: stretch;
+	pointer-events: none;
+}
+
+.process-tracker__resizer::before,
+.process-tracker__resizer::after {
+	content: "";
+	position: absolute;
+	top: var(--pt-head-height, 0px);
+	bottom: 0;
+}
+
+.process-tracker__resizer::before {
+	left: -3px;
+	right: -3px;
+	cursor: col-resize;
+	pointer-events: auto;
+}
+
+/*
+ * The line shows itself under the pointer and while it is dragged, in the colour Obsidian
+ * lights its own dividers with.
+ */
+.process-tracker__resizer::after {
+	left: 0;
+	right: 0;
+}
+
+.process-tracker__resizer:hover::after,
+.process-tracker__frame.is-resizing .process-tracker__resizer::after {
+	background-color: var(--divider-color-hover, var(--interactive-accent));
 }
 
 /*

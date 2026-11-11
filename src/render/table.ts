@@ -31,6 +31,12 @@ export const CREATABLE_CLASS = "is-creatable";
 /** Class of the scrolling container; the wheel handler of the plugin looks for it by name. */
 export const SCROLL_CLASS = "process-tracker__scroll";
 
+/** Class of the line between the names and the dates, which the first column is dragged by. */
+export const RESIZER_CLASS = "process-tracker__resizer";
+
+/** Custom property the width of the first column is written into, in place of the stylesheet's. */
+export const NAMES_WIDTH_PROPERTY = "--pt-col-track";
+
 /** Class of a row that has a colour of its own; the stylesheet repaints checkmarks by it. */
 export const COLORED_CLASS = "process-tracker--colored";
 
@@ -109,6 +115,8 @@ export interface TrackerView {
 	title: string;
 	/** How the track names and the corner title stand in their column. */
 	align: NamesAlign;
+	/** Width of the first column in pixels; `null` — the width of the stylesheet. */
+	width: number | null;
 	/** Only used by the empty state, to name the tag the user has configured. */
 	trackTag: string;
 	/** Only used by the empty state, to tell an empty vault from an empty filter. */
@@ -119,6 +127,8 @@ export interface TrackerView {
 export interface TrackerElements {
 	/** Both tables together: the pointer works over the whole thing. */
 	frame: HTMLElement;
+	/** The line between the two tables, which the first column is dragged by. */
+	resizer: HTMLElement;
 	/** The part that scrolls — the date columns and nothing else. */
 	scroll: HTMLElement;
 	captionCell: HTMLElement;
@@ -164,12 +174,17 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 
 	const frame = root.createDiv({ cls: "process-tracker__frame" });
 	frame.style.setProperty("--pt-names-align", view.align);
+	setNamesWidth(frame, view.width);
 
 	const names = frame.createEl("table", {
 		cls: "process-tracker__table process-tracker__names",
 	});
 	const captionCell = renderNamesHead(names, view.columns[0], view.title);
 	renderNamesBody(names, view.tracks);
+
+	// The line stands between the tables as an element of its own, so it is always exactly
+	// where they meet, however wide the first one is ([[rendering]]).
+	const resizer = frame.createDiv({ cls: RESIZER_CLASS });
 
 	const scroll = frame.createDiv({ cls: SCROLL_CLASS });
 	const dates = scroll.createEl("table", {
@@ -180,7 +195,17 @@ export function renderTracker(container: HTMLElement, view: TrackerView): Tracke
 	renderDatesHead(dates, view.columns, view.dailyNotes, view.dailyNotesCreatable);
 	renderDatesBody(dates, view);
 
-	return { frame, scroll, captionCell, probe };
+	return { frame, resizer, scroll, captionCell, probe };
+}
+
+/**
+ * Gives the first column a width of its own, or — for `null` — hands it back to the
+ * stylesheet. The render writes the `width` of the block here, and a drag every width the
+ * pointer passes ([[rendering]]).
+ */
+export function setNamesWidth(frame: HTMLElement, width: number | null): void {
+	if (width === null) frame.style.removeProperty(NAMES_WIDTH_PROPERTY);
+	else frame.style.setProperty(NAMES_WIDTH_PROPERTY, `${width}px`);
 }
 
 /**

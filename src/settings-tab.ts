@@ -1,12 +1,13 @@
 // Process Tracker — the settings tab of the plugin ([[architecture]]).
-// Adapter module: describes three fields and writes them into the settings, nothing else.
+// Adapter module: describes four fields and writes them into the settings, nothing else.
 
 import { PluginSettingTab, Setting } from "obsidian";
 import type { App, SettingDefinitionItem } from "obsidian";
 import type ProcessTrackerPlugin from "./main.ts";
-import type { EntriesMode } from "./model/types.ts";
+import type { EntriesMode, NamesAlign } from "./model/types.ts";
 import {
 	DEFAULT_SETTINGS,
+	normalizeAlign,
 	normalizeEntriesMode,
 	normalizeEntryFolder,
 	normalizeTrackTag,
@@ -40,9 +41,16 @@ const ENTRIES_OPTIONS: Record<EntriesMode, string> = {
 	journal: "Records in the track journal",
 };
 
+/** The words the dropdown of the alignment shows; the keys are what `data.json` stores. */
+const ALIGN_OPTIONS: Record<NamesAlign, string> = {
+	left: "Left",
+	center: "Center",
+	right: "Right",
+};
+
 /**
- * The settings of [[expectation]] §10: the tag of a track card, the folder of entries, and how
- * new entries are made.
+ * The settings of [[expectation]] §10: the tag of a track card, the folder of entries, how new
+ * entries are made, and how the first column stands.
  */
 const FIELDS: readonly Field[] = [
 	{
@@ -74,6 +82,16 @@ const FIELDS: readonly Field[] = [
 			"the track. The entries property of a track card and of a code block override it.",
 		options: ENTRIES_OPTIONS,
 		normalize: normalizeEntriesMode,
+	},
+	{
+		type: "dropdown",
+		key: "align",
+		name: "First column alignment",
+		desc:
+			"How the track names and the corner title stand in their column. The align " +
+			"parameter of a code block overrides it.",
+		options: ALIGN_OPTIONS,
+		normalize: normalizeAlign,
 	},
 ];
 

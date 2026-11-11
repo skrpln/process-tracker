@@ -33,6 +33,7 @@ import { TrackerBlock } from "./render/block.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { CellPointerChild } from "./render/pointer.ts";
 import type { CellTarget } from "./render/pointer.ts";
+import { ColumnResizeChild, writeWidth } from "./render/resize.ts";
 import {
 	cellOf,
 	cellsOfRow,
@@ -104,7 +105,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 		const block = new TrackerBlock(element);
 		context.addChild(block);
 
-		const draw = (): string | null => this.drawBlock(source, block, context.sourcePath);
+		const draw = (): string | null => this.drawBlock(source, block, context);
 		const shown = draw();
 		if (shown !== null && dataviewState(this.app) === "indexing") {
 			this.followIndexing(block, shown, () => this.rowsOf(source, context.sourcePath), draw);
@@ -115,9 +116,14 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 * Draws the table of a block in place of whatever it showed. Answers with the rows it drew,
 	 * as a key, when the rows depend on Dataview — a `track` filter — and `null` otherwise.
 	 */
-	private drawBlock(source: string, block: TrackerBlock, sourcePath: string): string | null {
+	private drawBlock(
+		source: string,
+		block: TrackerBlock,
+		context: MarkdownPostProcessorContext,
+	): string | null {
 		block.clear();
 		const element = block.containerEl;
+		const sourcePath = context.sourcePath;
 		try {
 			const { options, warnings } = parseCodeBlock(source);
 
@@ -152,7 +158,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 				stroke: options.stroke,
 				dates: options.dates,
 				title: options.title,
-				align: options.align,
+				// The block decides for itself; where it says nothing, the settings do.
+				align: options.align ?? this.settings.align,
+				width: options.width,
 				trackTag: this.settings.trackTag,
 				trackFilter: options.track,
 			});
@@ -190,6 +198,15 @@ export default class ProcessTrackerPlugin extends Plugin {
 						(caption, date) => {
 							void this.newDailyNote(caption, date, options.dailyNoteDir);
 						},
+					),
+				);
+				block.hold(
+					new ColumnResizeChild(
+						element,
+						elements.frame,
+						elements.resizer,
+						options.width,
+						(width) => this.keepWidth(context, element, source, width),
 					),
 				);
 			}
@@ -455,6 +472,26 @@ export default class ProcessTrackerPlugin extends Plugin {
 			await this.app.workspace.getLeaf("tab").openFile(file);
 		} catch (error) {
 			new Notice(`Process Tracker: ${message(error)}`);
+		}
+	}
+
+	/**
+	 * Keeps the width the first column was dragged to in the code block of its table, or takes
+	 * the line out after a double click ([[rendering]]). Answers whether the note took it: where
+	 * it could not, the column stays as dragged until the block is drawn again, and nothing is
+	 * said — a failure to write is the only thing worth a `Notice`.
+	 */
+	private async keepWidth(
+		context: MarkdownPostProcessorContext,
+		element: HTMLElement,
+		source: string,
+		width: number | null,
+	): Promise<boolean> {
+		try {
+			return await writeWidth(this.app, context, element, source, width);
+		} catch (error) {
+			new Notice(`Process Tracker: ${message(error)}`);
+			return false;
 		}
 	}
 

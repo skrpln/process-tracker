@@ -1,7 +1,7 @@
 // Process Tracker — parsing of the `process-tracker` code block source.
 // Pure module: no Obsidian API, covered by test/parse.test.ts.
 
-import { MAX_DAYS } from "../constants.ts";
+import { MAX_DAYS, MIN_WIDTH } from "../constants.ts";
 import { normalizeFolder } from "../entry/compose.ts";
 import { readEntriesMode } from "../entry/mode.ts";
 import type {
@@ -28,9 +28,6 @@ export const DEFAULT_DATES: SortDirection = "desc";
 /** No thread until the block asks for one: a tracker says enough with its checkmarks. */
 export const DEFAULT_STROKE = false;
 
-/** Track names stand in the middle of their column, as they always have. */
-export const DEFAULT_ALIGN: NamesAlign = "center";
-
 const ALIGNMENTS: readonly NamesAlign[] = ["left", "center", "right"];
 
 const KNOWN_KEYS = [
@@ -45,6 +42,7 @@ const KNOWN_KEYS = [
 	"entries",
 	"title",
 	"align",
+	"width",
 ];
 
 /** Parses `key: value` lines of a code block into tracker options. */
@@ -61,7 +59,8 @@ export function parseCodeBlock(source: string): ParseResult {
 		dailyNoteDir: null,
 		entries: null,
 		title: DEFAULT_TITLE,
-		align: DEFAULT_ALIGN,
+		align: null,
+		width: null,
 	};
 	const seen = new Set<string>();
 
@@ -101,6 +100,7 @@ export function parseCodeBlock(source: string): ParseResult {
 		if (key === "entries") options.entries = parseEntries(value, warnings);
 		if (key === "title") options.title = parseTitle(value);
 		if (key === "align") options.align = parseAlign(value, warnings);
+		if (key === "width") options.width = parseWidth(value, warnings);
 	}
 
 	return { options, warnings };
@@ -155,13 +155,47 @@ export function parseTitle(value: string): string {
 	return value.replace(/^(["'])(.*)\1$/, "$2");
 }
 
-/** `align: left | center | right` — how the first column stands. */
-export function parseAlign(value: string, warnings: string[] = []): NamesAlign {
-	const align = ALIGNMENTS.find((known) => known === value.toLowerCase());
-	if (align !== undefined) return align;
+/**
+ * An alignment as it was written, or `null` for anything else. Case and the spaces around it
+ * do not matter. The code block and the settings read the word the same way.
+ */
+export function readAlign(raw: unknown): NamesAlign | null {
+	if (typeof raw !== "string") return null;
+	const word = raw.trim().toLowerCase();
+	return ALIGNMENTS.find((known) => known === word) ?? null;
+}
 
-	warnings.push(`Unknown value "align: ${value}", "${DEFAULT_ALIGN}" is used.`);
-	return DEFAULT_ALIGN;
+/**
+ * `align: left | center | right` — how the first column stands in this table. A block that
+ * says nothing, or says a word that is no alignment, leaves it to the settings of the plugin
+ * ([[expectation]] §10).
+ */
+export function parseAlign(value: string, warnings: string[] = []): NamesAlign | null {
+	const align = readAlign(value);
+	if (align === null) {
+		warnings.push(`Unknown value "align: ${value}", the alignment of the settings is used.`);
+	}
+	return align;
+}
+
+/**
+ * `width: <pixels>` — how wide the first column is. The plugin writes this line itself when
+ * the column is dragged ([[rendering#Ширина первого столбца|rendering]]), and a reader may
+ * write it by hand. Only a whole number is a width; one under the limit is raised to it, as
+ * `days` over its limit is trimmed.
+ */
+export function parseWidth(value: string, warnings: string[] = []): number | null {
+	if (!/^\d+$/.test(value)) {
+		warnings.push(`"width: ${value}" is not a whole number of pixels, ignored.`);
+		return null;
+	}
+
+	const width = Number(value);
+	if (width < MIN_WIDTH) {
+		warnings.push(`"width: ${value}" is under the limit of ${MIN_WIDTH}, raised.`);
+		return MIN_WIDTH;
+	}
+	return width;
 }
 
 /**

@@ -47,6 +47,7 @@ stroke: true
 entries: journal
 title: Morning · {{month}} {{year}}
 align: left
+width: 180
 ```
 ````
 
@@ -62,7 +63,8 @@ align: left
 | `daily_note_dir` | a folder, `/` for the vault root                          | your daily notes folder | Where this table looks for daily notes and creates them. |
 | `entries`     | `notes`, `journal`                                           | the setting | How a click makes an entry for the tracks of this table. |
 | `title`       | text, `{{month}}`, `{{year}}`, `[[links]]`                   | `{{month}} {{year}}` | The caption in the corner above the track names. |
-| `align`       | `left`, `center`, `right`                                    | `center`    | Aligns the track names and the title. |
+| `align`       | `left`, `center`, `right`                                    | the setting | Aligns the track names and the title. |
+| `width`       | a whole number of pixels, from `40`                          | `12em`      | Width of the column of track names. |
 
 >[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
@@ -70,6 +72,7 @@ align: left
 > - without Dataview the table still works and shows every track in the vault;
 > - `track_color` colours this table only, and only the tracks whose own card names no colour: the card always wins. A value that is not a colour is ignored, and a note about it appears under the table;
 > - `stroke` draws a thin line through three or more checked days in a row, in the colour of the checkmarks. A day with an entry that is not done breaks the streak, exactly as an empty day does. The streak is counted over your vault and not over the days in sight: scroll into the middle of a long one and the line still runs off both edges of the table;
+> - `width` is written for you: drag the line between the track names and the dates, and the width is kept in the code block when you let go. Double-click the line to take it out again. A width is kept when the table stands in a note, or in a whole note shown in an embed, a hover preview or a canvas card; elsewhere — a part of a note embedded by its heading, a text card of a canvas — the column holds until the table is drawn again, and `width` can be written by hand;
 > - `title` replaces the month and the year in the corner. `{{month}}` and `{{year}}` are those of the days in sight and follow the scroll; `[[links]]` work and show their preview, any other markdown stays as written. A long title wraps, and its last line stands on the line of the day numbers. `title: ""` leaves the corner empty.
 
 ### 3. Click a cell
@@ -162,6 +165,7 @@ A day without a daily note shows a plain number, so the caption itself tells you
 | Track tag    | Only notes with this tag become tracks. `#` is optional, and nested tags count: `process_tracker/health` matches `process_tracker`. | `process_tracker` |
 | Entry folder | Where new entry notes go.                                    | vault root        |
 | New entries  | Separate notes, or records in the journal of the track. The `entries` property of a track note and of a code block override it. | separate notes |
+| First column alignment | How the track names and the corner title stand. The `align` option of a code block overrides it. | center |
 
 ## Bugs and questions
 

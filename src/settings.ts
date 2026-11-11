@@ -1,9 +1,10 @@
 // Process Tracker — plugin settings.
 // Pure module: the values and their cleanup; the tab that edits them is in settings-tab.ts.
 
+import { readAlign } from "./codeblock/parse.ts";
 import { DEFAULT_TRACK_TAG } from "./constants.ts";
 import { readEntriesMode } from "./entry/mode.ts";
-import type { EntriesMode } from "./model/types.ts";
+import type { EntriesMode, NamesAlign } from "./model/types.ts";
 
 export interface ProcessTrackerSettings {
 	/** Tag that marks a track card, without the leading `#`. */
@@ -12,12 +13,15 @@ export interface ProcessTrackerSettings {
 	entryFolder: string;
 	/** How new entries are made where neither the card nor the code block says. */
 	entries: EntriesMode;
+	/** How the first column stands in a table whose code block does not say. */
+	align: NamesAlign;
 }
 
 export const DEFAULT_SETTINGS: ProcessTrackerSettings = {
 	trackTag: DEFAULT_TRACK_TAG,
 	entryFolder: "",
 	entries: "notes",
+	align: "center",
 };
 
 /**
@@ -39,6 +43,11 @@ export function normalizeEntriesMode(value: unknown): EntriesMode {
 	return readEntriesMode(value) ?? DEFAULT_SETTINGS.entries;
 }
 
+/** A stored alignment the plugin does not know is the centre, where the names always stood. */
+export function normalizeAlign(value: unknown): NamesAlign {
+	return readAlign(value) ?? DEFAULT_SETTINGS.align;
+}
+
 /**
  * Merges stored data with defaults, dropping unknown or malformed values.
  *
@@ -53,5 +62,6 @@ export function normalizeSettings(data: unknown): ProcessTrackerSettings {
 		trackTag: normalizeTrackTag(stored.trackTag),
 		entryFolder: normalizeEntryFolder(stored.entryFolder ?? stored.evidenceFolder),
 		entries: normalizeEntriesMode(stored.entries),
+		align: normalizeAlign(stored.align),
 	};
 }

@@ -12,6 +12,12 @@ export const DEFAULT_DAYS = 7;
 /** Upper bound for `days`, protects the renderer from absurd tables. */
 export const MAX_DAYS = 3650;
 
+/**
+ * Lower bound for `width`, in pixels: a first column narrower than this has no room for a
+ * name, and the line it is dragged by ends up under the edge of the table.
+ */
+export const MIN_WIDTH = 40;
+
 /** Tag that marks a note as a track card, without the leading `#`. */
 export const DEFAULT_TRACK_TAG = "process_tracker";
 

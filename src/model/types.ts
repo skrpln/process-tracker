@@ -44,8 +44,16 @@ export interface TrackerOptions {
 	 * the columns scroll; `""` — an empty corner ([[codeblock-syntax]]).
 	 */
 	title: string;
-	/** How the track names and the corner title stand in their column. */
-	align: NamesAlign;
+	/**
+	 * How the track names and the corner title stand in their column. `null` — as the settings
+	 * of the plugin say.
+	 */
+	align: NamesAlign | null;
+	/**
+	 * Width of the first column in pixels: the line the plugin writes when the column is dragged
+	 * ([[codeblock-syntax]]). `null` — the width of the stylesheet.
+	 */
+	width: number | null;
 }
 
 /** Alignment of the first column: the track names and the corner title. */

@@ -11,8 +11,9 @@ import {
 	parseStartDate,
 	parseStroke,
 	parseTitle,
+	parseWidth,
 } from "../src/codeblock/parse.ts";
-import { MAX_DAYS } from "../src/constants.ts";
+import { MAX_DAYS, MIN_WIDTH } from "../src/constants.ts";
 
 describe("parseCodeBlock", () => {
 	it("returns defaults for an empty block", () => {
@@ -28,7 +29,8 @@ describe("parseCodeBlock", () => {
 			dailyNoteDir: null,
 			entries: null,
 			title: "{{month}} {{year}}",
-			align: "center",
+			align: null,
+			width: null,
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -333,13 +335,43 @@ describe("parseAlign", () => {
 		assert.equal(parseAlign("RIGHT"), "right");
 	});
 
-	it("is centred by default", () => {
-		assert.equal(parseCodeBlock("").options.align, "center");
+	it("says nothing by default, so the settings decide", () => {
+		assert.equal(parseCodeBlock("").options.align, null);
 	});
 
-	it("warns about an unknown value and stays centred", () => {
+	it("warns about an unknown value and leaves it to the settings", () => {
 		const { options, warnings } = parseCodeBlock("align: middle");
-		assert.equal(options.align, "center");
+		assert.equal(options.align, null);
 		assert.equal(warnings.length, 1);
+		assert.match(warnings[0], /settings/);
+	});
+});
+
+describe("width", () => {
+	it("is not set by default", () => {
+		assert.equal(parseCodeBlock("days: 30").options.width, null);
+	});
+
+	it("reads a whole number of pixels", () => {
+		const { options, warnings } = parseCodeBlock("width: 180");
+		assert.equal(options.width, 180);
+		assert.deepEqual(warnings, []);
+		assert.equal(parseWidth(String(MIN_WIDTH)), MIN_WIDTH);
+	});
+
+	it("warns about anything else and leaves the column as it was", () => {
+		for (const value of ["wide", "180.5", "-20", "180px", "1e3"]) {
+			const { options, warnings } = parseCodeBlock(`width: ${value}`);
+			assert.equal(options.width, null, `width: ${value}`);
+			assert.equal(warnings.length, 1, `width: ${value}`);
+		}
+	});
+
+	it("raises a width under the limit to the limit", () => {
+		for (const value of ["0", "10", String(MIN_WIDTH - 1)]) {
+			const { options, warnings } = parseCodeBlock(`width: ${value}`);
+			assert.equal(options.width, MIN_WIDTH, `width: ${value}`);
+			assert.equal(warnings.length, 1, `width: ${value}`);
+		}
 	});
 });

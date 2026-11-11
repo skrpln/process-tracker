@@ -5,6 +5,7 @@ import {
 	captionLabel,
 	dominantLabel,
 	columnWidth,
+	draggedWidth,
 	layoutHeight,
 	screenScale,
 	visibleColumnRange,
@@ -173,5 +174,40 @@ describe("layoutHeight", () => {
 
 	it("does not take a zero height for an answer", () => {
 		assert.equal(layoutHeight("0px", 30, 1), 30);
+	});
+});
+
+describe("draggedWidth", () => {
+	// A column of 180 px in a note, free to move between 40 and 500.
+	const drag = { start: 180, moved: 0, scale: 1, min: 40, max: 500 };
+
+	it("follows the pointer both ways", () => {
+		assert.equal(draggedWidth({ ...drag, moved: 30 }), 210);
+		assert.equal(draggedWidth({ ...drag, moved: -30 }), 150);
+		assert.equal(draggedWidth(drag), 180);
+	});
+
+	it("answers in whole pixels", () => {
+		assert.equal(draggedWidth({ ...drag, start: 180.4, moved: 10.3 }), 191);
+	});
+
+	it("divides the way of the pointer by the zoom of a canvas", () => {
+		assert.equal(draggedWidth({ ...drag, moved: 30, scale: 0.5 }), 240);
+		assert.equal(draggedWidth({ ...drag, moved: 30, scale: 2 }), 195);
+	});
+
+	it("takes a scale it cannot read as none", () => {
+		assert.equal(draggedWidth({ ...drag, moved: 30, scale: 0 }), 210);
+		assert.equal(draggedWidth({ ...drag, moved: 30, scale: Number.NaN }), 210);
+	});
+
+	it("stops at the narrowest and at the widest the column may be", () => {
+		assert.equal(draggedWidth({ ...drag, moved: -1000 }), 40);
+		assert.equal(draggedWidth({ ...drag, moved: 1000 }), 500);
+	});
+
+	it("keeps the lower limit where the frame leaves no room for both", () => {
+		assert.equal(draggedWidth({ ...drag, max: 20 }), 40);
+		assert.equal(draggedWidth({ ...drag, moved: 300, max: 20 }), 40);
 	});
 });

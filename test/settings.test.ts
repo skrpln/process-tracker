@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	DEFAULT_SETTINGS,
+	normalizeAlign,
 	normalizeEntriesMode,
 	normalizeEntryFolder,
 	normalizeSettings,
@@ -42,6 +43,7 @@ describe("normalizeSettings", () => {
 			trackTag: "habits",
 			entryFolder: "entry",
 			entries: "notes",
+			align: "center",
 		});
 	});
 
@@ -78,5 +80,23 @@ describe("normalizeEntriesMode", () => {
 	it("is read from data.json with the rest", () => {
 		assert.equal(normalizeSettings({ entries: "journal" }).entries, "journal");
 		assert.equal(normalizeSettings({ entries: 1 }).entries, "notes");
+	});
+});
+
+describe("normalizeAlign", () => {
+	it("keeps the three alignments, in any case", () => {
+		assert.equal(normalizeAlign("left"), "left");
+		assert.equal(normalizeAlign("center"), "center");
+		assert.equal(normalizeAlign(" Right "), "right");
+	});
+
+	it("answers the centre for an alignment it does not know", () => {
+		assert.equal(normalizeAlign("middle"), "center");
+		assert.equal(normalizeAlign(undefined), "center");
+	});
+
+	it("is read from data.json with the rest", () => {
+		assert.equal(normalizeSettings({ align: "left" }).align, "left");
+		assert.equal(normalizeSettings({ align: 1 }).align, "center");
 	});
 });
