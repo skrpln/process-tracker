@@ -2,7 +2,7 @@
 // Pure module: no Obsidian API, covered by test/entry.test.ts.
 
 import { toIsoDate } from "../dates/grid.ts";
-import type { CellState, Entry } from "../model/types.ts";
+import type { CellState, Entry, EntryDays, PropertyNames, Standing } from "../model/types.ts";
 
 /** Entries of the vault, keyed by track card and date: one day can hold several. */
 export type EntryIndex = ReadonlyMap<string, readonly Entry[]>;
@@ -11,8 +11,9 @@ export type EntryIndex = ReadonlyMap<string, readonly Entry[]>;
 const NO_ENTRIES: readonly Entry[] = Object.freeze([]);
 
 /**
- * Reads the `date` property as `YYYY-MM-DD`. A property written as a timestamp
- * (`2026-09-11T07:30`) keeps its day; anything else is not a date the table can place.
+ * Reads a property that names a day — `created`, `closed`, `date` — as `YYYY-MM-DD`. A value
+ * with a time (`2026-09-11T07:30`, `2026-11-10 14:30`) keeps its day; anything else is not a
+ * date the table can place.
  */
 export function readDate(value: unknown): string | null {
 	if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : toIsoDate(value);
@@ -33,6 +34,59 @@ export function readDone(value: unknown): boolean {
 		return text === "true" || text === "yes";
 	}
 	return false;
+}
+
+/** The properties that say whether a note is an entry and which days it stands in. */
+export type DayNames = Pick<PropertyNames, "done" | "created" | "closed" | "date">;
+
+/**
+ * The days of an entry note, read from its properties; `null` — the note is no entry
+ * ([[entry#Что считается свидетельством|entry]]).
+ *
+ * A note is an entry by its `done`: a vault is full of notes that carry a `created` and link
+ * somewhere in `track`, and those two alone make no entry. A note with the `date` of an
+ * earlier version is one without `done` too — it was a draft then, and it is read as it was.
+ *
+ * The note is made on `created` and closed on `closed`, and the time in either is dropped.
+ * Where one of them is missing, `date` stands in for it: a note that has nothing but `date`
+ * stands in that one day, as it always did. A note with neither `created` nor `date` is made
+ * on the day it was closed, and a done note with no `closed` is closed on the day it was made,
+ * so no entry is left without a day and a done entry always has one to be closed in.
+ */
+export function readDays(frontmatter: Record<string, unknown>, names: DayNames): EntryDays | null {
+	const date = readDate(frontmatter[names.date]);
+	if (date === null && !Object.prototype.hasOwnProperty.call(frontmatter, names.done)) return null;
+
+	const closed = readDate(frontmatter[names.closed]);
+	const created = readDate(frontmatter[names.created]) ?? date ?? closed;
+	if (created === null) return null;
+
+	const done = readDone(frontmatter[names.done]);
+	return { created, closed: done ? (closed ?? date ?? created) : null };
+}
+
+/** The days an entry stands in: the day it was made, and the day it was closed when that is another. */
+export function daysOf(entry: EntryDays): string[] {
+	return entry.closed === null || entry.closed === entry.created
+		? [entry.created]
+		: [entry.created, entry.closed];
+}
+
+/**
+ * How an entry stands in one of its days ([[expectation]] §6, §7).
+ *
+ * An entry closed on another day leaves a trace in the day it was made: the list of that day
+ * shows it with an open box — the work of that day — and the cell does not count it, or every
+ * day a task was started on would stay a draft for good.
+ */
+export function standingIn(entry: EntryDays, date: string): Standing {
+	if (entry.closed === null) return "open";
+	return entry.closed === date ? "closed" : "trace";
+}
+
+/** The entries of a day its cell counts: all of them but the traces. */
+export function countedEntries(entries: readonly Entry[], date: string): Entry[] {
+	return entries.filter((entry) => standingIn(entry, date) !== "trace");
 }
 
 /** Splits a text into what a reader sees as single signs, not into UTF-16 units. */
@@ -64,19 +118,27 @@ export function readSoleSign(text: string): string | null {
 }
 
 /**
- * Reads the `track` property as a link path: `[[card]]`, `[[folder/card|alias]]` and a
- * bare name all give `card`. A list takes its first readable item. Resolving the path
- * against the vault is the adapter's job.
+ * Reads a property that links to notes as link paths: `[[card]]`, `[[folder/card|alias]]` and
+ * a bare name all give `card`, and a list gives the path of every readable item. Resolving the
+ * paths against the vault is the adapter's job.
  */
-export function readTrackLink(value: unknown): string | null {
-	const raw = Array.isArray(value) ? value.find((item) => typeof item === "string") : value;
-	if (typeof raw !== "string") return null;
+export function readTrackLinks(value: unknown): string[] {
+	const links: string[] = [];
+	for (const raw of Array.isArray(value) ? value : [value]) {
+		if (typeof raw !== "string") continue;
 
-	const text = raw.trim();
-	const wikilink = /^\[\[(.*)\]\]$/.exec(text);
-	const link = wikilink === null ? text : wikilink[1];
-	const target = link.split("|")[0].split("#")[0].trim();
-	return target === "" ? null : target;
+		const text = raw.trim();
+		const wikilink = /^\[\[(.*)\]\]$/.exec(text);
+		const link = wikilink === null ? text : wikilink[1];
+		const target = link.split("|")[0].split("#")[0].trim();
+		if (target !== "") links.push(target);
+	}
+	return links;
+}
+
+/** Reads a property that links to one note: the first readable link of `readTrackLinks`. */
+export function readTrackLink(value: unknown): string | null {
+	return readTrackLinks(value)[0] ?? null;
 }
 
 export function entryKey(trackPath: string, date: string): string {
@@ -84,20 +146,23 @@ export function entryKey(trackPath: string, date: string): string {
 }
 
 /**
- * Indexes the entries of the vault by track and date.
+ * Indexes the entries of the vault by track and date. An entry is found under each of its
+ * days: the day it was made and the day it was closed.
  *
  * A day can hold several: a duplicate, a note made by hand, a copy brought by sync. None
  * of them is dropped and none is chosen over the others — the cell is counted from all of
  * them ([[expectation]] §7) and the popup lists them ([[rendering]]). The list is ordered
  * by address, so it reads the same from render to render.
  */
-export function buildEntryIndex(entries: Entry[]): EntryIndex {
+export function buildEntryIndex(entries: readonly Entry[]): EntryIndex {
 	const index = new Map<string, Entry[]>();
 	for (const entry of entries) {
-		const key = entryKey(entry.trackPath, entry.date);
-		const day = index.get(key);
-		if (day === undefined) index.set(key, [entry]);
-		else day.push(entry);
+		for (const date of daysOf(entry)) {
+			const key = entryKey(entry.trackPath, date);
+			const day = index.get(key);
+			if (day === undefined) index.set(key, [entry]);
+			else day.push(entry);
+		}
 	}
 	for (const day of index.values()) day.sort(byId);
 	return index;
@@ -128,7 +193,9 @@ export function byId(left: Entry, right: Entry): number {
  * goes on top, and every one below it moves down a line ([[entry#Журнал трека|entry]]).
  */
 export function entryId(entry: Entry): string {
-	return entry.record === null ? entry.path : recordId(entry.path, entry.date, entry.record.nth);
+	return entry.record === null
+		? entry.path
+		: recordId(entry.path, entry.created, entry.record.nth);
 }
 
 export function recordId(path: string, date: string, nth: number): string {
@@ -168,21 +235,30 @@ export function readEntryId(id: string): EntryAddress {
 
 /**
  * The three states of a cell, counted over the whole day ([[expectation]] §7): the box is
- * checked only when every entry of the day is done, and one open entry keeps the day a
+ * checked only when every entry of the day is closed in it, and one open entry keeps the day a
  * draft. Several entries are a state of affairs, not an error, so the cell carries no mark
  * of its own — the popup is where a day is taken apart ([[entry]]).
+ *
+ * A trace does not count: a day that holds nothing but entries closed on other days is empty.
  */
-export function cellState(entries: readonly Entry[]): CellState {
-	if (entries.length === 0) return "empty";
-	return entries.every((entry) => entry.done) ? "done" : "draft";
+export function cellState(entries: readonly Entry[], date: string): CellState {
+	let closed = 0;
+	for (const entry of entries) {
+		const standing = standingIn(entry, date);
+		if (standing === "open") return "draft";
+		if (standing === "closed") closed++;
+	}
+	return closed === 0 ? "empty" : "done";
 }
 
 /**
  * The sign a day shows instead of its checkmark ([[expectation]] §7): the mark of a closed day
  * of one entry. A draft keeps its box, and a day of several keeps the checkmark or the draft
- * of the common rule — whose mark it would be is not the table's to choose.
+ * of the common rule — whose mark it would be is not the table's to choose. Traces are not
+ * counted here either.
  */
-export function cellMark(entries: readonly Entry[]): string | null {
-	if (entries.length !== 1 || !entries[0].done) return null;
-	return entries[0].mark;
+export function cellMark(entries: readonly Entry[], date: string): string | null {
+	const counted = countedEntries(entries, date);
+	if (counted.length !== 1 || counted[0].closed === null) return null;
+	return counted[0].mark;
 }

@@ -2,72 +2,75 @@
 // records of track journals. Adapter module: resolves links against the vault, reads no file.
 
 import type { App, CachedMetadata, TFile } from "obsidian";
-import {
-	ENTRY_DATE_KEY,
-	ENTRY_DONE_KEY,
-	ENTRY_MARK_KEY,
-	ENTRY_TRACK_KEY,
-	TRACK_JOURNAL_KEY,
-} from "../constants.ts";
-import type { Entry } from "../model/types.ts";
+import type { Entry, PropertyNames } from "../model/types.ts";
 import { readRecords } from "./journal.ts";
 import type { JournalRecord, Outline } from "./journal.ts";
-import { readDate, readDone, readEntryId, readMark, readTrackLink } from "./state.ts";
+import { readDays, readEntryId, readMark, readTrackLinks } from "./state.ts";
 
 /**
- * Every entry note of the vault. A note counts as an entry when it names a track
- * card and a date — the two properties the plugin identifies it by ([[expectation]] §6)
- * — however it was created: by the tracker, by a template or by hand.
+ * Every entry note of the vault, as an entry of each track it links to. A note counts as an
+ * entry by its properties ([[expectation]] §6), however it was created: by the tracker, by a
+ * template or by hand.
  */
-export function collectEntries(app: App): Entry[] {
+export function collectEntries(app: App, names: PropertyNames): Entry[] {
 	const entries: Entry[] = [];
 	for (const file of app.vault.getMarkdownFiles()) {
-		const entry = toEntry(app, file);
-		if (entry !== null) entries.push(entry);
+		for (const entry of toEntries(app, file, names)) entries.push(entry);
 	}
 	return entries;
 }
 
 /**
  * The entry at this address as the metadata cache has it; `null` when it is gone or is no
- * entry. A record belongs to the track of the cell that names it: the address says where the
- * record stands, the cell says whose journal that is.
+ * entry of this track. A note can be an entry of several tracks, and a record belongs to the
+ * track of the cell that names it: the address says where the entry stands, the cell says
+ * whose it is.
  */
-export function entryAt(app: App, id: string, trackPath: string): Entry | null {
+export function entryAt(
+	app: App,
+	id: string,
+	trackPath: string,
+	names: PropertyNames,
+): Entry | null {
 	const address = readEntryId(id);
 	const file = app.vault.getFileByPath(address.path);
 	if (file === null) return null;
-	if (address.record === null) return toEntry(app, file);
+	if (address.record === null) {
+		return toEntries(app, file, names).find((entry) => entry.trackPath === trackPath) ?? null;
+	}
 
 	const { date, nth } = address.record;
 	const records = recordsIn(app, file, trackPath);
-	return records.find((entry) => entry.date === date && entry.record?.nth === nth) ?? null;
+	return records.find((entry) => entry.created === date && entry.record?.nth === nth) ?? null;
 }
 
-export function toEntry(app: App, file: TFile): Entry | null {
+/**
+ * One note as entries: one for each track card its `track` property links to — a single link
+ * or a list of them — and none when the note is no entry
+ * ([[entry#Что считается свидетельством|entry]]).
+ *
+ * The days are asked first: they are a few property lookups, and they turn away nearly every
+ * note of the vault before a link is resolved.
+ */
+export function toEntries(app: App, file: TFile, names: PropertyNames): Entry[] {
 	const cache = app.metadataCache.getFileCache(file);
 	const frontmatter = cache?.frontmatter;
-	if (cache === null || cache === undefined || frontmatter === undefined) return null;
+	if (cache === null || cache === undefined || frontmatter === undefined) return [];
 
-	const date = readDate(frontmatter[ENTRY_DATE_KEY]);
-	if (date === null) return null;
+	const days = readDays(frontmatter, names);
+	if (days === null) return [];
 
-	const link = frontmatterLink(cache, frontmatter, ENTRY_TRACK_KEY);
-	if (link === null) return null;
-
-	// The link is resolved the way Obsidian resolves it in the note itself, so a bare
-	// `[[cleaning]]` finds the card wherever it lies.
-	const target = app.metadataCache.getFirstLinkpathDest(link, file.path);
-	if (target === null) return null;
-
-	return {
-		path: file.path,
-		trackPath: target.path,
-		date,
-		done: readDone(frontmatter[ENTRY_DONE_KEY]),
-		mark: readMark(frontmatter[ENTRY_MARK_KEY]),
-		record: null,
-	};
+	const mark = readMark(frontmatter[names.mark]);
+	const entries: Entry[] = [];
+	for (const link of frontmatterLinks(cache, frontmatter, names.track)) {
+		// The link is resolved the way Obsidian resolves it in the note itself, so a bare
+		// `[[cleaning]]` finds the card wherever it lies.
+		const target = app.metadataCache.getFirstLinkpathDest(link, file.path);
+		// A list that names one card twice is still one entry of that track.
+		if (target === null || entries.some((entry) => entry.trackPath === target.path)) continue;
+		entries.push({ path: file.path, trackPath: target.path, ...days, mark, record: null });
+	}
+	return entries;
 }
 
 /**
@@ -79,21 +82,25 @@ export function toEntry(app: App, file: TFile): Entry | null {
  * Both places are asked whatever the mode of the track: the mode decides how an entry is made,
  * and a track that changed its mind keeps the history it has.
  */
-export function collectJournalEntries(app: App, trackPaths: readonly string[]): Entry[] {
-	return trackPaths.flatMap((trackPath) => journalEntries(app, trackPath));
+export function collectJournalEntries(
+	app: App,
+	trackPaths: readonly string[],
+	names: PropertyNames,
+): Entry[] {
+	return trackPaths.flatMap((trackPath) => journalEntries(app, trackPath, names));
 }
 
 /** The records of the journals of one track, the card's own first. */
-export function journalEntries(app: App, trackPath: string): Entry[] {
-	return journalsOf(app, trackPath).flatMap((file) => recordsIn(app, file, trackPath));
+export function journalEntries(app: App, trackPath: string, names: PropertyNames): Entry[] {
+	return journalsOf(app, trackPath, names).flatMap((file) => recordsIn(app, file, trackPath));
 }
 
 /** The notes a track keeps records in: the card, and the note its `journal` links to. */
-export function journalsOf(app: App, trackPath: string): TFile[] {
+export function journalsOf(app: App, trackPath: string, names: PropertyNames): TFile[] {
 	const card = app.vault.getFileByPath(trackPath);
 	if (card === null) return [];
 
-	const linked = linkedJournal(app, card).file;
+	const linked = linkedJournal(app, card, names).file;
 	return linked === null || linked.path === card.path ? [card] : [card, linked];
 }
 
@@ -101,14 +108,18 @@ export function journalsOf(app: App, trackPath: string): TFile[] {
  * The journal a card links to: the link as written, and the note it leads to — `null` while
  * there is none yet, or when it leads to something that is not a note.
  */
-export function linkedJournal(app: App, card: TFile): { link: string | null; file: TFile | null } {
+export function linkedJournal(
+	app: App,
+	card: TFile,
+	names: PropertyNames,
+): { link: string | null; file: TFile | null } {
 	const cache = app.metadataCache.getFileCache(card);
 	const frontmatter = cache?.frontmatter;
 	if (cache === null || cache === undefined || frontmatter === undefined) {
 		return { link: null, file: null };
 	}
 
-	const link = frontmatterLink(cache, frontmatter, TRACK_JOURNAL_KEY);
+	const link = frontmatterLink(cache, frontmatter, names.journal);
 	if (link === null) return { link: null, file: null };
 	const file = app.metadataCache.getFirstLinkpathDest(link, card.path);
 	return { link, file: file !== null && file.extension === "md" ? file : null };
@@ -138,30 +149,40 @@ export function outlineOf(cache: CachedMetadata): Outline {
 	return { headings, tasks, lines: Number.POSITIVE_INFINITY };
 }
 
+/** A record has one day, the date of its heading: it is made in it and closed in it. */
 export function toRecordEntry(path: string, trackPath: string, record: JournalRecord): Entry {
 	return {
 		path,
 		trackPath,
-		date: record.date,
-		done: record.box?.done ?? false,
+		created: record.date,
+		closed: record.box?.done === true ? record.date : null,
 		mark: record.mark,
 		record: { nth: record.nth, heading: record.heading, line: record.line },
 	};
 }
 
 /**
- * The link written in a frontmatter property. Obsidian parses links inside frontmatter
- * itself and lists them in `frontmatterLinks` (`track.0` for a list item); the raw
- * property value is the fallback for a vault whose cache carries no such list.
+ * The links written in a frontmatter property: one, or a list of them. Obsidian parses links
+ * inside frontmatter itself and lists them in `frontmatterLinks` (`track.0` for a list item);
+ * the raw property value is the fallback for a vault whose cache carries no such list.
  */
+export function frontmatterLinks(
+	cache: CachedMetadata,
+	frontmatter: Record<string, unknown>,
+	key: string,
+): string[] {
+	const own = (cache.frontmatterLinks ?? []).filter(
+		(link) => link.key === key || link.key.startsWith(`${key}.`),
+	);
+	if (own.length > 0) return readTrackLinks(own.map((link) => link.link));
+	return readTrackLinks(frontmatter[key]);
+}
+
+/** The link of a property that names one note: the first of `frontmatterLinks`. */
 export function frontmatterLink(
 	cache: CachedMetadata,
 	frontmatter: Record<string, unknown>,
 	key: string,
 ): string | null {
-	const own = (cache.frontmatterLinks ?? []).find(
-		(link) => link.key === key || link.key.startsWith(`${key}.`),
-	);
-	if (own !== undefined) return readTrackLink(own.link);
-	return readTrackLink(frontmatter[key]);
+	return frontmatterLinks(cache, frontmatter, key)[0] ?? null;
 }

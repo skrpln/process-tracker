@@ -1,27 +1,61 @@
 // Unit tests for the name and the text of a new entry note.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { composeEntry, entryFileName, entryPath, recordBody } from "../src/entry/compose.ts";
+import { DEFAULT_PROPERTY_NAMES } from "../src/constants.ts";
+import {
+	composeEntry as compose,
+	entryFileName,
+	entryPath,
+	recordBody,
+} from "../src/entry/compose.ts";
+import type { EntryFields } from "../src/entry/compose.ts";
 
-const fields = { track: "[[cleaning]]", date: "2026-09-13", done: false };
+const fields: EntryFields = { track: "[[cleaning]]", created: "2026-09-13", done: false, closed: null };
+
+/** Composes under the names the plugin uses until the settings rename them. */
+function composeEntry(template: string | null, given: EntryFields): string {
+	return compose(template, given, DEFAULT_PROPERTY_NAMES);
+}
 
 describe("composeEntry", () => {
 	it("writes a bare note when the card names no template", () => {
 		assert.equal(
 			composeEntry(null, fields),
-			'---\ntrack: "[[cleaning]]"\ndate: 2026-09-13\ndone: false\n---\n',
+			'---\ntrack: "[[cleaning]]"\ncreated: 2026-09-13\ndone: false\n---\n',
 		);
 	});
 
-	it("checks the box when the click asked for it", () => {
-		assert.match(composeEntry(null, { ...fields, done: true }), /^done: true$/m);
+	it("checks the box when the click asked for it, and closes it on the day of the cell", () => {
+		const closed = { ...fields, done: true, closed: "2026-09-13 21:40" };
+		assert.equal(
+			composeEntry(null, closed),
+			'---\ntrack: "[[cleaning]]"\ncreated: 2026-09-13\ndone: true\nclosed: 2026-09-13 21:40\n---\n',
+		);
+	});
+
+	it("leaves the closed of a template alone when the entry is open", () => {
+		assert.match(composeEntry("---\nclosed:\n---\n", fields), /^closed:$/m);
+	});
+
+	it("leaves the date of an older template alone and does not write one", () => {
+		const text = composeEntry("---\ntrack:\ndate:\ndone: false\n---\n", fields);
+		assert.equal(text, '---\ntrack: "[[cleaning]]"\ndate:\ndone: false\ncreated: 2026-09-13\n---\n');
+	});
+
+	it("writes the properties under the names the settings give them", () => {
+		const names = { track: "project", created: "made", done: "finished", closed: "ended" };
+		const text = compose(null, { ...fields, done: true, closed: "2026-09-13 08:00" }, names);
+		assert.equal(
+			text,
+			'---\nproject: "[[cleaning]]"\nmade: 2026-09-13\nfinished: true\nended: 2026-09-13 08:00\n---\n',
+		);
 	});
 
 	it("fills the empty properties of a template", () => {
-		const template = "---\ntrack:\ndate:\ndone: false\n---\n\nТело шаблона\n";
+		const template = "---\ntrack:\ncreated:\ndone: false\n---\n\nТело шаблона\n";
 		assert.equal(
 			composeEntry(template, fields),
-			'---\ntrack: "[[cleaning]]"\ndate: 2026-09-13\ndone: false\n---\n\nТело шаблона\n',
+			'---\ntrack: "[[cleaning]]"\ncreated: 2026-09-13\ndone: false\n---\n\nТело шаблона\n',
 		);
 	});
 
@@ -29,7 +63,7 @@ describe("composeEntry", () => {
 		const template = "---\nmood:\ntrack:\ntags:\n  - entry\n---\n";
 		assert.equal(
 			composeEntry(template, fields),
-			'---\nmood:\ntrack: "[[cleaning]]"\ntags:\n  - entry\ndate: 2026-09-13\ndone: false\n---\n',
+			'---\nmood:\ntrack: "[[cleaning]]"\ntags:\n  - entry\ncreated: 2026-09-13\ndone: false\n---\n',
 		);
 	});
 
@@ -37,15 +71,15 @@ describe("composeEntry", () => {
 		const template = "---\ntrack:\n  - [[old]]\n  - [[older]]\nmood: ясно\n---\n";
 		assert.equal(
 			composeEntry(template, fields),
-			'---\ntrack: "[[cleaning]]"\nmood: ясно\ndate: 2026-09-13\ndone: false\n---\n',
+			'---\ntrack: "[[cleaning]]"\nmood: ясно\ncreated: 2026-09-13\ndone: false\n---\n',
 		);
 	});
 
-	it("wins over a template that fills the three properties itself", () => {
-		const template = "---\ntrack: [[wrong]]\ndate: <% tp.date.now() %>\ndone: true\n---\n";
+	it("wins over a template that fills its properties itself", () => {
+		const template = "---\ntrack: [[wrong]]\ncreated: <% tp.date.now() %>\ndone: true\n---\n";
 		assert.equal(
 			composeEntry(template, fields),
-			'---\ntrack: "[[cleaning]]"\ndate: 2026-09-13\ndone: false\n---\n',
+			'---\ntrack: "[[cleaning]]"\ncreated: 2026-09-13\ndone: false\n---\n',
 		);
 	});
 
@@ -57,7 +91,7 @@ describe("composeEntry", () => {
 	it("gives frontmatter to a template that has none", () => {
 		assert.equal(
 			composeEntry("Просто текст\n", fields),
-			'---\ntrack: "[[cleaning]]"\ndate: 2026-09-13\ndone: false\n---\nПросто текст\n',
+			'---\ntrack: "[[cleaning]]"\ncreated: 2026-09-13\ndone: false\n---\nПросто текст\n',
 		);
 	});
 

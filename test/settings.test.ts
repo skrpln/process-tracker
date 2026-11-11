@@ -6,6 +6,8 @@ import {
 	normalizeAlign,
 	normalizeEntriesMode,
 	normalizeEntryFolder,
+	normalizePropertyName,
+	normalizePropertyNames,
 	normalizeSettings,
 	normalizeTrackTag,
 } from "../src/settings.ts";
@@ -44,6 +46,7 @@ describe("normalizeSettings", () => {
 			entryFolder: "entry",
 			entries: "notes",
 			align: "center",
+			properties: DEFAULT_SETTINGS.properties,
 		});
 	});
 
@@ -98,5 +101,53 @@ describe("normalizeAlign", () => {
 	it("is read from data.json with the rest", () => {
 		assert.equal(normalizeSettings({ align: "left" }).align, "left");
 		assert.equal(normalizeSettings({ align: 1 }).align, "center");
+	});
+});
+
+describe("property names", () => {
+	it("are the names the plugin always used, until the settings say otherwise", () => {
+		assert.deepEqual(normalizeSettings(null).properties, {
+			track: "track",
+			done: "done",
+			created: "created",
+			closed: "closed",
+			date: "date",
+			mark: "mark",
+			trackName: "track_name",
+			trackColor: "track_color",
+			template: "template",
+			entries: "entries",
+			journal: "journal",
+		});
+	});
+
+	it("keeps a name as it was typed, without the spaces around it", () => {
+		assert.equal(normalizePropertyName("  finished ", "closed"), "finished");
+	});
+
+	it("answers the default name for an empty or unreadable field", () => {
+		assert.equal(normalizePropertyName("   ", "closed"), "closed");
+		assert.equal(normalizePropertyName(undefined, "trackName"), "track_name");
+		assert.equal(normalizePropertyName(7, "done"), "done");
+	});
+
+	it("reads the names stored, and the defaults for the rest", () => {
+		const names = normalizePropertyNames({ closed: "finished", track: "", unknown: "x" });
+		assert.equal(names.closed, "finished");
+		assert.equal(names.track, "track");
+		assert.equal(names.done, "done");
+		assert.equal("unknown" in names, false);
+	});
+
+	it("stands on the defaults when data.json holds no names or something else", () => {
+		assert.deepEqual(normalizePropertyNames("closed"), DEFAULT_SETTINGS.properties);
+		assert.deepEqual(normalizeSettings({ properties: { mark: "rating" } }).properties.mark, "rating");
+	});
+
+	it("does not share the defaults with the settings it makes", () => {
+		const settings = normalizeSettings(null);
+		settings.properties.done = "finished";
+		assert.equal(normalizeSettings(null).properties.done, "done");
+		assert.equal(DEFAULT_SETTINGS.properties.done, "done");
 	});
 });

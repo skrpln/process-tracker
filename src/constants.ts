@@ -1,5 +1,7 @@
 // Process Tracker — shared constants.
 
+import type { PropertyNames } from "./model/types.ts";
+
 /** Language of the code block processed by the plugin. */
 export const CODE_BLOCK_LANGUAGE = "process-tracker";
 
@@ -21,32 +23,24 @@ export const MIN_WIDTH = 40;
 /** Tag that marks a note as a track card, without the leading `#`. */
 export const DEFAULT_TRACK_TAG = "process_tracker";
 
-/** Frontmatter key that overrides the displayed track name. */
-export const TRACK_NAME_KEY = "track_name";
-
-/** Frontmatter key that gives a track a colour of its own, in any form CSS understands. */
-export const TRACK_COLOR_KEY = "track_color";
-
-/** Frontmatter key of a track card that links to the template of its entries. */
-export const TRACK_TEMPLATE_KEY = "template";
-
-/** Frontmatter key of an entry note that links to its track card. */
-export const ENTRY_TRACK_KEY = "track";
-
-/** Frontmatter key that dates an entry note, as `YYYY-MM-DD`. */
-export const ENTRY_DATE_KEY = "date";
-
-/** Frontmatter key that checks the box: only a true value counts as done. */
-export const ENTRY_DONE_KEY = "done";
-
-/** Frontmatter key of an entry note whose first visible sign a closed day shows instead of the checkmark. */
-export const ENTRY_MARK_KEY = "mark";
-
-/** Frontmatter key of a track card that says how its new entries are made: `notes` or `journal`. */
-export const TRACK_ENTRIES_KEY = "entries";
-
-/** Frontmatter key of a track card that links to the journal of the track. */
-export const TRACK_JOURNAL_KEY = "journal";
+/**
+ * The properties the plugin reads and writes, under the names they go by until the settings
+ * rename them. No module reads a property by a name of its own: the names come from the
+ * settings, as a parameter ([[architecture#Настройки|architecture]]).
+ */
+export const DEFAULT_PROPERTY_NAMES: Readonly<PropertyNames> = {
+	track: "track",
+	done: "done",
+	created: "created",
+	closed: "closed",
+	date: "date",
+	mark: "mark",
+	trackName: "track_name",
+	trackColor: "track_color",
+	template: "template",
+	entries: "entries",
+	journal: "journal",
+};
 
 /** The heading of the section a track card keeps its own journal under, `# Journal`. */
 export const JOURNAL_SECTION = "Journal";

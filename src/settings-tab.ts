@@ -1,22 +1,24 @@
 // Process Tracker — the settings tab of the plugin ([[architecture]]).
-// Adapter module: describes four fields and writes them into the settings, nothing else.
+// Adapter module: describes the fields and writes them into the settings, nothing else.
 
 import { PluginSettingTab, Setting } from "obsidian";
 import type { App, SettingDefinitionItem } from "obsidian";
 import type ProcessTrackerPlugin from "./main.ts";
-import type { EntriesMode, NamesAlign } from "./model/types.ts";
+import { DEFAULT_PROPERTY_NAMES } from "./constants.ts";
+import type { EntriesMode, NamesAlign, PropertyNames } from "./model/types.ts";
 import {
 	DEFAULT_SETTINGS,
 	normalizeAlign,
 	normalizeEntriesMode,
 	normalizeEntryFolder,
+	normalizePropertyName,
 	normalizeTrackTag,
 } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
 
 /** One field of the tab: what it is called, what it says, how a value is cleaned up. */
 interface FieldBase {
-	key: keyof ProcessTrackerSettings;
+	key: Exclude<keyof ProcessTrackerSettings, "properties">;
 	name: string;
 	desc: string;
 	normalize: (value: unknown) => string;
@@ -95,6 +97,57 @@ const FIELDS: readonly Field[] = [
 	},
 ];
 
+/** One property whose name can be set, and what the reader is told about it. */
+interface PropertyField {
+	key: keyof PropertyNames;
+	desc: string;
+}
+
+/**
+ * The properties of [[expectation]] §10, in two groups: those of an entry note and those of a
+ * track card. A field is called by the default name of its property and shows that name while
+ * it is empty — an empty field means the default.
+ */
+const PROPERTY_GROUPS: readonly { heading: string; fields: readonly PropertyField[] }[] = [
+	{
+		heading: "Entry properties",
+		fields: [
+			{ key: "track", desc: "Links an entry note to its track: one link, or a list of them." },
+			{ key: "done", desc: "Checks the day: true or false." },
+			{
+				key: "created",
+				desc: "The day an entry was made. A click on a cell writes the day of that cell.",
+			},
+			{
+				key: "closed",
+				desc:
+					"The day and time an entry was closed: written when the entry is checked, " +
+					"removed when it is unchecked.",
+			},
+			{
+				key: "date",
+				desc:
+					"The day of an entry made by an earlier version. It stands in for created " +
+					"and closed where those are missing.",
+			},
+			{ key: "mark", desc: "One sign a checked day shows instead of its checkmark." },
+		],
+	},
+	{
+		heading: "Track properties",
+		fields: [
+			{ key: "trackName", desc: "Row title of a track; the file name otherwise." },
+			{ key: "trackColor", desc: "Color of the checkmarks of a track." },
+			{ key: "template", desc: "Links a track to the template of its new entries." },
+			{ key: "entries", desc: "How a click makes an entry of a track: notes or journal." },
+			{ key: "journal", desc: "Links a track to its journal." },
+		],
+	},
+];
+
+/** What the key of a control starts with when the control names a property. */
+const PROPERTY_PREFIX = "properties.";
+
 /**
  * Every change is cleaned up and saved — Obsidian has no Save button, and a settings tab
  * that loses what was typed is worse than none.
@@ -115,7 +168,7 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 	}
 
 	getSettingDefinitions(): SettingDefinitionItem[] {
-		return FIELDS.map(
+		const fields = FIELDS.map(
 			(field): SettingDefinitionItem => ({
 				name: field.name,
 				desc: field.desc,
@@ -125,14 +178,44 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 						: { type: "dropdown", key: field.key, options: field.options },
 			}),
 		);
+		const groups = PROPERTY_GROUPS.map(
+			(group): SettingDefinitionItem => ({
+				type: "group",
+				heading: group.heading,
+				items: group.fields.map((field) => ({
+					name: DEFAULT_PROPERTY_NAMES[field.key],
+					desc: field.desc,
+					control: {
+						type: "text",
+						key: PROPERTY_PREFIX + field.key,
+						placeholder: DEFAULT_PROPERTY_NAMES[field.key],
+					},
+				})),
+			}),
+		);
+		return [...fields, ...groups];
 	}
 
 	getControlValue(key: string): unknown {
+		const property = propertyOf(key);
+		if (property !== undefined) return this.plugin.settings.properties[property];
+
 		const field = fieldOf(key);
 		return field === undefined ? undefined : this.plugin.settings[field.key];
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
+		const property = propertyOf(key);
+		if (property !== undefined) {
+			// A new object, not a changed one: the defaults must stay what they are.
+			this.plugin.settings.properties = {
+				...this.plugin.settings.properties,
+				[property]: normalizePropertyName(value, property),
+			};
+			await this.plugin.saveSettings();
+			return;
+		}
+
 		const field = fieldOf(key);
 		if (field === undefined) return;
 		// Each field cleans its own value, so the value fits the key it came with.
@@ -157,9 +240,36 @@ export class ProcessTrackerSettingTab extends PluginSettingTab {
 				);
 			}
 		}
+
+		for (const group of PROPERTY_GROUPS) {
+			new Setting(this.containerEl).setName(group.heading).setHeading();
+			for (const field of group.fields) {
+				const name = DEFAULT_PROPERTY_NAMES[field.key];
+				new Setting(this.containerEl)
+					.setName(name)
+					.setDesc(field.desc)
+					.addText((text) =>
+						text
+							.setPlaceholder(name)
+							.setValue(this.plugin.settings.properties[field.key])
+							.onChange((changed) =>
+								this.setControlValue(PROPERTY_PREFIX + field.key, changed),
+							),
+					);
+			}
+		}
 	}
 }
 
 function fieldOf(key: string): Field | undefined {
 	return FIELDS.find((field) => field.key === key);
+}
+
+/** The property a control names, or `undefined` when the key is one of the plain fields. */
+function propertyOf(key: string): keyof PropertyNames | undefined {
+	if (!key.startsWith(PROPERTY_PREFIX)) return undefined;
+	const name = key.slice(PROPERTY_PREFIX.length);
+	return Object.prototype.hasOwnProperty.call(DEFAULT_PROPERTY_NAMES, name)
+		? (name as keyof PropertyNames)
+		: undefined;
 }

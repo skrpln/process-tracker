@@ -79,22 +79,69 @@ export interface TrackCard {
 }
 
 /**
- * An entry: one day of one track — a note of its own, or a record in the journal of the track.
+ * The names of the properties the plugin reads and writes. Each can be renamed in the settings
+ * ([[architecture#Настройки|architecture]]); the defaults are in `constants.ts`.
  */
-export interface Entry {
+export interface PropertyNames {
+	/** Of an entry note: the link to its track card, or a list of them. */
+	track: string;
+	/** Of an entry note: checks the box — only a true value counts as done. */
+	done: string;
+	/** Of an entry note: the day it was made. */
+	created: string;
+	/** Of an entry note: the day and the time it was closed. */
+	closed: string;
+	/** Of an entry note made by an earlier version: the day it stands in. */
+	date: string;
+	/** Of an entry note: the sign a closed day shows instead of the checkmark. */
+	mark: string;
+	/** Of a track card: overrides the displayed track name. */
+	trackName: string;
+	/** Of a track card: a colour of its own, in any form CSS understands. */
+	trackColor: string;
+	/** Of a track card: the link to the template of its entries. */
+	template: string;
+	/** Of a track card: how its new entries are made, `notes` or `journal`. */
+	entries: string;
+	/** Of a track card: the link to the journal of the track. */
+	journal: string;
+}
+
+/**
+ * The days of an entry ([[expectation]] §6). It stands in the day it was made and in the day
+ * it was closed; made and closed on one day, it stands there once.
+ */
+export interface EntryDays {
+	/**
+	 * The day the entry was made, `YYYY-MM-DD`: the `created` property of a note, the date in
+	 * the heading of a record.
+	 */
+	created: string;
+	/** The day the entry was closed; `null` while it is open. A done entry always has one. */
+	closed: string | null;
+}
+
+/**
+ * An entry of one track — a note of its own, or a record in the journal of the track. A note
+ * that links to several tracks is an entry of each of them.
+ */
+export interface Entry extends EntryDays {
 	/** The note; for a record, the journal it stands in. */
 	path: string;
 	/** Path of the track card the `track` property points at. */
 	trackPath: string;
-	/** Local calendar date as `YYYY-MM-DD`. */
-	date: string;
-	/** The `done` property; `false` for a draft. */
-	done: boolean;
 	/** The first visible sign of the `mark` property; `null` — no mark ([[expectation]] §6). */
 	mark: string | null;
 	/** Where the record stands in its journal; `null` — the entry is a note of its own. */
 	record: EntryRecord | null;
 }
+
+/**
+ * How an entry stands in one of its days ([[expectation]] §7): open, closed on this very day,
+ * or closed on another — then the day it was made keeps its trace, which the list of the day
+ * shows and the cell does not count.
+ */
+export type Standing = "open" | "closed" | "trace";
 
 /** A record of a track journal: a `## YYYY-MM-DD` heading and the text under it. */
 export interface EntryRecord {

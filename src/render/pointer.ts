@@ -4,11 +4,11 @@ import { Keymap, MarkdownRenderChild } from "obsidian";
 import type { App, HoverParent, HoverPopover } from "obsidian";
 import { HOVER_SOURCE } from "../constants.ts";
 import { entryAt } from "../entry/source.ts";
-import { entryPreview } from "../entry/state.ts";
-import type { CellState, Entry } from "../model/types.ts";
+import { entryPreview, standingIn } from "../entry/state.ts";
+import type { CellState, Entry, PropertyNames } from "../model/types.ts";
 import { DayPopup } from "./popup.ts";
 import type { DayHandlers } from "./popup.ts";
-import { CREATABLE_CLASS, entryIdsOf } from "./table.ts";
+import { CREATABLE_CLASS, countedIdsOf, entryIdsOf, traceIdsOf } from "./table.ts";
 
 /** How long the pointer rests on a day before its list opens, as a preview waits too. */
 const OPEN_DELAY = 300;
@@ -26,7 +26,11 @@ export interface CellTarget {
 	trackPath: string;
 	date: string;
 	state: CellState;
-	/** Addresses of the entries behind the cell, in the order the list shows them. */
+	/**
+	 * Addresses of the entries the cell counts, in the order the list shows them. An entry
+	 * closed on another day leaves only a trace here and is not among them: a click works with
+	 * the day as the cell shows it ([[expectation]] §7).
+	 */
 	entryIds: string[];
 }
 
@@ -67,6 +71,8 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		private readonly onClick: (target: CellTarget, mod: boolean) => void,
 		private readonly handlers: DayHandlers,
 		private readonly onDailyNote: DailyNoteRequest,
+		/** What the properties of an entry are called, for reading the entries of a cell. */
+		private readonly names: PropertyNames,
 	) {
 		super(containerEl);
 	}
@@ -108,6 +114,10 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	 * core Page preview plugin, a day of several opens the list of the plugin, an empty day
 	 * shows nothing, and a link of the table — a track name, or a day caption that leads to
 	 * a daily note — shows the note behind it.
+	 *
+	 * A day that holds an entry closed on another day opens the list even when that entry is
+	 * all it holds: only the list shows it as it stands in this day — an open box, which closes
+	 * it here ([[expectation]] §7).
 	 */
 	private onHover(event: MouseEvent): void {
 		const cell = closestOf(event.target, ".process-tracker__cell");
@@ -126,7 +136,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 
 	private onCellHover(cell: HTMLElement, event: MouseEvent): void {
 		const ids = entryIdsOf(cell);
-		if (ids.length > 1) {
+		if (ids.length > 1 || traceIdsOf(cell).length > 0) {
 			const open = this.liveDay();
 			// The pointer came back to the cell the list belongs to: the list stays.
 			if (open !== null && open.cell === cell) {
@@ -141,7 +151,8 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 
 		this.cancelOpen();
 		this.liveDay()?.scheduleClose();
-		const entry = ids.length === 1 ? entryAt(this.app, ids[0], cell.dataset.track ?? "") : null;
+		const entry =
+			ids.length === 1 ? entryAt(this.app, ids[0], cell.dataset.track ?? "", this.names) : null;
 		if (entry !== null) this.preview({ element: cell, path: entryPreview(entry) }, event);
 	}
 
@@ -174,8 +185,8 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 
 	/**
 	 * Opens the list of one day. The notes are read again here, so the boxes show what the
-	 * vault says at the moment the list appears. A day that thinned out to one note in the
-	 * meantime gets no list: the cell itself is repainted by the subscription.
+	 * vault says at the moment the list appears. A day that thinned out to one note it counts
+	 * in the meantime gets no list: the cell itself is repainted by the subscription.
 	 */
 	private openDayList(cell: HTMLElement, ids: string[]): void {
 		this.opening = 0;
@@ -183,10 +194,12 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 
 		const entries: Entry[] = [];
 		for (const id of ids) {
-			const entry = entryAt(this.app, id, cell.dataset.track ?? "");
+			const entry = entryAt(this.app, id, cell.dataset.track ?? "", this.names);
 			if (entry !== null) entries.push(entry);
 		}
-		if (entries.length < 2) return;
+		const date = cell.dataset.date ?? "";
+		const single = entries.length === 1 && standingIn(entries[0], date) !== "trace";
+		if (entries.length === 0 || single) return;
 
 		this.closeDay();
 		this.day = new DayPopup(this.app, this.sourcePath, cell, entries, this.handlers);
@@ -223,7 +236,7 @@ function readCell(node: EventTarget | null): CellTarget | null {
 		trackPath,
 		date,
 		state: (cell.dataset.state ?? "empty") as CellState,
-		entryIds: entryIdsOf(cell),
+		entryIds: countedIdsOf(cell),
 	};
 }
 

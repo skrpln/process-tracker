@@ -3,7 +3,31 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App, TFile } from "obsidian";
-import { createEntry, createRecord, setEntryDone } from "../src/entry/write.ts";
+import { DEFAULT_PROPERTY_NAMES } from "../src/constants.ts";
+import {
+	createEntry as createWith,
+	createRecord as createRecordWith,
+	setEntryDone as setDoneWith,
+} from "../src/entry/write.ts";
+import type { PropertyNames } from "../src/model/types.ts";
+
+/** The names the plugin writes until the settings rename them. */
+const names: PropertyNames = DEFAULT_PROPERTY_NAMES;
+
+/** The clock of the tests: 10 November 2026, 14:30. */
+const NOW = new Date(2026, 10, 10, 14, 30);
+
+const createEntry = (app: App, track: string, date: string, done: boolean, folder: string) =>
+	createWith(app, track, date, done, folder, names, NOW);
+const createRecord = (
+	app: App,
+	track: string,
+	date: string,
+	done: boolean,
+	fill: (template: string, date: string) => string,
+) => createRecordWith(app, track, date, done, fill, names);
+const setEntryDone = (app: App, id: string, done: boolean, day = "2026-11-10") =>
+	setDoneWith(app, id, done, day, names, NOW);
 
 interface Note {
 	path: string;
@@ -88,15 +112,26 @@ describe("createEntry", () => {
 		assert.deepEqual(vault.created, [
 			{
 				path: "cleaning 2026-09-13.md",
-				text: '---\ntrack: "[[cleaning]]"\ndate: 2026-09-13\ndone: false\n---\n',
+				text: '---\ntrack: "[[cleaning]]"\ncreated: 2026-09-13\ndone: false\n---\n',
 			},
 		]);
 	});
 
-	it("checks the box when the click asked for it", async () => {
+	it("checks the box when the click asked for it, closing the note on the day of the cell", async () => {
 		const vault = vaultWith([card]);
 		await createEntry(vault.app, "cleaning.md", "2026-09-13", true, "");
-		assert.match(vault.created[0].text, /^done: true$/m);
+		assert.equal(
+			vault.created[0].text,
+			'---\ntrack: "[[cleaning]]"\ncreated: 2026-09-13\ndone: true\nclosed: 2026-09-13 14:30\n---\n',
+		);
+	});
+
+	it("writes the properties under the names the settings give them", async () => {
+		const vault = vaultWith([{ path: "cleaning.md", frontmatter: { title: "Уборка" } }]);
+		const renamed = { ...names, track: "project", created: "made", trackName: "title" };
+		const file = await createWith(vault.app, "cleaning.md", "2026-09-13", false, "", renamed, NOW);
+		assert.equal(file.path, "Уборка 2026-09-13.md");
+		assert.equal(vault.created[0].text, '---\nproject: "[[cleaning]]"\nmade: 2026-09-13\ndone: false\n---\n');
 	});
 
 	it("names the note by the track_name of the card", async () => {
@@ -138,7 +173,7 @@ describe("createEntry", () => {
 		await createEntry(vault.app, "cleaning.md", "2026-09-13", false, "");
 		assert.equal(
 			vault.created[0].text,
-			'---\ntrack: "[[cleaning]]"\nmood:\ndate: 2026-09-13\ndone: false\n---\n\n<% tp.file.cursor() %>\n',
+			'---\ntrack: "[[cleaning]]"\nmood:\ncreated: 2026-09-13\ndone: false\n---\n\n<% tp.file.cursor() %>\n',
 		);
 	});
 
@@ -164,16 +199,57 @@ describe("createEntry", () => {
 });
 
 describe("setEntryDone", () => {
-	it("checks the box of an existing note", async () => {
-		const vault = vaultWith([{ path: "e.md", frontmatter: { done: false } }]);
-		await setEntryDone(vault.app, "e.md", true);
-		assert.equal(vault.notes.get("e.md")?.frontmatter?.done, true);
+	it("closes a note on the day of the click, at the time of the click", async () => {
+		const vault = vaultWith([{ path: "e.md", frontmatter: { created: "2026-11-05", done: false } }]);
+		const days = await setEntryDone(vault.app, "e.md", true, "2026-11-09");
+		assert.deepEqual(vault.notes.get("e.md")?.frontmatter, {
+			created: "2026-11-05",
+			done: true,
+			closed: "2026-11-09 14:30",
+		});
+		assert.deepEqual(days, { created: "2026-11-05", closed: "2026-11-09" });
 	});
 
-	it("takes the mark back without touching the rest", async () => {
-		const vault = vaultWith([{ path: "e.md", frontmatter: { done: true, mood: "ясно" } }]);
-		await setEntryDone(vault.app, "e.md", false);
-		assert.deepEqual(vault.notes.get("e.md")?.frontmatter, { done: false, mood: "ясно" });
+	it("moves the closing of a note closed on another day to the day of the click", async () => {
+		const vault = vaultWith([
+			{ path: "e.md", frontmatter: { created: "2026-11-05", done: true, closed: "2026-11-10 09:00" } },
+		]);
+		await setEntryDone(vault.app, "e.md", true, "2026-11-05");
+		assert.equal(vault.notes.get("e.md")?.frontmatter?.closed, "2026-11-05 14:30");
+	});
+
+	it("opens a note and takes its closed away, leaving the rest", async () => {
+		const vault = vaultWith([
+			{
+				path: "e.md",
+				frontmatter: { created: "2026-11-05", done: true, closed: "2026-11-10 09:00", status: "done" },
+			},
+		]);
+		const days = await setEntryDone(vault.app, "e.md", false);
+		assert.deepEqual(vault.notes.get("e.md")?.frontmatter, {
+			created: "2026-11-05",
+			done: false,
+			status: "done",
+		});
+		assert.deepEqual(days, { created: "2026-11-05", closed: null });
+	});
+
+	it("switches only done of a note of an earlier version", async () => {
+		const vault = vaultWith([{ path: "e.md", frontmatter: { date: "2026-09-11", done: false, mood: "ясно" } }]);
+		const days = await setEntryDone(vault.app, "e.md", true, "2026-09-11");
+		assert.deepEqual(vault.notes.get("e.md")?.frontmatter, { date: "2026-09-11", done: true, mood: "ясно" });
+		assert.deepEqual(days, { created: "2026-09-11", closed: "2026-09-11" });
+	});
+
+	it("writes under the names the settings give", async () => {
+		const vault = vaultWith([{ path: "e.md", frontmatter: { made: "2026-11-05", finished: false } }]);
+		const renamed = { ...names, done: "finished", created: "made", closed: "ended" };
+		await setDoneWith(vault.app, "e.md", true, "2026-11-06", renamed, NOW);
+		assert.deepEqual(vault.notes.get("e.md")?.frontmatter, {
+			made: "2026-11-05",
+			finished: true,
+			ended: "2026-11-06 14:30",
+		});
 	});
 
 	it("says so when the note is gone", async () => {
@@ -203,8 +279,8 @@ describe("createRecord", () => {
 		assert.deepEqual(entry, {
 			path: "cleaning.md",
 			trackPath: "cleaning.md",
-			date: "2026-09-28",
-			done: false,
+			created: "2026-09-28",
+			closed: null,
 			mark: null,
 			record: { nth: 0, heading: "2026-09-28", line: 7 },
 		});
@@ -299,7 +375,8 @@ describe("setEntryDone of a record", () => {
 		const vault = vaultWith([
 			{ path: "log.md", content: "## 2026-09-28\n- [ ] done\n## 2026-09-28\n- [ ] done\n" },
 		]);
-		await setEntryDone(vault.app, "log.md#2026-09-28#1", true);
+		const days = await setEntryDone(vault.app, "log.md#2026-09-28#1", true);
+		assert.deepEqual(days, { created: "2026-09-28", closed: "2026-09-28" });
 		assert.equal(
 			vault.notes.get("log.md")?.content,
 			"## 2026-09-28\n- [ ] done\n## 2026-09-28\n- [x] done\n",

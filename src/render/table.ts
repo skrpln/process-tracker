@@ -5,7 +5,14 @@ import { setTooltip } from "obsidian";
 import { fillTitle, titleParts } from "../codeblock/title.ts";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
 import type { CellRef } from "../entry/refresh.ts";
-import { cellMark, cellState, entryId, findEntries } from "../entry/state.ts";
+import {
+	cellMark,
+	cellState,
+	countedEntries,
+	entryId,
+	findEntries,
+	standingIn,
+} from "../entry/state.ts";
 import type { EntryIndex } from "../entry/state.ts";
 import type {
 	CellState,
@@ -85,6 +92,13 @@ export const STROKE_EDGES_ATTRIBUTE = "data-stroke-edges";
 
 /** Attribute a cell carries its part of the thread: `start`, `mid` or `end`. */
 export const STROKE_ATTRIBUTE = "data-stroke";
+
+/**
+ * Attribute a cell names the entries in that only leave a trace in its day: closed on another
+ * day, they are listed by the popup and not counted by the cell ([[expectation]] §7). The same
+ * addresses stand in `data-entry` too, which names everything the day holds.
+ */
+export const TRACE_ATTRIBUTE = "data-trace";
 
 /**
  * How the addresses of a day are written into one attribute: one per line. A vault path holds
@@ -369,7 +383,7 @@ function rowStroke(
 	if (!view.stroke) return [];
 
 	const closed = (date: string): boolean =>
-		cellState(findEntries(view.entries, trackPath, date)) === "done";
+		cellState(findEntries(view.entries, trackPath, date), date) === "done";
 	const edges = streakEdges({
 		days: view.columns.map((column) => column.iso),
 		order: view.dates,
@@ -469,11 +483,13 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
 }
 
 /**
- * The box shows what the vault says: checked when every entry of the day is done, unchecked
- * for a draft or an empty day. The state also goes on the cell as `data-state`, where the
- * stylesheet picks the draft up and where the click handling reads it back — together with
+ * The box shows what the vault says: checked when every entry of the day is closed in it,
+ * unchecked for a draft or an empty day. The state also goes on the cell as `data-state`, where
+ * the stylesheet picks the draft up and where the click handling reads it back — together with
  * `data-track`, `data-date` and `data-entry`, which address the cell and name the entries
  * behind it, one address per line — a path for a note, a path and a place for a record.
+ * `data-trace` names those of them that were closed on another day: the cell does not count
+ * them, the popup lists them ([[expectation]] §7).
  *
  * A day with several entries looks like any other day: there is no mark for it, because
  * several entries are a state of affairs and not an error ([[expectation]] §7).
@@ -494,14 +510,14 @@ function renderCheckCell(
 	entries: readonly Entry[],
 	stroke: StrokeMark | null,
 ): void {
-	const state = cellState(entries);
+	const state = cellState(entries, column.iso);
 	const cell = row.createEl("td", {
 		cls: "process-tracker__cell",
 		attr: { "data-date": column.iso, "data-track": track.path, "data-state": state },
 	});
 	if (column.isToday) cell.addClass("is-today");
 	markStroke(cell, stroke);
-	writeEntryIds(cell, entries.map(entryId));
+	writeEntryIds(cell, entries, column.iso);
 
 	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
 	// so centring it never has to argue with the way a theme styles a checkbox.
@@ -510,8 +526,8 @@ function renderCheckCell(
 		type: "checkbox",
 	});
 	box.checked = state === "done";
-	showMark(cell, cellMark(entries));
-	setTooltip(cell, draftTooltip(state, entries.length));
+	showMark(cell, cellMark(entries, column.iso));
+	setTooltip(cell, draftTooltip(state, countedEntries(entries, column.iso).length));
 }
 
 /**
@@ -520,14 +536,15 @@ function renderCheckCell(
  * in.
  */
 export function paintCell(cell: HTMLElement, entries: readonly Entry[]): void {
-	const state = cellState(entries);
+	const date = cell.dataset.date ?? "";
+	const state = cellState(entries, date);
 	cell.setAttr("data-state", state);
-	writeEntryIds(cell, entries.map(entryId));
-	setTooltip(cell, draftTooltip(state, entries.length));
+	writeEntryIds(cell, entries, date);
+	setTooltip(cell, draftTooltip(state, countedEntries(entries, date).length));
 
 	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
 	if (box !== null) box.checked = state === "done";
-	showMark(cell, cellMark(entries));
+	showMark(cell, cellMark(entries, date));
 
 	// The thread of the row follows the cell: a day just closed can finish a streak, and a
 	// checkmark taken back breaks one. A row without a thread returns from here at once.
@@ -561,15 +578,36 @@ function draftTooltip(state: CellState, count: number): string {
 	return state === "draft" && count === 1 ? DRAFT_TOOLTIP : "";
 }
 
-/** The addresses of the entries behind a cell, in the order the popup lists them. */
+/** The addresses of every entry behind a cell, traces included, in the order the popup lists them. */
 export function entryIdsOf(cell: HTMLElement): string[] {
-	const written = cell.dataset.entry ?? "";
+	return idsIn(cell, "data-entry");
+}
+
+/** The addresses of the entries a cell holds only as traces, closed on another day. */
+export function traceIdsOf(cell: HTMLElement): string[] {
+	return idsIn(cell, TRACE_ATTRIBUTE);
+}
+
+/** The addresses of the entries a cell counts: what a click on it works with. */
+export function countedIdsOf(cell: HTMLElement): string[] {
+	const traces = traceIdsOf(cell);
+	return entryIdsOf(cell).filter((id) => !traces.includes(id));
+}
+
+function idsIn(cell: HTMLElement, attribute: string): string[] {
+	const written = cell.getAttribute(attribute) ?? "";
 	return written === "" ? [] : written.split(ID_SEPARATOR);
 }
 
-function writeEntryIds(cell: HTMLElement, ids: readonly string[]): void {
-	if (ids.length === 0) cell.removeAttribute("data-entry");
-	else cell.setAttr("data-entry", ids.join(ID_SEPARATOR));
+function writeEntryIds(cell: HTMLElement, entries: readonly Entry[], date: string): void {
+	const traces = entries.filter((entry) => standingIn(entry, date) === "trace");
+	writeIds(cell, "data-entry", entries.map(entryId));
+	writeIds(cell, TRACE_ATTRIBUTE, traces.map(entryId));
+}
+
+function writeIds(cell: HTMLElement, attribute: string, ids: readonly string[]): void {
+	if (ids.length === 0) cell.removeAttribute(attribute);
+	else cell.setAttr(attribute, ids.join(ID_SEPARATOR));
 }
 
 /** The cells of this table that show the entry at this address right now. */

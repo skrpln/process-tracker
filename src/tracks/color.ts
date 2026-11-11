@@ -1,8 +1,6 @@
 // Process Tracker — the colour of a track ([[track-selection]]).
 // Pure module: no Obsidian API, covered by test/color.test.ts.
 
-import { TRACK_COLOR_KEY } from "../constants.ts";
-
 /**
  * Is this a colour? The browser answers.
  *
@@ -36,9 +34,12 @@ export function readColor(raw: unknown): string | null {
 	return value !== "" && isCssColor(value) ? value : null;
 }
 
-/** The `track_color` property of a track card, or `null` when it is missing or unreadable. */
-export function readCardColor(frontmatter: Record<string, unknown>): string | null {
-	return readColor(frontmatter[TRACK_COLOR_KEY]);
+/**
+ * The `track_color` property of a track card — `key` is what the settings call it — or `null`
+ * when it is missing or unreadable.
+ */
+export function readCardColor(frontmatter: Record<string, unknown>, key: string): string | null {
+	return readColor(frontmatter[key]);
 }
 
 /**

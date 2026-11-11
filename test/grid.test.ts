@@ -6,6 +6,7 @@ import {
 	formatDay,
 	formatMonthYear,
 	splitMonthYear,
+	toDayTime,
 	toIsoDate,
 } from "../src/dates/grid.ts";
 import type { SortDirection } from "../src/model/types.ts";
@@ -136,5 +137,15 @@ describe("splitMonthYear", () => {
 	it("keeps a caption without a year whole", () => {
 		assert.deepEqual(splitMonthYear("september"), { month: "september", year: "" });
 		assert.deepEqual(splitMonthYear(""), { month: "", year: "" });
+	});
+});
+
+describe("toDayTime", () => {
+	it("writes the day asked for with the time of the clock", () => {
+		assert.equal(toDayTime("2026-11-09", new Date(2026, 10, 10, 14, 5)), "2026-11-09 14:05");
+	});
+
+	it("pads the hours and minutes", () => {
+		assert.equal(toDayTime("2026-11-10", new Date(2026, 10, 10, 7, 3)), "2026-11-10 07:03");
 	});
 });

@@ -4,15 +4,18 @@ import { setTooltip } from "obsidian";
 import type { App, HoverParent, HoverPopover } from "obsidian";
 import { HOVER_SOURCE } from "../constants.ts";
 import type { Entry } from "../model/types.ts";
-import { entryPreview } from "../entry/state.ts";
+import { entryPreview, standingIn } from "../entry/state.ts";
 
 /** How long the list waits after the pointer left it, so a slow hand can still reach it. */
 const CLOSE_DELAY = 200;
 
 /** What the list asks the plugin to do; both answers come back from the vault. */
 export interface DayHandlers {
-	/** A box was pressed: switch that entry. `true` when the file took the change. */
-	toggle(entry: Entry, done: boolean): Promise<boolean>;
+	/**
+	 * A box was pressed: close or open that entry on the day of the list. `true` when the file
+	 * took the change.
+	 */
+	toggle(entry: Entry, done: boolean, date: string): Promise<boolean>;
 	/** A link was clicked: open that entry in a new tab, as a click on a cell does. */
 	open(entry: Entry): void;
 }
@@ -20,6 +23,8 @@ export interface DayHandlers {
 /**
  * A day that holds several entries has one cell and several notes, so the cell hands the
  * day over to a list: a row per note, a live box and a link, no heading ([[expectation]] §8).
+ * So does a day that holds an entry closed on another day: the list shows it with an open box,
+ * the work of this day, and the box closes it here ([[expectation]] §7).
  *
  * The container is the plugin's own — the core Page preview plugin shows one note, and this
  * shows a day — but the classes are Obsidian's, so a theme dresses the list exactly as it
@@ -38,6 +43,8 @@ export class DayPopup implements HoverParent {
 	private readonly list: HTMLElement;
 	/** Handle of the timer that closes the list; 0 when none is pending. */
 	private closing = 0;
+	/** The day of the cell: a box shows how its entry stands in it, and closes it on it. */
+	private readonly date: string;
 
 	constructor(
 		private readonly app: App,
@@ -47,6 +54,7 @@ export class DayPopup implements HoverParent {
 		entries: readonly Entry[],
 		private readonly handlers: DayHandlers,
 	) {
+		this.date = cell.dataset.date ?? "";
 		this.element = cell.ownerDocument.body.createDiv({
 			cls: "popover hover-popover process-tracker__day",
 		});
@@ -125,13 +133,15 @@ export class DayPopup implements HoverParent {
 		const row = this.list.createDiv({ cls: "process-tracker__day-row" });
 
 		const box = row.createEl("input", { cls: "task-list-item-checkbox", type: "checkbox" });
-		box.checked = entry.done;
+		// Checked only where the entry was closed on this very day: one closed on another day
+		// stands here as the work of this day, open.
+		box.checked = standingIn(entry, this.date) === "closed";
 		box.addEventListener("click", (event: MouseEvent) => {
 			// The box must not check itself: the mark belongs to the file, and it is set
 			// here only once the file has taken it.
 			const wanted = box.checked;
 			event.preventDefault();
-			void this.handlers.toggle(entry, wanted).then((written) => {
+			void this.handlers.toggle(entry, wanted, this.date).then((written) => {
 				box.checked = written ? wanted : !wanted;
 			});
 		});

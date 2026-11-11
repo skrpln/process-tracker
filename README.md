@@ -99,14 +99,29 @@ width: 180
 **Entry note example**:
 ```yaml
 ---
-track: "[[Cleaning]]"  # Link to the track note this entry belongs to.
-date: 2026-09-11
+track: "[[Cleaning]]"      # Link to the track note, or a list of links.
+created: 2026-11-05        # The day the entry was made.
 done: true
-mark: 🔥               # Optional. Shown instead of the checkmark.
+closed: 2026-11-10 14:30   # The day it was closed. The plugin writes it when you check the box.
+mark: 🔥                   # Optional. Shown instead of the checkmark.
 ---
 
 anything worth keeping about that day: what you did, links, checklists
 ```
+
+A note is an entry when it has `track` and `done`. With a list in `track` it is an entry of every track on the list.
+
+An entry stands in the table on two days:
+
+- on the day of `created` — as an open box, unless it was closed that same day;
+- on the day of `closed` — as a checked box.
+
+So a task made on 5 November and closed on the 10th checks the 10th. The 5th stays empty, and its popup lists the task with an open box — the trace of the work started that day. Checking that box closes the task on the 5th instead. Times are ignored: `2026-11-10 14:30` is 10 November.
+
+A click on an empty cell makes a note with `created` set to the day of the cell, whatever the template says; `Cmd`/`Ctrl` + click also checks it and writes `closed`. Checking a box writes `done: true` and `closed` with the day of the cell and the current time, so a day checked afterwards keeps its own day. Unchecking writes `done: false` and removes `closed`. Other properties of the note, a task status for instance, are left alone.
+
+> [!note]
+> Entry notes made by version 0.2 and earlier have a `date` instead. They stay where they were: `date` stands in for a missing `created` and for a missing `closed`, and checking such a note changes `done` only.
 
 `mark` lets a day say how it went: a checked day shows the first sign of the value — a digit, a letter or an emoji — in place of its checkmark. `mark: 4` shows `4`, `mark: 🔥` shows 🔥; one sign fits in a cell, so `mark: 10` shows `1`. An outlined box keeps its box, and so does a day with several entries.
 
@@ -166,6 +181,7 @@ A day without a daily note shows a plain number, so the caption itself tells you
 | Entry folder | Where new entry notes go.                                    | vault root        |
 | New entries  | Separate notes, or records in the journal of the track. The `entries` property of a track note and of a code block override it. | separate notes |
 | First column alignment | How the track names and the corner title stand. The `align` option of a code block overrides it. | center |
+| Entry properties, Track properties | The names of the properties the plugin reads and writes, one field each: `track`, `done`, `created`, `closed`, `date`, `mark` of an entry note, `track_name`, `track_color`, `template`, `entries`, `journal` of a track note. Rename one to match the properties your notes already use; an empty field means the default name. | the names above |
 
 ## Bugs and questions
 

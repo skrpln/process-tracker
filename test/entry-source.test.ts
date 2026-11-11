@@ -3,15 +3,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { App, TFile } from "obsidian";
+import { DEFAULT_PROPERTY_NAMES } from "../src/constants.ts";
 import { scanOutline } from "../src/entry/journal.ts";
 import {
-	collectEntries,
-	collectJournalEntries,
-	entryAt,
-	journalsOf,
+	collectEntries as collectAll,
+	collectJournalEntries as collectRecords,
+	entryAt as entryAtWith,
+	journalsOf as journalsOfWith,
 	outlineOf,
-	toEntry,
+	toEntries,
 } from "../src/entry/source.ts";
+import type { PropertyNames } from "../src/model/types.ts";
+
+/** The names the plugin reads until the settings rename them. */
+const names: PropertyNames = DEFAULT_PROPERTY_NAMES;
+
+const collectEntries = (app: App) => collectAll(app, names);
+const collectJournalEntries = (app: App, tracks: string[]) => collectRecords(app, tracks, names);
+const entryAt = (app: App, id: string, track: string) => entryAtWith(app, id, track, names);
+const journalsOf = (app: App, track: string) => journalsOfWith(app, track, names);
 
 interface Note {
 	path: string;
@@ -44,14 +54,19 @@ function appWith(notes: Note[]): App {
 }
 
 const card: Note = { path: "cleaning.md", frontmatter: { tags: "process_tracker" } };
+const water: Note = { path: "water.md", frontmatter: { tags: "process_tracker" } };
 
-function readOne(note: Note): ReturnType<typeof toEntry> {
-	const app = appWith([card, note]);
-	return toEntry(app, { path: note.path } as TFile);
+function readAll(note: Note, read: PropertyNames = names): ReturnType<typeof toEntries> {
+	const app = appWith([card, water, note]);
+	return toEntries(app, { path: note.path } as TFile, read);
 }
 
-describe("toEntry", () => {
-	it("reads a note that names a track and a date", () => {
+function readOne(note: Note): ReturnType<typeof toEntries>[number] | null {
+	return readAll(note)[0] ?? null;
+}
+
+describe("toEntries", () => {
+	it("reads a note of an earlier version that names a track and a date", () => {
 		const entry = readOne({
 			path: "cleaning 2026-09-11.md",
 			frontmatter: { track: "[[cleaning]]", date: "2026-09-11", done: true },
@@ -59,11 +74,73 @@ describe("toEntry", () => {
 		assert.deepEqual(entry, {
 			path: "cleaning 2026-09-11.md",
 			trackPath: "cleaning.md",
-			date: "2026-09-11",
-			done: true,
+			created: "2026-09-11",
+			closed: "2026-09-11",
 			mark: null,
 			record: null,
 		});
+	});
+
+	it("reads a task made on one day and closed on another", () => {
+		const entry = readOne({
+			path: "Купить фильтр.md",
+			frontmatter: {
+				track: "[[cleaning]]",
+				created: "2026-11-05",
+				done: true,
+				closed: "2026-11-10 14:30",
+				status: "done",
+			},
+		});
+		assert.equal(entry?.created, "2026-11-05");
+		assert.equal(entry?.closed, "2026-11-10");
+	});
+
+	it("is an entry of every track its list links to", () => {
+		const entries = readAll({
+			path: "e.md",
+			frontmatter: { track: ["[[cleaning]]", "[[water]]"], created: "2026-11-05", done: false },
+			frontmatterLinks: [
+				{ key: "track.0", link: "cleaning" },
+				{ key: "track.1", link: "water" },
+			],
+		});
+		assert.deepEqual(
+			entries.map((entry) => [entry.path, entry.trackPath, entry.created, entry.closed]),
+			[
+				["e.md", "cleaning.md", "2026-11-05", null],
+				["e.md", "water.md", "2026-11-05", null],
+			],
+		);
+	});
+
+	it("drops the links of a list that lead nowhere, and a track named twice", () => {
+		const entries = readAll({
+			path: "e.md",
+			frontmatter: { track: ["[[gone]]", "[[cleaning]]", "cleaning"], created: "2026-11-05", done: true },
+		});
+		assert.deepEqual(entries.map((entry) => entry.trackPath), ["cleaning.md"]);
+	});
+
+	it("reads the properties under the names the settings give them", () => {
+		const renamed = { ...names, track: "project", done: "finished", created: "made" };
+		const entries = readAll(
+			{
+				path: "e.md",
+				frontmatter: { project: "[[water]]", finished: false, made: "2026-11-05", track: "[[cleaning]]" },
+			},
+			renamed,
+		);
+		assert.deepEqual(entries.map((entry) => [entry.trackPath, entry.created]), [
+			["water.md", "2026-11-05"],
+		]);
+	});
+
+	it("is not an entry with created and a track but no done", () => {
+		assert.deepEqual(
+			readAll({ path: "e.md", frontmatter: { track: "[[cleaning]]", created: "2026-11-05" } }),
+			[],
+		);
 	});
 
 	it("reads the mark of an entry", () => {
@@ -79,15 +156,15 @@ describe("toEntry", () => {
 			path: "e.md",
 			frontmatter: { track: "[[cleaning]]", date: "2026-09-11", done: false },
 		});
-		assert.equal(entry?.done, false);
+		assert.equal(entry?.closed, null);
 	});
 
-	it("treats an entry without a done property as a draft", () => {
+	it("treats an entry of an earlier version without a done property as a draft", () => {
 		const entry = readOne({
 			path: "e.md",
 			frontmatter: { track: "[[cleaning]]", date: "2026-09-11" },
 		});
-		assert.equal(entry?.done, false);
+		assert.equal(entry?.closed, null);
 	});
 
 	it("prefers the link Obsidian parsed itself", () => {
@@ -99,7 +176,7 @@ describe("toEntry", () => {
 		assert.equal(entry?.trackPath, "cleaning.md");
 	});
 
-	it("reads a link out of a list property", () => {
+	it("reads a link out of a list property of one item", () => {
 		const entry = readOne({
 			path: "e.md",
 			frontmatter: { track: ["[[cleaning]]"], date: "2026-09-11" },
@@ -108,8 +185,9 @@ describe("toEntry", () => {
 		assert.equal(entry?.trackPath, "cleaning.md");
 	});
 
-	it("is not an entry without a date", () => {
+	it("is not an entry without a day", () => {
 		assert.equal(readOne({ path: "e.md", frontmatter: { track: "[[cleaning]]" } }), null);
+		assert.equal(readOne({ path: "e.md", frontmatter: { track: "[[cleaning]]", done: true } }), null);
 	});
 
 	it("is not an entry without a track", () => {
@@ -143,7 +221,7 @@ describe("collectEntries", () => {
 			{ path: "plain.md" },
 		]);
 		assert.deepEqual(
-			collectEntries(app).map((entry) => [entry.path, entry.trackPath, entry.done]),
+			collectEntries(app).map((entry) => [entry.path, entry.trackPath, entry.closed !== null]),
 			[
 				["e1.md", "cleaning.md", true],
 				["e2.md", "water.md", false],
@@ -159,7 +237,17 @@ describe("entryAt", () => {
 	};
 
 	it("reads the note at a path", () => {
-		assert.equal(entryAt(appWith([card, note]), note.path, card.path)?.done, true);
+		assert.equal(entryAt(appWith([card, note]), note.path, card.path)?.closed, "2026-09-11");
+	});
+
+	it("reads a note of several tracks as the entry of the track asked", () => {
+		const both: Note = {
+			path: "e.md",
+			frontmatter: { track: ["[[cleaning]]", "[[water]]"], created: "2026-11-05", done: false },
+		};
+		const app = appWith([card, water, both]);
+		assert.equal(entryAt(app, "e.md", "water.md")?.trackPath, "water.md");
+		assert.equal(entryAt(app, "e.md", "elsewhere.md"), null);
 	});
 
 	it("answers nothing for a path that leads nowhere", () => {
@@ -235,16 +323,16 @@ describe("journal entries", () => {
 			{
 				path: "cleaning.md",
 				trackPath: "cleaning.md",
-				date: "2026-09-28",
-				done: true,
+				created: "2026-09-28",
+				closed: "2026-09-28",
 				mark: "🔥",
 				record: { nth: 0, heading: "2026-09-28 👽", line: 2 },
 			},
 			{
 				path: "cleaning.md",
 				trackPath: "cleaning.md",
-				date: "2026-09-27",
-				done: false,
+				created: "2026-09-27",
+				closed: null,
 				mark: null,
 				record: { nth: 0, heading: "2026-09-27", line: 5 },
 			},
@@ -254,7 +342,7 @@ describe("journal entries", () => {
 	it("reads the card and the journal it links to, both for the track of the card", () => {
 		const entries = collectJournalEntries(journalApp([linked, log]), ["reading.md"]);
 		assert.deepEqual(
-			entries.map((entry) => [entry.path, entry.trackPath, entry.date, entry.done]),
+			entries.map((entry) => [entry.path, entry.trackPath, entry.created, entry.closed !== null]),
 			[
 				["reading.md", "reading.md", "2026-09-01", true],
 				["Reading log.md", "reading.md", "2026-09-20", false],

@@ -94,6 +94,17 @@ export function toIsoDate(date: Date): string {
 }
 
 /**
+ * A day with the time of a clock, `YYYY-MM-DD HH:mm` — the way the closing of an entry is
+ * written ([[expectation]] §8). The day is the one the reader clicked in, the time is now:
+ * a mark set for yesterday keeps yesterday's day.
+ */
+export function toDayTime(day: string, now: Date): string {
+	const hours = String(now.getHours()).padStart(2, "0");
+	const minutes = String(now.getMinutes()).padStart(2, "0");
+	return `${day} ${hours}:${minutes}`;
+}
+
+/**
  * The day a number of days away from an ISO date, on the local calendar.
  *
  * The streak of a row runs past the edge of the window, so the table has to ask about days

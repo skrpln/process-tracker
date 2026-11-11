@@ -7,31 +7,46 @@ import {
 	byId,
 	cellMark,
 	cellState,
+	countedEntries,
+	daysOf,
 	entryId,
 	entryKey,
 	entryPreview,
 	findEntries,
 	readDate,
+	readDays,
 	readDone,
 	readEntryId,
 	readMark,
 	readSoleSign,
 	readTrackLink,
+	readTrackLinks,
+	standingIn,
 } from "../src/entry/state.ts";
+import { DEFAULT_PROPERTY_NAMES } from "../src/constants.ts";
 
 function paths(entries: readonly Entry[]): string[] {
 	return entries.map((entry) => entry.path);
 }
 
+/** The day the tests are about. */
+const DAY = "2026-09-11";
+
+/** A done entry made and closed on the day of the tests, unless told otherwise. */
 function entry(overrides: Partial<Entry> & { path: string }): Entry {
 	return {
 		trackPath: "cleaning.md",
-		date: "2026-09-11",
-		done: true,
+		created: DAY,
+		closed: DAY,
 		mark: null,
 		record: null,
 		...overrides,
 	};
+}
+
+/** An entry made on the day of the tests and still open. */
+function open(path: string): Entry {
+	return entry({ path, closed: null });
 }
 
 describe("readDate", () => {
@@ -41,6 +56,7 @@ describe("readDate", () => {
 
 	it("keeps the day of a timestamp", () => {
 		assert.equal(readDate("2026-09-11T07:30:00"), "2026-09-11");
+		assert.equal(readDate("2026-11-10 14:30"), "2026-11-10");
 	});
 
 	it("trims the value", () => {
@@ -105,6 +121,12 @@ describe("readTrackLink", () => {
 		assert.equal(readTrackLink([null, "[[cleaning]]", "[[water]]"]), "cleaning");
 	});
 
+	it("reads every readable item of a list as a link of its own", () => {
+		assert.deepEqual(readTrackLinks([null, "[[cleaning]]", "", "water", 4]), ["cleaning", "water"]);
+		assert.deepEqual(readTrackLinks("[[cleaning|уборка]]"), ["cleaning"]);
+		assert.deepEqual(readTrackLinks(undefined), []);
+	});
+
 	it("rejects an empty or missing property", () => {
 		assert.equal(readTrackLink("   "), null);
 		assert.equal(readTrackLink("[[]]"), null);
@@ -135,7 +157,7 @@ describe("buildEntryIndex", () => {
 	it("keeps every entry of a day, in the order of their paths", () => {
 		const index = buildEntryIndex([
 			entry({ path: "c.md" }),
-			entry({ path: "a.md", done: false }),
+			open("a.md"),
 			entry({ path: "b.md" }),
 		]);
 		assert.deepEqual(paths(findEntries(index, "cleaning.md", "2026-09-11")), [
@@ -143,6 +165,18 @@ describe("buildEntryIndex", () => {
 			"b.md",
 			"c.md",
 		]);
+	});
+
+	it("finds an entry in the day it was made and in the day it was closed", () => {
+		const index = buildEntryIndex([entry({ path: "a.md", created: "2026-09-05" })]);
+		assert.deepEqual(paths(findEntries(index, "cleaning.md", "2026-09-05")), ["a.md"]);
+		assert.deepEqual(paths(findEntries(index, "cleaning.md", DAY)), ["a.md"]);
+		assert.deepEqual(findEntries(index, "cleaning.md", "2026-09-08"), []);
+	});
+
+	it("finds an entry made and closed on one day there once", () => {
+		const index = buildEntryIndex([entry({ path: "a.md" })]);
+		assert.deepEqual(paths(findEntries(index, "cleaning.md", DAY)), ["a.md"]);
 	});
 
 	it("gives every track and day a key of its own", () => {
@@ -153,17 +187,142 @@ describe("buildEntryIndex", () => {
 
 describe("cellState", () => {
 	it("names the three states of a day with one entry", () => {
-		assert.equal(cellState([]), "empty");
-		assert.equal(cellState([entry({ path: "a.md", done: false })]), "draft");
-		assert.equal(cellState([entry({ path: "a.md", done: true })]), "done");
+		assert.equal(cellState([], DAY), "empty");
+		assert.equal(cellState([open("a.md")], DAY), "draft");
+		assert.equal(cellState([entry({ path: "a.md" })], DAY), "done");
 	});
 
 	it("checks the box only when every entry of the day is done", () => {
-		const done = entry({ path: "a.md", done: true });
-		const draft = entry({ path: "b.md", done: false });
-		assert.equal(cellState([done, draft]), "draft");
-		assert.equal(cellState([draft, done]), "draft");
-		assert.equal(cellState([done, entry({ path: "c.md", done: true })]), "done");
+		const done = entry({ path: "a.md" });
+		const draft = open("b.md");
+		assert.equal(cellState([done, draft], DAY), "draft");
+		assert.equal(cellState([draft, done], DAY), "draft");
+		assert.equal(cellState([done, entry({ path: "c.md" })], DAY), "done");
+	});
+
+	it("leaves the day an entry was made in empty when it was closed on another", () => {
+		const later = entry({ path: "a.md", closed: "2026-09-15" });
+		assert.equal(cellState([later], DAY), "empty");
+		assert.equal(cellState([later], "2026-09-15"), "done");
+	});
+
+	it("does not let a trace hold a day back or close it", () => {
+		const trace = entry({ path: "a.md", closed: "2026-09-15" });
+		assert.equal(cellState([trace, open("b.md")], DAY), "draft");
+		assert.equal(cellState([trace, entry({ path: "b.md" })], DAY), "done");
+	});
+});
+
+describe("readDays", () => {
+	const names = DEFAULT_PROPERTY_NAMES;
+
+	it("places a done note in the day it was made and the day it was closed", () => {
+		const days = readDays(
+			{ created: "2026-11-05", done: true, closed: "2026-11-10 14:30" },
+			names,
+		);
+		assert.deepEqual(days, { created: "2026-11-05", closed: "2026-11-10" });
+	});
+
+	it("keeps an open note in the day it was made, whatever closed says", () => {
+		const days = readDays({ created: "2026-11-05", done: false, closed: "2026-11-10" }, names);
+		assert.deepEqual(days, { created: "2026-11-05", closed: null });
+	});
+
+	it("drops the time of created", () => {
+		assert.deepEqual(readDays({ created: "2026-11-05T09:12", done: false }, names), {
+			created: "2026-11-05",
+			closed: null,
+		});
+	});
+
+	it("closes a done note without closed on the day it was made", () => {
+		assert.deepEqual(readDays({ created: "2026-11-05", done: true }, names), {
+			created: "2026-11-05",
+			closed: "2026-11-05",
+		});
+	});
+
+	it("makes a note without created on the day it was closed", () => {
+		assert.deepEqual(readDays({ done: true, closed: "2026-11-10 08:00" }, names), {
+			created: "2026-11-10",
+			closed: "2026-11-10",
+		});
+	});
+
+	it("reads a note of an earlier version in its one day", () => {
+		assert.deepEqual(readDays({ date: "2026-09-11", done: true }, names), {
+			created: "2026-09-11",
+			closed: "2026-09-11",
+		});
+		assert.deepEqual(readDays({ date: "2026-09-11", done: false }, names), {
+			created: "2026-09-11",
+			closed: null,
+		});
+	});
+
+	it("reads a note of an earlier version without done as a draft, as it always did", () => {
+		assert.deepEqual(readDays({ date: "2026-09-11" }, names), {
+			created: "2026-09-11",
+			closed: null,
+		});
+	});
+
+	it("lets date stand in only for what is missing", () => {
+		assert.deepEqual(readDays({ date: "2026-09-11", created: "2026-09-12", done: true }, names), {
+			created: "2026-09-12",
+			closed: "2026-09-11",
+		});
+		assert.deepEqual(readDays({ date: "2026-09-11", closed: "2026-09-14", done: true }, names), {
+			created: "2026-09-11",
+			closed: "2026-09-14",
+		});
+	});
+
+	it("is no entry without done or date", () => {
+		assert.equal(readDays({ created: "2026-11-05", closed: "2026-11-10" }, names), null);
+	});
+
+	it("is no entry without a day", () => {
+		assert.equal(readDays({ done: true }, names), null);
+		assert.equal(readDays({ done: false, created: "yesterday" }, names), null);
+	});
+
+	it("reads the properties under the names the settings give them", () => {
+		const renamed = { done: "finished", created: "made", closed: "ended", date: "day" };
+		assert.deepEqual(
+			readDays({ finished: true, made: "2026-11-05", ended: "2026-11-06", done: false }, renamed),
+			{ created: "2026-11-05", closed: "2026-11-06" },
+		);
+		assert.equal(readDays({ done: true, created: "2026-11-05" }, renamed), null);
+	});
+});
+
+describe("days of an entry", () => {
+	it("are one day for an open entry and for one closed on the day it was made", () => {
+		assert.deepEqual(daysOf({ created: DAY, closed: null }), [DAY]);
+		assert.deepEqual(daysOf({ created: DAY, closed: DAY }), [DAY]);
+	});
+
+	it("are two for an entry closed on another day", () => {
+		assert.deepEqual(daysOf({ created: "2026-11-05", closed: "2026-11-10" }), [
+			"2026-11-05",
+			"2026-11-10",
+		]);
+	});
+
+	it("tell how the entry stands in each of them", () => {
+		const later = { created: "2026-11-05", closed: "2026-11-10" };
+		assert.equal(standingIn(later, "2026-11-05"), "trace");
+		assert.equal(standingIn(later, "2026-11-10"), "closed");
+		assert.equal(standingIn({ created: DAY, closed: null }, DAY), "open");
+		assert.equal(standingIn({ created: DAY, closed: DAY }, DAY), "closed");
+	});
+
+	it("leave the traces out of what a cell counts", () => {
+		const trace = entry({ path: "a.md", closed: "2026-09-15" });
+		assert.deepEqual(paths(countedEntries([trace, open("b.md")], DAY)), ["b.md"]);
+		assert.deepEqual(paths(countedEntries([trace], "2026-09-15")), ["a.md"]);
 	});
 });
 
@@ -206,21 +365,32 @@ describe("readMark", () => {
 
 describe("cellMark", () => {
 	it("shows the mark of a closed day of one entry", () => {
-		assert.equal(cellMark([entry({ path: "a.md", mark: "🔥" })]), "🔥");
+		assert.equal(cellMark([entry({ path: "a.md", mark: "🔥" })], DAY), "🔥");
 	});
 
 	it("shows nothing for a day without a mark", () => {
-		assert.equal(cellMark([]), null);
-		assert.equal(cellMark([entry({ path: "a.md" })]), null);
+		assert.equal(cellMark([], DAY), null);
+		assert.equal(cellMark([entry({ path: "a.md" })], DAY), null);
 	});
 
 	it("keeps a draft a draft, mark or not", () => {
-		assert.equal(cellMark([entry({ path: "a.md", done: false, mark: "🔥" })]), null);
+		assert.equal(cellMark([entry({ path: "a.md", closed: null, mark: "🔥" })], DAY), null);
 	});
 
 	it("shows no mark for a day of several entries", () => {
 		const day = [entry({ path: "a.md", mark: "🔥" }), entry({ path: "b.md", mark: "4" })];
-		assert.equal(cellMark(day), null);
+		assert.equal(cellMark(day, DAY), null);
+	});
+
+	it("shows the mark in the day of closing, not in the day the entry was made", () => {
+		const later = entry({ path: "a.md", closed: "2026-09-15", mark: "🔥" });
+		assert.equal(cellMark([later], "2026-09-15"), "🔥");
+		assert.equal(cellMark([later], DAY), null);
+	});
+
+	it("counts no trace as a second entry of the day", () => {
+		const trace = entry({ path: "a.md", closed: "2026-09-15", mark: "4" });
+		assert.equal(cellMark([trace, entry({ path: "b.md", mark: "🔥" })], DAY), "🔥");
 	});
 });
 

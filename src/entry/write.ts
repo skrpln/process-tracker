@@ -2,8 +2,8 @@
 // Adapter module: the only place in the plugin that changes entries.
 
 import type { App, CachedMetadata, TFile } from "obsidian";
-import { ENTRY_DONE_KEY, TRACK_TEMPLATE_KEY } from "../constants.ts";
-import type { Entry } from "../model/types.ts";
+import { toDayTime } from "../dates/grid.ts";
+import type { Entry, EntryDays, PropertyNames } from "../model/types.ts";
 import { trackDisplayName } from "../tracks/select.ts";
 import {
 	composeEntry,
@@ -14,13 +14,16 @@ import {
 } from "./compose.ts";
 import { insertRecord, setRecordDone } from "./journal.ts";
 import { frontmatterLink, linkedJournal } from "./source.ts";
-import { readEntryId } from "./state.ts";
+import { readDate, readDays, readEntryId } from "./state.ts";
 
 /** How many names are tried before a folder is declared hopeless. */
 const NAME_ATTEMPTS = 100;
 
 /**
  * Creates the entry note behind one cell and returns it.
+ *
+ * The note is made on the day of the cell: `created` is that day, and an entry made done is
+ * closed on it too, at the time of the click ([[expectation]] §6).
  *
  * Everything the note needs is written before the file appears, in one `create`: Templater
  * renders `<% %>` on the content it finds, so a second pass over the frontmatter would race
@@ -32,15 +35,17 @@ export async function createEntry(
 	date: string,
 	done: boolean,
 	folder: string,
+	names: PropertyNames,
+	now: Date = new Date(),
 ): Promise<TFile> {
 	const card = app.vault.getFileByPath(trackPath);
 	if (card === null) throw new Error(`the track card "${trackPath}" is gone`);
 
 	const cache = app.metadataCache.getFileCache(card);
 	const frontmatter = (cache?.frontmatter ?? {}) as Record<string, unknown>;
-	const name = entryFileName(trackDisplayName(frontmatter, card.basename), date);
+	const name = entryFileName(trackDisplayName(frontmatter, card.basename, names.trackName), date);
 	const path = freePath(app, folder, name);
-	const template = templateOf(app, card, cache);
+	const template = templateOf(app, card, cache, names.template);
 	if (template?.file === null) {
 		throw new Error(`the template "${template.link}" of "${card.basename}" is gone`);
 	}
@@ -50,8 +55,12 @@ export async function createEntry(
 	// and for relative paths hold in the note the plugin makes.
 	const link = app.fileManager.generateMarkdownLink(card, path);
 
+	const closed = done ? toDayTime(date, now) : null;
 	await ensureFolder(app, folder);
-	return await app.vault.create(path, composeEntry(text, { track: link, date, done }));
+	return await app.vault.create(
+		path,
+		composeEntry(text, { track: link, created: date, done, closed }, names),
+	);
 }
 
 /**
@@ -76,15 +85,17 @@ export async function createRecord(
 	date: string,
 	done: boolean,
 	fill: (template: string, date: string) => string,
+	names: PropertyNames,
 ): Promise<Entry> {
 	const card = app.vault.getFileByPath(trackPath);
 	if (card === null) throw new Error(`the track card "${trackPath}" is gone`);
 
-	const template = templateOf(app, card, app.metadataCache.getFileCache(card))?.file ?? null;
+	const cache = app.metadataCache.getFileCache(card);
+	const template = templateOf(app, card, cache, names.template)?.file ?? null;
 	const body =
 		template === null ? "" : fill(recordBody(await app.vault.cachedRead(template)), date);
 
-	const journal = linkedJournal(app, card);
+	const journal = linkedJournal(app, card, names);
 	const file = journal.link === null ? card : journal.file;
 
 	if (file === null) {
@@ -109,10 +120,28 @@ export async function createRecord(
 }
 
 /**
- * Sets `done` of an entry at this address: the property of a note, or the box of a record.
- * Everything else of the note or the journal is left as it is.
+ * Closes or opens the entry at this address on one day — the day of the cell or of the list
+ * the click was made in — and answers with the days the entry stands in after the write:
+ * `null` when the note is no entry any more.
+ *
+ * A record has its box switched and nothing else ([[entry#Переключение и открытие|entry]]). A
+ * note gets `done`, and with it `closed`: a note closed is closed on that day at the time of
+ * the click, `YYYY-MM-DD HH:mm`, and a note opened loses its `closed`. A click on a day means
+ * "done on this day", so a mark set for yesterday is closed yesterday, and an entry closed on
+ * another day moves its closing to this one ([[expectation]] §8).
+ *
+ * A note with the `date` of an earlier version gets `done` alone: it stands in that day and
+ * needs no `closed` to say so. Every other property of the note — a status of a task among
+ * them — is left as it is.
  */
-export async function setEntryDone(app: App, id: string, done: boolean): Promise<void> {
+export async function setEntryDone(
+	app: App,
+	id: string,
+	done: boolean,
+	day: string,
+	names: PropertyNames,
+	now: Date = new Date(),
+): Promise<EntryDays | null> {
 	const address = readEntryId(id);
 	const record = address.record;
 	const file = app.vault.getFileByPath(address.path);
@@ -122,11 +151,19 @@ export async function setEntryDone(app: App, id: string, done: boolean): Promise
 
 	if (record !== null) {
 		await app.vault.process(file, (text) => setRecordDone(text, record.date, record.nth, done));
-		return;
+		return { created: record.date, closed: done ? record.date : null };
 	}
+
+	let days: EntryDays | null = null;
 	await app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-		frontmatter[ENTRY_DONE_KEY] = done;
+		frontmatter[names.done] = done;
+		if (readDate(frontmatter[names.date]) === null) {
+			if (done) frontmatter[names.closed] = toDayTime(day, now);
+			else delete frontmatter[names.closed];
+		}
+		days = readDays(frontmatter, names);
 	});
+	return days;
 }
 
 /**
@@ -137,11 +174,12 @@ function templateOf(
 	app: App,
 	card: TFile,
 	cache: CachedMetadata | null,
+	key: string,
 ): { link: string; file: TFile | null } | null {
 	if (cache === null) return null;
 
 	const frontmatter = (cache.frontmatter ?? {}) as Record<string, unknown>;
-	const link = frontmatterLink(cache, frontmatter, TRACK_TEMPLATE_KEY);
+	const link = frontmatterLink(cache, frontmatter, key);
 	if (link === null) return null;
 	return { link, file: app.metadataCache.getFirstLinkpathDest(link, card.path) };
 }
@@ -168,8 +206,8 @@ function recordEntry(
 	return {
 		path,
 		trackPath,
-		date,
-		done,
+		created: date,
+		closed: done ? date : null,
 		// The heading the plugin writes is the date alone: a new record has no mark.
 		mark: null,
 		record: { nth: written.nth, heading: date, line: written.line },

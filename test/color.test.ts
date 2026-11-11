@@ -77,16 +77,20 @@ describe("readColor", () => {
 
 describe("readCardColor", () => {
 	it("reads the property of the card", () => {
-		assert.equal(readCardColor({ track_color: "var(--color-red)" }), "var(--color-red)");
+		assert.equal(readCardColor({ track_color: "var(--color-red)" }, "track_color"), "var(--color-red)");
 	});
 
 	it("answers with nothing when the card says nothing", () => {
-		assert.equal(readCardColor({}), null);
-		assert.equal(readCardColor({ track_name: "Cleaning" }), null);
+		assert.equal(readCardColor({}, "track_color"), null);
+		assert.equal(readCardColor({ track_name: "Cleaning" }, "track_color"), null);
+	});
+
+	it("reads the property under the name the settings give it", () => {
+		assert.equal(readCardColor({ color: "green", track_color: "#4CAF50" }, "color"), "green");
 	});
 
 	it("answers with nothing when the card says something unreadable", () => {
-		assert.equal(readCardColor({ track_color: "blurple" }), null);
+		assert.equal(readCardColor({ track_color: "blurple" }, "track_color"), null);
 	});
 });
 

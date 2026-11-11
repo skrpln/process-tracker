@@ -1,35 +1,47 @@
 // Process Tracker — the name and the text of a new entry note.
 // Pure module: no Obsidian API, covered by test/compose.test.ts.
 
-import { ENTRY_DATE_KEY, ENTRY_DONE_KEY, ENTRY_TRACK_KEY } from "../constants.ts";
+import type { PropertyNames } from "../model/types.ts";
 
 export interface EntryFields {
 	/** Link to the track card, written the way this vault writes links. */
 	track: string;
-	/** Local calendar date as `YYYY-MM-DD`. */
-	date: string;
+	/** The day of the cell that was clicked, `YYYY-MM-DD`. */
+	created: string;
 	done: boolean;
+	/** When a done entry was closed, `YYYY-MM-DD HH:mm`; `null` for an open one. */
+	closed: string | null;
 }
+
+/** The properties a new entry note is made with. */
+export type EntryNames = Pick<PropertyNames, "track" | "created" | "done" | "closed">;
 
 const FENCE = "---";
 
 /**
- * Text of a new entry note: the template of the track card with the three properties
- * of the plugin filled in. A template without frontmatter gets one, and a track card
- * without a template gives a bare note with an empty body ([[expectation]] §5).
+ * Text of a new entry note: the template of the track card with the properties of the plugin
+ * filled in — `track`, `created` and `done`, and `closed` for an entry made done. A template
+ * without frontmatter gets one, and a track card without a template gives a bare note with an
+ * empty body ([[expectation]] §5). The names of the properties are the ones the settings give.
  *
- * The three properties belong to the plugin: whatever the template says about `track`,
- * `date` or `done` is replaced, because the cell that was clicked knows the answer. The
- * rest of the template is left alone — `<% %>` commands included, so Templater finds its
- * work untouched when the file appears.
+ * These properties belong to the plugin: whatever the template says about them is replaced,
+ * because the cell that was clicked knows the answer — a `created` the template fills with
+ * today would put a mark set for yesterday into today. The rest of the template is left alone,
+ * `date` and `<% %>` commands included, so Templater finds its work untouched when the file
+ * appears.
  */
-export function composeEntry(template: string | null, fields: EntryFields): string {
+export function composeEntry(
+	template: string | null,
+	fields: EntryFields,
+	names: EntryNames,
+): string {
 	const { head, body } = split(template ?? "");
 
 	let properties = head;
-	properties = setProperty(properties, ENTRY_TRACK_KEY, quote(fields.track));
-	properties = setProperty(properties, ENTRY_DATE_KEY, fields.date);
-	properties = setProperty(properties, ENTRY_DONE_KEY, String(fields.done));
+	properties = setProperty(properties, names.track, quote(fields.track));
+	properties = setProperty(properties, names.created, fields.created);
+	properties = setProperty(properties, names.done, String(fields.done));
+	if (fields.closed !== null) properties = setProperty(properties, names.closed, fields.closed);
 
 	return [FENCE, ...properties, FENCE, body].join("\n");
 }

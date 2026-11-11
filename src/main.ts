@@ -3,7 +3,14 @@
 
 import { Notice, Plugin, debounce } from "obsidian";
 import type { EventRef, Events, MarkdownPostProcessorContext, TFile } from "obsidian";
-import type { EntriesMode, Entry, TrackCard, TrackerOptions } from "./model/types.ts";
+import type {
+	EntriesMode,
+	Entry,
+	EntryDays,
+	PropertyNames,
+	TrackCard,
+	TrackerOptions,
+} from "./model/types.ts";
 import { parseCodeBlock } from "./codeblock/parse.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
 import { confirmDailyNote } from "./daily/confirm.ts";
@@ -25,9 +32,16 @@ import {
 	entryAt,
 	journalEntries,
 	journalsOf,
-	toEntry,
+	toEntries,
 } from "./entry/source.ts";
-import { buildEntryIndex, byId, entryId, findEntries, readEntryId } from "./entry/state.ts";
+import {
+	buildEntryIndex,
+	byId,
+	countedEntries,
+	entryId,
+	findEntries,
+	readEntryId,
+} from "./entry/state.ts";
 import { createEntry, createRecord, setEntryDone } from "./entry/write.ts";
 import { TrackerBlock } from "./render/block.ts";
 import { TrackerRenderChild } from "./render/child.ts";
@@ -61,6 +75,13 @@ import { toTrackCard } from "./tracks/source.ts";
  */
 const INDEX_QUIET_MS = 500;
 
+/** One entry the plugin has just written: its address, and what it is after the write. */
+interface Write {
+	id: string;
+	/** An entry for each track it belongs to; none when the note is no entry any more. */
+	entries: readonly Entry[];
+}
+
 export default class ProcessTrackerPlugin extends Plugin {
 	settings: ProcessTrackerSettings = { ...DEFAULT_SETTINGS };
 
@@ -91,6 +112,11 @@ export default class ProcessTrackerPlugin extends Plugin {
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+	}
+
+	/** What the properties are called in this vault, as the settings say now. */
+	private get names(): PropertyNames {
+		return this.settings.properties;
 	}
 
 	/**
@@ -145,7 +171,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 			// Notes are found wherever they lie; records only in the journals of these tracks.
 			const entries = [
 				...notes,
-				...collectJournalEntries(this.app, tracks.map((track) => track.path)),
+				...collectJournalEntries(this.app, tracks.map((track) => track.path), this.names),
 			];
 
 			const elements = renderTracker(element, {
@@ -190,7 +216,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 							void this.runCellAction(target, mod, options.entries);
 						},
 						{
-							toggle: (entry, done) => this.toggleEntry(entry, done),
+							toggle: (entry, done, date) => this.toggleEntry(entry, done, date),
 							open: (entry) => {
 								void this.openEntry(entryId(entry), entry.trackPath);
 							},
@@ -198,6 +224,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 						(caption, date) => {
 							void this.newDailyNote(caption, date, options.dailyNoteDir);
 						},
+						this.names,
 					),
 				);
 				block.hold(
@@ -236,7 +263,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 	private rowsOf(source: string, sourcePath: string): string | null {
 		try {
 			const { options } = parseCodeBlock(source);
-			const cards = this.app.vault.getMarkdownFiles().map((file) => toTrackCard(this.app, file));
+			const cards = this.app.vault
+				.getMarkdownFiles()
+				.map((file) => toTrackCard(this.app, file, this.names));
 			return rowKey(this.filterTracks(cards, options, sourcePath, []));
 		} catch {
 			return null;
@@ -299,10 +328,10 @@ export default class ProcessTrackerPlugin extends Plugin {
 	private scanVault(): { cards: TrackCard[]; notes: Entry[] } {
 		const cards: TrackCard[] = [];
 		const notes: Entry[] = [];
+		const names = this.names;
 		for (const file of this.app.vault.getMarkdownFiles()) {
-			cards.push(toTrackCard(this.app, file));
-			const entry = toEntry(this.app, file);
-			if (entry !== null) notes.push(entry);
+			cards.push(toTrackCard(this.app, file, names));
+			for (const entry of toEntries(this.app, file, names)) notes.push(entry);
 		}
 		return { cards, notes };
 	}
@@ -325,11 +354,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 	private refresh(file: TFile, gone = false): void {
 		if (this.tables.size === 0) return;
 
-		const entry = gone ? null : toEntry(this.app, file);
-		for (const table of this.tables) {
-			this.recount(table, file.path, entry);
-			this.recountJournal(table, file.path);
-		}
+		const entries = gone ? [] : toEntries(this.app, file, this.names);
+		this.repaint([{ id: file.path, entries }]);
+		for (const table of this.tables) this.recountJournal(table, file.path);
 	}
 
 	/**
@@ -342,20 +369,20 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 */
 	private recountJournal(table: HTMLElement, path: string): void {
 		const keeps = (trackPath: string): boolean =>
-			journalsOf(this.app, trackPath).some((journal) => journal.path === path);
+			journalsOf(this.app, trackPath, this.names).some((journal) => journal.path === path);
 
 		for (const row of rowsOfJournal(table, path, keeps)) {
 			const trackPath = row.dataset.track ?? "";
-			const records = journalEntries(this.app, trackPath);
+			const records = journalEntries(this.app, trackPath, this.names);
 
 			for (const cell of cellsOfRow(row)) {
 				const day = readCellRef(cell);
 				if (day === null) continue;
 
-				const entries = records.filter((record) => record.date === day.date);
+				const entries = records.filter((record) => belongsTo(record, day));
 				for (const id of entryIdsOf(cell)) {
 					if (readEntryId(id).record !== null) continue;
-					const note = entryAt(this.app, id, trackPath);
+					const note = entryAt(this.app, id, trackPath, this.names);
 					if (note !== null && belongsTo(note, day)) entries.push(note);
 				}
 				paintCell(cell, entries.sort(byId));
@@ -364,37 +391,51 @@ export default class ProcessTrackerPlugin extends Plugin {
 	}
 
 	/**
-	 * Recounts, in one table, every day the changed note touches: the days whose cells show
-	 * it and the day it claims now ([[entry]]).
+	 * Recounts, in every table on screen, the days the changed entries touch: the days whose
+	 * cells show them and the days they claim now ([[entry]]). An entry closed elsewhere
+	 * appears in the day of its closing, and the day it was made keeps it as a trace.
 	 *
-	 * A day is counted, not guessed: the cell names the notes behind it, and each of them is
-	 * read again from the metadata cache — a lookup in memory, no disk. So a day that holds
-	 * two entries answers for both, and a note that left the day leaves the rest of it
-	 * standing. The work is bounded by the notes of one day, not by the size of the vault.
+	 * A day is counted, not guessed: the cell names the entries behind it, and each of them is
+	 * read again from the metadata cache — a lookup in memory, no disk — save the changed ones,
+	 * which are taken as given. So a day that holds two entries answers for both, and an entry
+	 * that left the day leaves the rest of it standing. The work is bounded by the entries of
+	 * the days touched, not by the size of the vault.
 	 */
-	private recount(table: HTMLElement, path: string, changed: Entry | null): void {
-		const shown: CellRef[] = [];
-		for (const cell of cellsShowing(table, path)) {
-			const day = readCellRef(cell);
-			if (day !== null) shown.push(day);
-		}
+	private repaint(writes: readonly Write[]): void {
+		const ids = writes.map((write) => write.id);
+		const changed = writes.flatMap((write) => write.entries);
 
-		for (const day of touchedDays(shown, changed)) {
-			const cell = cellOf(table, day);
-			if (cell !== null) this.paint(cell, day, path, changed);
+		for (const table of this.tables) {
+			const shown: CellRef[] = [];
+			for (const id of ids) {
+				for (const cell of cellsShowing(table, id)) {
+					const day = readCellRef(cell);
+					if (day !== null) shown.push(day);
+				}
+			}
+
+			for (const day of touchedDays(shown, changed)) {
+				const cell = cellOf(table, day);
+				if (cell !== null) this.paint(cell, day, ids, changed);
+			}
 		}
 	}
 
 	/**
-	 * Repaints one cell from the entries of its day: every note the cell names is read again
-	 * from the metadata cache, and the one note the caller knows better is taken as given —
-	 * as the event brought it, or as a write has just left it.
+	 * Repaints one cell from the entries of its day: every entry the cell names is read again
+	 * from the metadata cache, and the entries the caller knows better are taken as given — as
+	 * the event brought them, or as a write has just left them.
 	 */
-	private paint(cell: HTMLElement, day: CellRef, known: string, changed: Entry | null): void {
+	private paint(
+		cell: HTMLElement,
+		day: CellRef,
+		known: readonly string[],
+		changed: readonly Entry[],
+	): void {
 		const rest: Entry[] = [];
 		for (const id of entryIdsOf(cell)) {
-			if (id === known) continue;
-			const entry = entryAt(this.app, id, day.trackPath);
+			if (known.includes(id)) continue;
+			const entry = entryAt(this.app, id, day.trackPath, this.names);
 			if (entry !== null) rest.push(entry);
 		}
 
@@ -402,47 +443,56 @@ export default class ProcessTrackerPlugin extends Plugin {
 	}
 
 	/**
-	 * An entry as a write has just left it. The metadata cache catches up a moment after the
-	 * write, so `done` is taken as it was asked; the mark, which the write does not touch, is
-	 * read from the cache, where it has been all along — a draft closed by a click shows its
-	 * mark at once. An entry the cache has not read yet has no mark to show until it has.
+	 * An entry as a write has just left it, as an entry of every track it belongs to.
+	 *
+	 * The metadata cache catches up a moment after the write, so the days are taken as the
+	 * write answered them; the tracks and the mark, which the write does not touch, are read
+	 * from the cache, where they have been all along — a draft closed by a click shows its mark
+	 * at once. An entry the cache has not read yet is an entry of the track clicked, with no
+	 * mark to show until it has.
 	 */
-	private written(id: string, day: CellRef, done: boolean): Entry {
-		const known = entryAt(this.app, id, day.trackPath);
-		if (known !== null) return { ...known, done };
+	private afterWrite(id: string, trackPath: string, days: EntryDays | null): Entry[] {
+		if (days === null) return [];
 
 		const address = readEntryId(id);
-		const record =
-			address.record === null
-				? null
-				: { nth: address.record.nth, heading: day.date, line: 0 };
-		return { path: address.path, trackPath: day.trackPath, date: day.date, done, mark: null, record };
+		if (address.record !== null) {
+			const known = entryAt(this.app, id, trackPath, this.names);
+			const record = known?.record ?? {
+				nth: address.record.nth,
+				heading: address.record.date,
+				line: 0,
+			};
+			return [{ path: address.path, trackPath, ...days, mark: known?.mark ?? null, record }];
+		}
+
+		const file = this.app.vault.getFileByPath(address.path);
+		const known = file === null ? [] : toEntries(this.app, file, this.names);
+		if (known.length === 0) {
+			return [{ path: address.path, trackPath, ...days, mark: null, record: null }];
+		}
+		return known.map((entry) => ({ ...entry, ...days }));
 	}
 
 	/**
-	 * Switches one entry of a day, asked for by the list the day opens on hover.
+	 * Closes or opens one entry on the day of the list it was pressed in — the list a day opens
+	 * on hover ([[expectation]] §8).
 	 *
-	 * The cells showing that entry are repainted at once, with the entry taken as it was just
-	 * asked to be: the file is written, but the metadata cache catches up a moment later, and
-	 * reading it here would answer with the state before the write. The answer says whether
-	 * the file took the change, so the box of the list can follow it.
+	 * The days it touches are repainted at once, with the entry taken as the write left it: the
+	 * file is written, but the metadata cache catches up a moment later, and reading it here
+	 * would answer with the state before the write. The answer says whether the file took the
+	 * change, so the box of the list can follow it.
 	 */
-	private async toggleEntry(entry: Entry, done: boolean): Promise<boolean> {
+	private async toggleEntry(entry: Entry, done: boolean, date: string): Promise<boolean> {
 		const id = entryId(entry);
+		let days: EntryDays | null;
 		try {
-			await setEntryDone(this.app, id, done);
+			days = await setEntryDone(this.app, id, done, date, this.names);
 		} catch (error) {
 			new Notice(`Process Tracker: ${message(error)}`);
 			return false;
 		}
 
-		for (const table of this.tables) {
-			for (const cell of cellsShowing(table, id)) {
-				const day = readCellRef(cell);
-				if (day === null) continue;
-				this.paint(cell, day, id, this.written(id, day, done));
-			}
-		}
+		this.repaint([{ id, entries: this.afterWrite(id, entry.trackPath, days) }]);
 		return true;
 	}
 
@@ -508,16 +558,16 @@ export default class ProcessTrackerPlugin extends Plugin {
 			return;
 		}
 
-		const line = entryAt(this.app, id, trackPath)?.record?.line;
+		const line = entryAt(this.app, id, trackPath, this.names)?.record?.line;
 		const state = line === undefined ? undefined : { eState: { line } };
 		await this.app.workspace.getLeaf("tab").openFile(file, state);
 	}
 
 	/**
-	 * Performs what a click asks for ([[expectation]] §8) and repaints the one cell that
-	 * changed. Only that cell: a table redrawn on every click would lose its scroll
-	 * position, and noticing changes made elsewhere in the vault is the business of the
-	 * subscription to `metadataCache`.
+	 * Performs what a click asks for ([[expectation]] §8) and repaints the days that changed:
+	 * the cell clicked, and the other day of an entry closed or opened there. Only those: a
+	 * table redrawn on every click would lose its scroll position, and noticing changes made
+	 * elsewhere in the vault is the business of the subscription to `metadataCache`.
 	 */
 	private async runCellAction(
 		target: CellTarget,
@@ -544,8 +594,8 @@ export default class ProcessTrackerPlugin extends Plugin {
 			}
 
 			if (action.kind === "toggle") {
-				await setEntryDone(this.app, id, action.done);
-				paintCell(target.cell, [this.written(id, target, action.done)]);
+				const days = await setEntryDone(this.app, id, action.done, target.date, this.names);
+				this.repaint([{ id, entries: this.afterWrite(id, target.trackPath, days) }]);
 				return;
 			}
 			await this.openEntry(id, target.trackPath);
@@ -566,7 +616,7 @@ export default class ProcessTrackerPlugin extends Plugin {
 		blockMode: EntriesMode | null,
 	): Promise<void> {
 		const card = this.app.vault.getFileByPath(target.trackPath);
-		const cardMode = card === null ? null : toTrackCard(this.app, card).entries;
+		const cardMode = card === null ? null : toTrackCard(this.app, card, this.names).entries;
 		const mode = resolveEntriesMode(cardMode, blockMode, this.settings.entries);
 
 		if (mode === "journal") {
@@ -576,8 +626,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 				target.date,
 				done,
 				fillDayTemplate,
+				this.names,
 			);
-			paintCell(target.cell, [record]);
+			this.repaint([{ id: entryId(record), entries: [record] }]);
 			return;
 		}
 
@@ -587,35 +638,43 @@ export default class ProcessTrackerPlugin extends Plugin {
 			target.date,
 			done,
 			this.settings.entryFolder,
+			this.names,
 		);
-		paintCell(target.cell, [this.written(file.path, target, done)]);
+		// Made on the day of the cell, and closed on it when the click asked for that.
+		const made: Entry = {
+			path: file.path,
+			trackPath: target.trackPath,
+			created: target.date,
+			closed: done ? target.date : null,
+			mark: null,
+			record: null,
+		};
+		this.repaint([{ id: file.path, entries: [made] }]);
 	}
 
 	/**
-	 * Closes or opens every entry of one day at once ([[expectation]] §8).
+	 * Closes or opens every entry the day counts, at once ([[expectation]] §8). An entry that
+	 * only left a trace here, closed on another day, is not among them.
 	 *
 	 * A note that will not take the change does not stop the others, and it does not pass in
-	 * silence either: the count and the first reason go into a `Notice`. The cell is repainted
-	 * from what was asked only when every note took it; otherwise it is left to the
-	 * subscription, which recounts the day from the vault as the writes land.
+	 * silence either: the count and the first reason go into a `Notice`. The days are repainted
+	 * from the writes that went through; the notes that refused are read from the vault as they
+	 * are, unchanged.
 	 */
 	private async toggleDay(target: CellTarget, done: boolean): Promise<void> {
+		const writes: Write[] = [];
 		const refused: string[] = [];
 		for (const id of target.entryIds) {
 			try {
-				await setEntryDone(this.app, id, done);
+				const days = await setEntryDone(this.app, id, done, target.date, this.names);
+				writes.push({ id, entries: this.afterWrite(id, target.trackPath, days) });
 			} catch (error) {
 				refused.push(message(error));
 			}
 		}
 
-		if (refused.length === 0) {
-			paintCell(
-				target.cell,
-				target.entryIds.map((id) => this.written(id, target, done)),
-			);
-			return;
-		}
+		this.repaint(writes);
+		if (refused.length === 0) return;
 		throw new Error(
 			`${refused.length} of ${target.entryIds.length} entries of ${target.date} ` +
 				`did not take the change: ${refused[0]}`,
@@ -642,9 +701,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 			if (this.app.vault.getFileByPath(address.path) !== null) return written;
 		}
 
-		const index = buildEntryIndex(collectEntries(this.app));
-		const day = findEntries(index, target.trackPath, target.date);
-		return day.length === 1 ? day[0].path : null;
+		const index = buildEntryIndex(collectEntries(this.app, this.names));
+		const day = countedEntries(findEntries(index, target.trackPath, target.date), target.date);
+		return day.length === 1 ? entryId(day[0]) : null;
 	}
 }
 
