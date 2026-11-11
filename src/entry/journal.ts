@@ -53,6 +53,30 @@ export interface JournalRecord {
 	mark: string | null;
 }
 
+/** A top-level block of a note, as the metadata cache lists its sections. */
+export interface OutlineBlock {
+	/** What the block is, in the words of the cache: `paragraph`, `list`, `thematicBreak`. */
+	type: string;
+	/** The line the block starts on, from 0. */
+	line: number;
+}
+
+/**
+ * Whether a stretch of a note — the lines from `from` up to `to` — ends with a horizontal
+ * rule: the last block that starts in it is one ([[nested-tracks#Одна черта|Одна черта]]).
+ *
+ * A comment is passed over: `%% … %%` is a block to the cache and nothing to a reader, so a
+ * rule followed by one is still the last thing the reader sees.
+ */
+export function endsWithRule(blocks: readonly OutlineBlock[], from: number, to: number): boolean {
+	let last: OutlineBlock | null = null;
+	for (const block of blocks) {
+		if (block.type === "comment" || block.line < from || block.line >= to) continue;
+		if (last === null || block.line > last.line) last = block;
+	}
+	return last !== null && last.type === "thematicBreak";
+}
+
 /** A heading that starts a record: `## 2026-09-28`, and whatever follows the date. */
 const RECORD_HEADING = /^(\d{4}-\d{2}-\d{2})(?!\d)/;
 

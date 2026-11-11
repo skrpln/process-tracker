@@ -1,14 +1,27 @@
-// Process Tracker — the pointer over the table: clicks, previews and the list of a day.
+// Process Tracker — the pointer over the table: clicks, previews, the list of a day and the
+// tree of the entries below its track.
 
 import { Keymap, MarkdownRenderChild } from "obsidian";
 import type { App, HoverParent, HoverPopover } from "obsidian";
 import { HOVER_SOURCE } from "../constants.ts";
-import { entryAt } from "../entry/source.ts";
+import { nestedBranches } from "../entry/nested.ts";
+import type { NestedBranch } from "../entry/nested.ts";
+import { entryAt, entryEndsWithRule } from "../entry/source.ts";
 import { entryPreview, standingIn } from "../entry/state.ts";
 import type { CellState, Entry, PropertyNames } from "../model/types.ts";
-import { DayPopup } from "./popup.ts";
+import { trackName, trackParents } from "../tracks/links.ts";
+import { buildTrackTree } from "../tracks/tree.ts";
+import { DayPopup, growNestedTree } from "./popup.ts";
 import type { DayHandlers } from "./popup.ts";
-import { CREATABLE_CLASS, countedIdsOf, entryIdsOf, traceIdsOf } from "./table.ts";
+import {
+	CREATABLE_CLASS,
+	countedIdsOf,
+	descendantsOfRow,
+	entryIdsOf,
+	nestedOf,
+	ownStateOf,
+	traceIdsOf,
+} from "./table.ts";
 
 /** How long the pointer rests on a day before its list opens, as a preview waits too. */
 const OPEN_DELAY = 300;
@@ -25,11 +38,15 @@ export interface CellTarget {
 	cell: HTMLElement;
 	trackPath: string;
 	date: string;
+	/**
+	 * The state of the track's own entries. A cell checked by an entry below its track says
+	 * more than they do, and a click works with the track's own ([[expectation]] §12).
+	 */
 	state: CellState;
 	/**
-	 * Addresses of the entries the cell counts, in the order the list shows them. An entry
-	 * closed on another day leaves only a trace here and is not among them: a click works with
-	 * the day as the cell shows it ([[expectation]] §7).
+	 * Addresses of the track's own entries the cell counts, in the order the list shows them.
+	 * An entry closed on another day leaves only a trace here and is not among them: a click
+	 * works with the day as the cell shows it ([[expectation]] §7).
 	 */
 	entryIds: string[];
 }
@@ -52,8 +69,13 @@ interface HoverTarget {
  * Obsidian unloads the child together with the block, and the listeners go with it.
  */
 export class CellPointerChild extends MarkdownRenderChild implements HoverParent {
-	/** Where the core Page preview plugin keeps the popover it opened for this table. */
-	hoverPopover: HoverPopover | null = null;
+	/** The popover the core Page preview plugin opened for this table, while it is shown. */
+	private popover: HoverPopover | null = null;
+	/**
+	 * The cell whose own entry was last handed to the preview while entries stood below its
+	 * track: the popover shown next is that entry's, and the tree of the day goes under it.
+	 */
+	private treeCell: HTMLElement | null = null;
 
 	/** The list of a day, while one is open. */
 	private day: DayPopup | null = null;
@@ -75,6 +97,45 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		private readonly names: PropertyNames,
 	) {
 		super(containerEl);
+	}
+
+	/** Where the core Page preview plugin keeps the popover it opened for this table. */
+	get hoverPopover(): HoverPopover | null {
+		return this.popover;
+	}
+
+	/**
+	 * Obsidian writes a popover here at the moment it shows it. That is where the tree of a
+	 * day is added to the preview of the track's own entry ([[nested-tracks]]): the popover is
+	 * Obsidian's, the entry in it stays editable, and the tree stands under it.
+	 *
+	 * Which popover it is, Obsidian does not say; the pointer does. A preview asked for is
+	 * dropped by Obsidian once the pointer leaves its cell, so the one that gets shown belongs
+	 * to the cell the pointer was last over — and a hover on anything else forgets the cell.
+	 */
+	set hoverPopover(popover: HoverPopover | null) {
+		this.popover = popover;
+		const cell = this.treeCell;
+		if (popover === null || cell === null) return;
+
+		// One rule stands between the entry and the tree: the one the text of the entry ends
+		// with, and where it ends with none, one the tree brings ([[nested-tracks]]).
+		const [id] = entryIdsOf(cell);
+		const own = id === undefined ? null : entryAt(this.app, id, cell.dataset.track ?? "", this.names);
+		const rule = own === null || !entryEndsWithRule(this.app, own);
+
+		growNestedTree(
+			popover,
+			this.branchesOf(cell),
+			{
+				app: this.app,
+				sourcePath: this.sourcePath,
+				date: cell.dataset.date ?? "",
+				handlers: this.handlers,
+				trackName: (trackPath) => trackName(this.app, trackPath, this.names),
+			},
+			rule,
+		);
 	}
 
 	onload(): void {
@@ -118,6 +179,10 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	 * A day that holds an entry closed on another day opens the list even when that entry is
 	 * all it holds: only the list shows it as it stands in this day — an open box, which closes
 	 * it here ([[expectation]] §7).
+	 *
+	 * A day with entries below its track shows them as a tree ([[expectation]] §12): under the
+	 * preview of the track's own entry where it has one, under the list where it has several,
+	 * and alone — in the popup of the plugin — where it has none.
 	 */
 	private onHover(event: MouseEvent): void {
 		const cell = closestOf(event.target, ".process-tracker__cell");
@@ -126,6 +191,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 			return;
 		}
 
+		this.treeCell = null;
 		this.cancelOpen();
 		this.liveDay()?.scheduleClose();
 
@@ -136,7 +202,9 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 
 	private onCellHover(cell: HTMLElement, event: MouseEvent): void {
 		const ids = entryIdsOf(cell);
-		if (ids.length > 1 || traceIdsOf(cell).length > 0) {
+		const below = nestedOf(cell).length > 0;
+		if (ids.length > 1 || traceIdsOf(cell).length > 0 || (below && ids.length === 0)) {
+			this.treeCell = null;
 			const open = this.liveDay();
 			// The pointer came back to the cell the list belongs to: the list stays.
 			if (open !== null && open.cell === cell) {
@@ -153,7 +221,34 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		this.liveDay()?.scheduleClose();
 		const entry =
 			ids.length === 1 ? entryAt(this.app, ids[0], cell.dataset.track ?? "", this.names) : null;
+		// Set before the preview is asked for: the popover may be shown from within the call.
+		this.treeCell = entry !== null && below ? cell : null;
 		if (entry !== null) this.preview({ element: cell, path: entryPreview(entry) }, event);
+	}
+
+	/**
+	 * The tree of a day: the entries below the track of a cell, under the children of the
+	 * track ([[expectation]] §12).
+	 *
+	 * The entries are the ones the cell names, read again, so the boxes show what the vault
+	 * says now. The tree is built from the tracks the row lists as its descendants, with the
+	 * parents of each read at this moment: who stands below the row is the render's word, how
+	 * they stand under one another is the vault's ([[nested-tracks]]).
+	 */
+	private branchesOf(cell: HTMLElement): NestedBranch[] {
+		const entries: Entry[] = [];
+		for (const ref of nestedOf(cell)) {
+			const entry = entryAt(this.app, ref.id, ref.trackPath, this.names);
+			if (entry !== null) entries.push(entry);
+		}
+		if (entries.length === 0) return [];
+
+		const trackPath = cell.dataset.track ?? "";
+		const tracks = [trackPath, ...descendantsOfRow(cell.parentElement)];
+		const tree = buildTrackTree(
+			tracks.map((path) => ({ path, parents: trackParents(this.app, path, this.names) })),
+		);
+		return nestedBranches(tree, trackPath, entries);
 	}
 
 	/**
@@ -184,9 +279,10 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	}
 
 	/**
-	 * Opens the list of one day. The notes are read again here, so the boxes show what the
-	 * vault says at the moment the list appears. A day that thinned out to one note it counts
-	 * in the meantime gets no list: the cell itself is repainted by the subscription.
+	 * Opens the list of one day, and the tree of the entries below its track under it. The
+	 * notes are read again here, so the boxes show what the vault says at the moment the list
+	 * appears. A day that thinned out to one note it counts in the meantime gets no list: the
+	 * cell itself is repainted by the subscription.
 	 */
 	private openDayList(cell: HTMLElement, ids: string[]): void {
 		this.opening = 0;
@@ -199,10 +295,19 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 		}
 		const date = cell.dataset.date ?? "";
 		const single = entries.length === 1 && standingIn(entries[0], date) !== "trace";
-		if (entries.length === 0 || single) return;
+		const branches = this.branchesOf(cell);
+		if (single || (entries.length === 0 && branches.length === 0)) return;
 
 		this.closeDay();
-		this.day = new DayPopup(this.app, this.sourcePath, cell, entries, this.handlers);
+		this.day = new DayPopup(
+			this.app,
+			this.sourcePath,
+			cell,
+			entries,
+			branches,
+			this.handlers,
+			(trackPath) => trackName(this.app, trackPath, this.names),
+		);
 	}
 
 	private cancelOpen(): void {
@@ -235,7 +340,7 @@ function readCell(node: EventTarget | null): CellTarget | null {
 		cell,
 		trackPath,
 		date,
-		state: (cell.dataset.state ?? "empty") as CellState,
+		state: ownStateOf(cell),
 		entryIds: countedIdsOf(cell),
 	};
 }

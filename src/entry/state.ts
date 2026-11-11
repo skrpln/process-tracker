@@ -240,8 +240,20 @@ export function readEntryId(id: string): EntryAddress {
  * of its own — the popup is where a day is taken apart ([[entry]]).
  *
  * A trace does not count: a day that holds nothing but entries closed on other days is empty.
+ *
+ * `nested` are the entries of the tracks below this one ([[nested-tracks]]). One of them closed
+ * in this day checks the box, whatever the track's own entries say; an open one changes
+ * nothing — the popup shows it, the cell does not ([[expectation]] §12).
  */
-export function cellState(entries: readonly Entry[], date: string): CellState {
+export function cellState(
+	entries: readonly Entry[],
+	date: string,
+	nested: readonly Entry[] = NO_ENTRIES,
+): CellState {
+	for (const entry of nested) {
+		if (standingIn(entry, date) === "closed") return "done";
+	}
+
 	let closed = 0;
 	for (const entry of entries) {
 		const standing = standingIn(entry, date);
@@ -256,9 +268,23 @@ export function cellState(entries: readonly Entry[], date: string): CellState {
  * of one entry. A draft keeps its box, and a day of several keeps the checkmark or the draft
  * of the common rule — whose mark it would be is not the table's to choose. Traces are not
  * counted here either.
+ *
+ * An entry closed below the track counts as one of the day ([[nested-tracks]]): a day closed
+ * by it alone shows its mark, and a day closed by two — the track's own and one below, or two
+ * below — keeps the checkmark. A note that is an entry of several tracks is one entry here.
  */
-export function cellMark(entries: readonly Entry[], date: string): string | null {
-	const counted = countedEntries(entries, date);
-	if (counted.length !== 1 || counted[0].closed === null) return null;
-	return counted[0].mark;
+export function cellMark(
+	entries: readonly Entry[],
+	date: string,
+	nested: readonly Entry[] = NO_ENTRIES,
+): string | null {
+	const counted = new Map<string, Entry>();
+	for (const entry of countedEntries(entries, date)) counted.set(entryId(entry), entry);
+	for (const entry of nested) {
+		if (standingIn(entry, date) === "closed") counted.set(entryId(entry), entry);
+	}
+	if (counted.size !== 1) return null;
+
+	const [only] = counted.values();
+	return only.closed === null ? null : only.mark;
 }

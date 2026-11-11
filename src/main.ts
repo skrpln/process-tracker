@@ -24,6 +24,7 @@ import {
 import { buildDateColumns } from "./dates/grid.ts";
 import { cellAction } from "./entry/actions.ts";
 import { resolveEntriesMode } from "./entry/mode.ts";
+import { recountNested } from "./entry/nested.ts";
 import { belongsTo, recountDay, touchedDays } from "./entry/refresh.ts";
 import type { CellRef } from "./entry/refresh.ts";
 import {
@@ -52,21 +53,26 @@ import {
 	cellOf,
 	cellsOfRow,
 	cellsShowing,
+	descendantsOfRow,
 	dressDayCaption,
 	entryIdsOf,
+	nestedOf,
 	paintCell,
 	readCellRef,
 	renderError,
 	renderTracker,
 	renderWarnings,
 	rowsOfJournal,
+	rowsWithDescendants,
 } from "./render/table.ts";
 import { ProcessTrackerSettingTab } from "./settings-tab.ts";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./settings.ts";
 import type { ProcessTrackerSettings } from "./settings.ts";
 import { applyTrackFilter, dataviewState } from "./tracks/dataview.ts";
+import { trackParents } from "./tracks/links.ts";
 import { selectTracks } from "./tracks/select.ts";
 import { toTrackCard } from "./tracks/source.ts";
+import { buildTrackTree, descendantsOf } from "./tracks/tree.ts";
 
 /**
  * How long Dataview has to stay silent before a block drawn during indexing asks for its rows
@@ -154,7 +160,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 			const { options, warnings } = parseCodeBlock(source);
 
 			const { cards, notes } = this.scanVault();
-			const tracks = this.filterTracks(cards, options, sourcePath, warnings);
+			const tagged = selectTracks(cards, this.settings.trackTag, options.sort);
+			const tracks = applyTrackFilter(this.app, tagged, options.track, sourcePath, warnings);
+			const descendants = this.descendantsOf(tracks, tagged);
 			const columns = buildDateColumns({
 				start: options.start,
 				today: new Date(),
@@ -168,16 +176,22 @@ export default class ProcessTrackerPlugin extends Plugin {
 			const place = dailyNotePlace(this.app, options.dailyNoteDir, warnings);
 			const days = columns.map((column) => column.iso);
 
-			// Notes are found wherever they lie; records only in the journals of these tracks.
+			// Notes are found wherever they lie; records only in the journals of these tracks
+			// and of the tracks below them, whose entries count in the cells of the rows.
+			const journals = new Set(tracks.map((track) => track.path));
+			for (const below of descendants.values()) {
+				for (const path of below) journals.add(path);
+			}
 			const entries = [
 				...notes,
-				...collectJournalEntries(this.app, tracks.map((track) => track.path), this.names),
+				...collectJournalEntries(this.app, Array.from(journals), this.names),
 			];
 
 			const elements = renderTracker(element, {
 				tracks,
 				columns,
 				entries: buildEntryIndex(entries),
+				descendants,
 				dailyNotes: place === null ? new Map() : findDailyNotes(this.app, place, days),
 				dailyNotesCreatable: place !== null,
 				trackColor: options.trackColor,
@@ -257,6 +271,30 @@ export default class ProcessTrackerPlugin extends Plugin {
 	): TrackCard[] {
 		const tagged = selectTracks(cards, this.settings.trackTag, options.sort);
 		return applyTrackFilter(this.app, tagged, options.track, sourcePath, warnings);
+	}
+
+	/**
+	 * The tracks below each row that has any ([[nested-tracks]]): its children, their children
+	 * and so on, whether the block shows them as rows or not.
+	 *
+	 * The tree is built over every card with the plugin tag, in the order of the block's `sort`:
+	 * a track below a row need not pass the `track` filter of the block, and the popup lists
+	 * what stands below a track in the order the table lists its rows. Only the tagged cards
+	 * are asked for their parents — a handful of lookups in the metadata cache.
+	 */
+	private descendantsOf(rows: TrackCard[], tagged: TrackCard[]): Map<string, string[]> {
+		const names = this.names;
+		const tree = buildTrackTree(
+			tagged.map((card) => ({ path: card.path, parents: trackParents(this.app, card.path, names) })),
+		);
+
+		const descendants = new Map<string, string[]>();
+		if (tree.children.size === 0) return descendants;
+		for (const row of rows) {
+			const below = descendantsOf(tree, row.path);
+			if (below.length > 0) descendants.set(row.path, below);
+		}
+		return descendants;
 	}
 
 	/** The rows a block would draw now, as a key; `null` when the block cannot be read. */
@@ -349,31 +387,57 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 *
 	 * Track cards are not watched as cards. A tag taken off a card changes the rows of the table,
 	 * not a cell in it, and that is the business of the next render ([[architecture]]); a card
-	 * that keeps its own journal is a journal to this handler.
+	 * that keeps its own journal is a journal to this handler. Nor is the link of a card to its
+	 * parent watched: which tracks stand below a row is the word of the render
+	 * ([[nested-tracks]]).
 	 */
 	private refresh(file: TFile, gone = false): void {
 		if (this.tables.size === 0) return;
 
 		const entries = gone ? [] : toEntries(this.app, file, this.names);
 		this.repaint([{ id: file.path, entries }]);
-		for (const table of this.tables) this.recountJournal(table, file.path);
+
+		// Whether a track keeps the changed note as its journal is asked of each track once,
+		// however many rows and tables have it below them.
+		const answers = new Map<string, boolean>();
+		const keeps = (trackPath: string): boolean => {
+			let answer = answers.get(trackPath);
+			if (answer === undefined) {
+				answer = journalsOf(this.app, trackPath, this.names).some(
+					(journal) => journal.path === file.path,
+				);
+				answers.set(trackPath, answer);
+			}
+			return answer;
+		};
+		for (const table of this.tables) this.recountJournal(table, file.path, keeps);
 	}
 
 	/**
-	 * Recounts, in one table, every row whose track keeps the changed note as its journal.
+	 * Recounts, in one table, every row the changed journal can change: the rows of the tracks
+	 * that keep the note as their journal, and the rows that have such a track below them
+	 * ([[nested-tracks]]).
 	 *
 	 * The records of the row are read again from the metadata cache — the headings and the boxes
 	 * of two notes at most — and the notes the cells name are read as `paint` reads them. Lines
 	 * move with every record written above them, so the whole row is repainted, not the day the
 	 * change was in: the addresses in the cells have to follow.
+	 *
+	 * Below the row the same is done for the tracks that keep the journal: their records are
+	 * read again, the records the cells showed of them — and of the changed note, whoever kept
+	 * it — are dropped, and every other entry from below is read by its address.
 	 */
-	private recountJournal(table: HTMLElement, path: string): void {
-		const keeps = (trackPath: string): boolean =>
-			journalsOf(this.app, trackPath, this.names).some((journal) => journal.path === path);
-
+	private recountJournal(
+		table: HTMLElement,
+		path: string,
+		keeps: (trackPath: string) => boolean,
+	): void {
 		for (const row of rowsOfJournal(table, path, keeps)) {
 			const trackPath = row.dataset.track ?? "";
 			const records = journalEntries(this.app, trackPath, this.names);
+			const below = descendantsOfRow(row);
+			const keepers = below.filter(keeps);
+			const recordsBelow = collectJournalEntries(this.app, keepers, this.names);
 
 			for (const cell of cellsOfRow(row)) {
 				const day = readCellRef(cell);
@@ -385,7 +449,20 @@ export default class ProcessTrackerPlugin extends Plugin {
 					const note = entryAt(this.app, id, trackPath, this.names);
 					if (note !== null && belongsTo(note, day)) entries.push(note);
 				}
-				paintCell(cell, entries.sort(byId));
+
+				const nested: Entry[] = [];
+				for (const ref of nestedOf(cell)) {
+					const address = readEntryId(ref.id);
+					const reread = address.path === path || keepers.includes(ref.trackPath);
+					if (address.record !== null && reread) continue;
+					const entry = entryAt(this.app, ref.id, ref.trackPath, this.names);
+					if (entry !== null) nested.push(entry);
+				}
+				paintCell(
+					cell,
+					entries.sort(byId),
+					recountNested(day.date, below, nested, recordsBelow),
+				);
 			}
 		}
 	}
@@ -393,7 +470,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 	/**
 	 * Recounts, in every table on screen, the days the changed entries touch: the days whose
 	 * cells show them and the days they claim now ([[entry]]). An entry closed elsewhere
-	 * appears in the day of its closing, and the day it was made keeps it as a trace.
+	 * appears in the day of its closing, and the day it was made keeps it as a trace. The same
+	 * days are recounted in the rows of the tracks above the entry's own, whose cells it closes
+	 * too ([[nested-tracks]]).
 	 *
 	 * A day is counted, not guessed: the cell names the entries behind it, and each of them is
 	 * read again from the metadata cache — a lookup in memory, no disk — save the changed ones,
@@ -414,7 +493,10 @@ export default class ProcessTrackerPlugin extends Plugin {
 				}
 			}
 
-			for (const day of touchedDays(shown, changed)) {
+			// The rows with tracks below them are asked for only where an entry stands to be
+			// placed: an event about a note that is no entry stops here.
+			const above = changed.length === 0 ? [] : rowsWithDescendants(table);
+			for (const day of touchedDays(shown, changed, above)) {
 				const cell = cellOf(table, day);
 				if (cell !== null) this.paint(cell, day, ids, changed);
 			}
@@ -424,7 +506,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 	/**
 	 * Repaints one cell from the entries of its day: every entry the cell names is read again
 	 * from the metadata cache, and the entries the caller knows better are taken as given — as
-	 * the event brought them, or as a write has just left them.
+	 * the event brought them, or as a write has just left them. The entries below the track of
+	 * the cell are counted the same way, each read as an entry of the track the cell names for
+	 * it ([[nested-tracks]]).
 	 */
 	private paint(
 		cell: HTMLElement,
@@ -439,7 +523,19 @@ export default class ProcessTrackerPlugin extends Plugin {
 			if (entry !== null) rest.push(entry);
 		}
 
-		paintCell(cell, recountDay(day, rest, changed));
+		const restBelow: Entry[] = [];
+		for (const ref of nestedOf(cell)) {
+			if (known.includes(ref.id)) continue;
+			const entry = entryAt(this.app, ref.id, ref.trackPath, this.names);
+			if (entry !== null) restBelow.push(entry);
+		}
+
+		const below = descendantsOfRow(cell.parentElement);
+		paintCell(
+			cell,
+			recountDay(day, rest, changed),
+			recountNested(day.date, below, restBelow, changed),
+		);
 	}
 
 	/**

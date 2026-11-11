@@ -11,6 +11,15 @@ export interface CellRef {
 }
 
 /**
+ * A row of a rendered table that has tracks below its own, as the renderer writes it into the
+ * DOM: its track, and its descendants ([[nested-tracks]]).
+ */
+export interface RowRef {
+	trackPath: string;
+	descendants: readonly string[];
+}
+
+/**
  * The days changed entries ask the table to recount: the days whose cells show them right
  * now, and the days they claim after the change — the day each was made and the day it was
  * closed, in the row of every track it belongs to. No day is named twice.
@@ -19,8 +28,16 @@ export interface CellRef {
  * addresses of a day into the cell — so the plugin keeps no copy of the vault in memory. A note
  * that moved from one day to another touches both, a note just closed appears in the day of
  * its closing, and a note that stopped being an entry touches only the days it is leaving.
+ *
+ * An entry closes the cells of the tracks above its own too ([[expectation]] §12), so its days
+ * are named in every one of `rows` that has its track below: the rows of the table that have
+ * descendants, each with the list the renderer gave it.
  */
-export function touchedDays(shown: readonly CellRef[], entries: readonly Entry[]): CellRef[] {
+export function touchedDays(
+	shown: readonly CellRef[],
+	entries: readonly Entry[],
+	rows: readonly RowRef[] = [],
+): CellRef[] {
 	const days: CellRef[] = [];
 	const add = (day: CellRef): void => {
 		if (!days.some((known) => sameCell(known, day))) days.push(day);
@@ -28,7 +45,12 @@ export function touchedDays(shown: readonly CellRef[], entries: readonly Entry[]
 
 	for (const day of shown) add(day);
 	for (const entry of entries) {
-		for (const date of daysOf(entry)) add({ trackPath: entry.trackPath, date });
+		for (const date of daysOf(entry)) {
+			add({ trackPath: entry.trackPath, date });
+			for (const row of rows) {
+				if (row.descendants.includes(entry.trackPath)) add({ trackPath: row.trackPath, date });
+			}
+		}
 	}
 	return days;
 }

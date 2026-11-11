@@ -112,7 +112,12 @@ const PROPERTY_GROUPS: readonly { heading: string; fields: readonly PropertyFiel
 	{
 		heading: "Entry properties",
 		fields: [
-			{ key: "track", desc: "Links an entry note to its track: one link, or a list of them." },
+			{
+				key: "track",
+				desc:
+					"Links an entry note to its track, and a track to its parent track: one " +
+					"link, or a list of them.",
+			},
 			{ key: "done", desc: "Checks the day: true or false." },
 			{
 				key: "created",

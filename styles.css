@@ -678,3 +678,112 @@ body.theme-light .process-tracker {
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
+
+/*
+ * The tree of a day: the children of a track and, under each, the entries of the day that
+ * stand below it.
+ *
+ * The markup is the one Obsidian renders a list of a note into — `ul.has-list-bullet`,
+ * `li.task-list-item`, `.task-list-item-checkbox`, all under `markdown-rendered` — so the
+ * bullets, the indents and the look of a done task are the theme's. Stated here is only what
+ * Obsidian hangs on the view class the tree does without, and the place of the tree in the
+ * two popups it stands in.
+ */
+.process-tracker__nested > ul {
+	/* The popup gives the tree its space; the paragraph spacing of a list in a note would add to it. */
+	margin-block: 0;
+}
+
+/* What Obsidian states for the box of a task under `markdown-preview-view`: its place on the line. */
+.process-tracker__nested .task-list-item-checkbox {
+	position: relative;
+	top: 0.2em;
+	margin-inline-end: 0.6em;
+}
+
+/*
+ * The rule between what a day holds of its own and the tree. It is a real `hr` under
+ * `markdown-rendered`, so its colour, its thickness and whatever else a theme gives a rule of
+ * a note are the theme's. Only the space around it is stated: in the list of a day it stands
+ * between rows of links, not between paragraphs.
+ */
+.process-tracker__day-list .process-tracker__nested > hr {
+	margin: var(--size-4-2) 0;
+}
+
+/*
+ * A done task of a note strikes through everything inside its item, the tasks nested under it
+ * too: a text decoration runs down to every block below. In the tree a box says "this entry
+ * is closed", and an open entry under a closed one must not look closed. A decoration stops at
+ * an inline block, so the list under a task is one, as wide as the item.
+ */
+.process-tracker__nested li.task-list-item > ul {
+	display: inline-block;
+	width: 100%;
+	vertical-align: top;
+}
+
+/*
+ * In a popover of Obsidian the tree stands inside the note the popover previews, after its
+ * text: the popup is one surface whichever of the two a theme paints, scrolls as one and is
+ * placed by Obsidian as one.
+ *
+ * Obsidian makes the text of a previewed note as tall as the popover (`height: 100%` down to
+ * the view, which scrolls inside itself). With the tree after it, the text still took the whole
+ * height and the tree stood below it, a tree's height further down, behind a scrollbar. So the
+ * note that holds a tree is as tall as its text, the way an embed in a note is, and the
+ * popover scrolls the two together.
+ */
+.popover.hover-popover > .markdown-embed.process-tracker__nested-note > .markdown-embed-content {
+	height: auto;
+}
+
+/*
+ * The tree starts right under the rule the entry ends with, as the next line would. Two things
+ * stood between them: the padding a note ends with, in the reading view and in the editor, and
+ * the margin under the rule.
+ *
+ * The rule is the last block of the text: an `hr` in a block of the reading view that no block
+ * of text follows — a footer of Obsidian's own may. A rule in the middle of the text keeps its
+ * margin.
+ */
+.popover.hover-popover > .markdown-embed.process-tracker__nested-note > .markdown-embed-content .markdown-preview-view,
+.popover.hover-popover > .markdown-embed.process-tracker__nested-note > .markdown-embed-content > .markdown-source-view.mod-cm6 > .cm-editor > .cm-scroller {
+	padding-bottom: 0;
+}
+
+.process-tracker__nested-note .markdown-preview-sizer > .el-hr:not(:has(~ div:not(.mod-ui))) > hr {
+	margin-bottom: var(--size-4-2);
+}
+
+/*
+ * The padding of the tree is the one Obsidian gives the text of the note, so the two start on
+ * one vertical; `--file-margins` holds one value or two, and the second declaration takes the
+ * top back whichever it is. The rule the tree brings, where the text ends with none, keeps
+ * above it the margin a theme gives a rule and below it the same space the rule of the text is
+ * left with. The text is set as the note above is: the text font, at the size of a popover.
+ */
+.popover.hover-popover .process-tracker__nested.is-hosted {
+	box-sizing: border-box;
+	padding: var(--file-margins);
+	padding-top: 0;
+	font-family: var(--font-text);
+	font-size: var(--popover-font-size);
+}
+
+.popover.hover-popover .process-tracker__nested.is-hosted > hr {
+	margin-bottom: var(--size-4-2);
+}
+
+/*
+ * A popover found without a note inside keeps the tree as a child of its own. A popover lays
+ * its children out in a row, so the class turns the row into a column and the tree goes last.
+ */
+.popover.hover-popover.process-tracker__nested-host {
+	flex-direction: column;
+}
+
+.popover.hover-popover.process-tracker__nested-host > .process-tracker__nested {
+	order: 1;
+	flex: 0 0 auto;
+}

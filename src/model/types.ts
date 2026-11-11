@@ -83,7 +83,10 @@ export interface TrackCard {
  * ([[architecture#Настройки|architecture]]); the defaults are in `constants.ts`.
  */
 export interface PropertyNames {
-	/** Of an entry note: the link to its track card, or a list of them. */
+	/**
+	 * Of an entry note: the link to its track card, or a list of them. Of a track card: the
+	 * link to its parent track, by the same name ([[nested-tracks]]).
+	 */
 	track: string;
 	/** Of an entry note: checks the box — only a true value counts as done. */
 	done: string;

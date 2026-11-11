@@ -20,6 +20,7 @@ track_color: "#4CAF50"          # Colour of the checkmarks. Without it the theme
 template: "[[Cleaning entry]]"  # Template for new entry notes of this track.
 entries: journal                # Optional: notes (default) or journal, see below.
 journal: "[[Cleaning log]]"     # Optional: where the journal lives. Without it, in this note.
+track: "[[Home]]"               # Optional: the parent track, see "Tracks inside tracks".
 ---
 ```
 
@@ -156,6 +157,32 @@ anything worth keeping about that day
 
 The mode only decides how new entries are made. The table always shows both kinds, so a track can switch modes and keep its history. The track note says it first with `entries`, then the code block, then the plugin settings.
 
+### Tracks inside tracks
+
+A track can stand under another one: an area of life, the tracks in it, the tasks of each. Give the track note a `track` property that links to its parent — or a list of links, if it has several:
+
+```yaml
+---
+tags: process_tracker
+track: "[[Home]]"
+---
+```
+
+Whatever is done below a track shows in its row:
+
+- A day is checked when an entry of a track below it — a child, a child of a child, and so on — was closed on that day. Open entries below do not change the cell.
+- Hover the cell to see what was done: the entry of the track itself, a rule, and right under it a tree of that day. Each child of the track is a line; under it stand its entry notes and the entries of the tracks below it. A child that has a journal record of its own for the day is a checkbox itself — the box of that record — so a track whose children have a record each shows a plain checklist. A box in the tree checks and unchecks its entry, a name opens the note. A child with nothing on that day is left out.
+- Click and `Cmd`/`Ctrl` + click work with the entries of the track itself, as in any other row; the entries below are changed from the tree.
+- A day closed by a single entry shows the `mark` of that entry, whichever track it belongs to.
+- `stroke` runs through the days closed from below as well.
+
+The tracks below a row do not have to be rows of the same table: a table with one row for `Home` still counts every task under it. The tree lists them in the order of the table's `sort`.
+
+A track note that also has `done` is a long task: a track with a row and a journal of its own and, at the same time, an entry of its parent — open from the day it was `created`, checked on the day it was `closed`.
+
+> [!note]
+> The tree under the entry of the track itself is added to the preview of the core **Page preview** plugin, so it needs that plugin on. A day with no entry of its own shows the tree in a popup of Process Tracker.
+
 ### 4. Click a date
 
 The caption above a column is a link when the daily note of that day is in your vault: a click opens it in this tab, `Cmd`/`Ctrl` + click in a new one, and hovering it gives the same preview a cell does.
@@ -181,7 +208,7 @@ A day without a daily note shows a plain number, so the caption itself tells you
 | Entry folder | Where new entry notes go.                                    | vault root        |
 | New entries  | Separate notes, or records in the journal of the track. The `entries` property of a track note and of a code block override it. | separate notes |
 | First column alignment | How the track names and the corner title stand. The `align` option of a code block overrides it. | center |
-| Entry properties, Track properties | The names of the properties the plugin reads and writes, one field each: `track`, `done`, `created`, `closed`, `date`, `mark` of an entry note, `track_name`, `track_color`, `template`, `entries`, `journal` of a track note. Rename one to match the properties your notes already use; an empty field means the default name. | the names above |
+| Entry properties, Track properties | The names of the properties the plugin reads and writes, one field each: `track`, `done`, `created`, `closed`, `date`, `mark` of an entry note, `track_name`, `track_color`, `template`, `entries`, `journal` of a track note. The link of a track to its parent goes by the same name as `track`. Rename one to match the properties your notes already use; an empty field means the default name. | the names above |
 
 ## Bugs and questions
 

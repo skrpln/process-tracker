@@ -9,6 +9,7 @@ import {
 	collectEntries as collectAll,
 	collectJournalEntries as collectRecords,
 	entryAt as entryAtWith,
+	entryEndsWithRule,
 	journalsOf as journalsOfWith,
 	outlineOf,
 	toEntries,
@@ -265,6 +266,8 @@ interface Journal {
 	frontmatterLinks?: { key: string; link: string }[];
 	/** The text; its headings and boxes are handed out the way the metadata cache lists them. */
 	text?: string;
+	/** The top-level blocks of the note, as the cache lists its sections: a type and a line. */
+	sections?: { type: string; line: number }[];
 }
 
 /** A vault whose cache lists headings and boxes, built from the text of each note. */
@@ -295,6 +298,10 @@ function journalApp(notes: Journal[]): App {
 						position: position(heading.line, heading.end),
 					})),
 					listItems: outline.tasks.map((task) => ({ task: task.mark, position: position(task.line) })),
+					sections: note.sections?.map((section) => ({
+						type: section.type,
+						position: position(section.line),
+					})),
 				};
 			},
 			getFirstLinkpathDest: (link: string) =>
@@ -393,5 +400,58 @@ describe("journal entries", () => {
 		const scanned = scanOutline(text);
 		assert.deepEqual(outline.headings, scanned.headings);
 		assert.deepEqual(outline.tasks, scanned.tasks);
+	});
+});
+
+describe("entryEndsWithRule", () => {
+	// Two records: the first is closed with a rule, the second runs to the end of the note.
+	const journal: Journal = {
+		path: "home.md",
+		text: "# Journal\n## 2026-11-09\n- [x] done\ntext\n\n---\n\n## 2026-11-08\n- [x] done\ntext",
+		sections: [
+			{ type: "heading", line: 0 },
+			{ type: "heading", line: 1 },
+			{ type: "list", line: 2 },
+			{ type: "thematicBreak", line: 5 },
+			{ type: "heading", line: 7 },
+			{ type: "list", line: 8 },
+		],
+	};
+	const app = journalApp([
+		journal,
+		{ path: "ruled.md", sections: [{ type: "yaml", line: 0 }, { type: "paragraph", line: 4 }, { type: "thematicBreak", line: 6 }] },
+		{ path: "plain.md", sections: [{ type: "yaml", line: 0 }, { type: "paragraph", line: 4 }] },
+		{ path: "bare.md" },
+	]);
+	const record = (date: string) => entryAtWith(app, `home.md#${date}#0`, "home.md", names);
+	const note = (path: string) => ({
+		path,
+		trackPath: "home.md",
+		created: "2026-11-09",
+		closed: null,
+		mark: null,
+		record: null,
+	});
+
+	it("says yes for a record whose text ends with a rule", () => {
+		const entry = record("2026-11-09");
+		assert.ok(entry !== null);
+		assert.equal(entryEndsWithRule(app, entry), true);
+	});
+
+	it("says no for a record that ends with text, whatever the record above it ends with", () => {
+		const entry = record("2026-11-08");
+		assert.ok(entry !== null);
+		assert.equal(entryEndsWithRule(app, entry), false);
+	});
+
+	it("reads an entry note to its end", () => {
+		assert.equal(entryEndsWithRule(app, note("ruled.md")), true);
+		assert.equal(entryEndsWithRule(app, note("plain.md")), false);
+	});
+
+	it("says no for a note the cache lists no blocks of, and for one that is gone", () => {
+		assert.equal(entryEndsWithRule(app, note("bare.md")), false);
+		assert.equal(entryEndsWithRule(app, note("gone.md")), false);
 	});
 });

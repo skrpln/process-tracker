@@ -4,7 +4,8 @@
 import { setTooltip } from "obsidian";
 import { fillTitle, titleParts } from "../codeblock/title.ts";
 import { formatDay, formatMonthYear, splitMonthYear } from "../dates/grid.ts";
-import type { CellRef } from "../entry/refresh.ts";
+import { nestedEntries } from "../entry/nested.ts";
+import type { CellRef, RowRef } from "../entry/refresh.ts";
 import {
 	cellMark,
 	cellState,
@@ -101,10 +102,39 @@ export const STROKE_ATTRIBUTE = "data-stroke";
 export const TRACE_ATTRIBUTE = "data-trace";
 
 /**
+ * Attribute a row names the tracks below its own in — its descendants, one path per line, in
+ * the order of the table ([[nested-tracks]]). Written only for a track that has some, so its
+ * absence is also the answer to whether anything stands below this row.
+ */
+export const DESCENDANTS_ATTRIBUTE = "data-descendants";
+
+/**
+ * Attribute a cell names the entries of the descendants of its track in: the entries that
+ * stand in this day below the track, one address per line ([[expectation]] §12).
+ */
+export const NESTED_ATTRIBUTE = "data-nested";
+
+/**
+ * Attribute a cell names the track of each of those entries in, line for line with
+ * `data-nested`: an address says where an entry stands, not whose it is.
+ */
+export const NESTED_TRACK_ATTRIBUTE = "data-nested-track";
+
+/**
+ * Attribute a cell carries the state of the track's own entries in, where an entry closed
+ * below made the cell say more than they do. A click works with the track's own entries and
+ * reads its state here ([[expectation]] §12).
+ */
+export const OWN_STATE_ATTRIBUTE = "data-own-state";
+
+/**
  * How the addresses of a day are written into one attribute: one per line. A vault path holds
  * no newline, so the list splits back exactly as it was written.
  */
 const ID_SEPARATOR = "\n";
+
+/** The answer for a row with nothing below it; shared, so a row allocates nothing. */
+const NO_TRACKS: readonly string[] = Object.freeze([]);
 
 /** A row of the date cells, which names its track in `data-track`. */
 const ROW_SELECTOR = ".process-tracker__dates tr[data-track]";
@@ -115,6 +145,11 @@ export interface TrackerView {
 	columns: DateColumn[];
 	/** Entries of the vault; decide the state of every cell. */
 	entries: EntryIndex;
+	/**
+	 * The tracks below each row that has any: track path -> its descendants, in the order of
+	 * the table. Their entries count in the cells of the row ([[nested-tracks]]).
+	 */
+	descendants: ReadonlyMap<string, readonly string[]>;
 	/** Colour of this table, for the tracks whose card names none. `null` — the theme decides. */
 	trackColor: string | null;
 	/** Whether a streak of closed days is threaded together ([[expectation]] §9). */
@@ -357,13 +392,28 @@ function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	const body = table.createEl("tbody");
 	for (const track of view.tracks) {
 		const row = body.createEl("tr", { attr: { "data-track": track.path } });
+		const below = view.descendants.get(track.path) ?? NO_TRACKS;
+		writeIds(row, DESCENDANTS_ATTRIBUTE, below);
 		requestColor(row, resolveTrackColor(track.color, view.trackColor));
-		const thread = rowStroke(row, view, track.path);
+
+		const day = (date: string): Day => ({
+			own: findEntries(view.entries, track.path, date),
+			nested: nestedEntries(view.entries, below, date),
+		});
+		const thread = rowStroke(row, view, day);
 		view.columns.forEach((column, index) => {
-			const entries = findEntries(view.entries, track.path, column.iso);
-			renderCheckCell(row, track, column, entries, thread[index] ?? null);
+			renderCheckCell(row, track, column, day(column.iso), thread[index] ?? null);
 		});
 	}
+}
+
+/**
+ * What one day of a track holds: the track's own entries, and the entries of the tracks below
+ * it ([[expectation]] §12).
+ */
+interface Day {
+	own: readonly Entry[];
+	nested: readonly Entry[];
 }
 
 /**
@@ -378,12 +428,15 @@ function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 function rowStroke(
 	row: HTMLTableRowElement,
 	view: TrackerView,
-	trackPath: string,
+	day: (date: string) => Day,
 ): (StrokeMark | null)[] {
 	if (!view.stroke) return [];
 
-	const closed = (date: string): boolean =>
-		cellState(findEntries(view.entries, trackPath, date), date) === "done";
+	// A day closed by an entry below the track is a closed day of the streak too.
+	const closed = (date: string): boolean => {
+		const { own, nested } = day(date);
+		return cellState(own, date, nested) === "done";
+	};
 	const edges = streakEdges({
 		days: view.columns.map((column) => column.iso),
 		order: view.dates,
@@ -501,54 +554,73 @@ function renderTrackCell(row: HTMLTableRowElement, track: TrackCard): void {
  * stays in the cell, hidden: the measurements ask a box its size and its place, and a mark
  * taken back by a click has the box to fall back on.
  *
+ * A cell of a track with tracks below it counts their entries too: `data-nested` names them
+ * and `data-nested-track` the track of each, and where one of them closed the day over the
+ * head of the track's own entries, `data-own-state` keeps the state those alone would give
+ * ([[nested-tracks]]).
+ *
  * The click itself is handled once for the whole table, by `CellPointerChild`.
  */
 function renderCheckCell(
 	row: HTMLTableRowElement,
 	track: TrackCard,
 	column: DateColumn,
-	entries: readonly Entry[],
+	day: Day,
 	stroke: StrokeMark | null,
 ): void {
-	const state = cellState(entries, column.iso);
 	const cell = row.createEl("td", {
 		cls: "process-tracker__cell",
-		attr: { "data-date": column.iso, "data-track": track.path, "data-state": state },
+		attr: { "data-date": column.iso, "data-track": track.path },
 	});
 	if (column.isToday) cell.addClass("is-today");
 	markStroke(cell, stroke);
-	writeEntryIds(cell, entries, column.iso);
 
 	// The checkbox is wrapped for the same reason as the day number: the wrapper is ours,
 	// so centring it never has to argue with the way a theme styles a checkbox.
-	const box = cell.createDiv({ cls: SLOT_CLASS }).createEl("input", {
+	cell.createDiv({ cls: SLOT_CLASS }).createEl("input", {
 		cls: "task-list-item-checkbox",
 		type: "checkbox",
 	});
-	box.checked = state === "done";
-	showMark(cell, cellMark(entries, column.iso));
-	setTooltip(cell, draftTooltip(state, countedEntries(entries, column.iso).length));
+	showDay(cell, day.own, day.nested);
 }
 
 /**
- * Repaints one cell from the entries of its day, after the day changed. The table is not
- * rebuilt: a rebuild would throw away the scroll position of the table the reader is working
- * in.
+ * Repaints one cell from the entries of its day — the track's own and those below it — after
+ * the day changed. The table is not rebuilt: a rebuild would throw away the scroll position
+ * of the table the reader is working in.
  */
-export function paintCell(cell: HTMLElement, entries: readonly Entry[]): void {
-	const date = cell.dataset.date ?? "";
-	const state = cellState(entries, date);
-	cell.setAttr("data-state", state);
-	writeEntryIds(cell, entries, date);
-	setTooltip(cell, draftTooltip(state, countedEntries(entries, date).length));
-
-	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
-	if (box !== null) box.checked = state === "done";
-	showMark(cell, cellMark(entries, date));
+export function paintCell(
+	cell: HTMLElement,
+	entries: readonly Entry[],
+	nested: readonly Entry[] = [],
+): void {
+	showDay(cell, entries, nested);
 
 	// The thread of the row follows the cell: a day just closed can finish a streak, and a
 	// checkmark taken back breaks one. A row without a thread returns from here at once.
 	if (cell.parentElement !== null) paintRowStroke(cell.parentElement);
+}
+
+/**
+ * Writes a day into its cell: the state, the addresses, the box, the mark and the note of a
+ * draft. One function for the render and for the repaint, so the two cannot drift apart.
+ */
+function showDay(cell: HTMLElement, own: readonly Entry[], nested: readonly Entry[]): void {
+	const date = cell.dataset.date ?? "";
+	const state = cellState(own, date, nested);
+	const ownState = cellState(own, date);
+	cell.setAttr("data-state", state);
+	if (ownState === state) cell.removeAttribute(OWN_STATE_ATTRIBUTE);
+	else cell.setAttr(OWN_STATE_ATTRIBUTE, ownState);
+
+	writeEntryIds(cell, own, date);
+	writeIds(cell, NESTED_ATTRIBUTE, nested.map(entryId));
+	writeIds(cell, NESTED_TRACK_ATTRIBUTE, nested.map((entry) => entry.trackPath));
+	setTooltip(cell, draftTooltip(state, countedEntries(own, date).length));
+
+	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
+	if (box !== null) box.checked = state === "done";
+	showMark(cell, cellMark(own, date, nested));
 }
 
 /**
@@ -610,15 +682,58 @@ function writeIds(cell: HTMLElement, attribute: string, ids: readonly string[]):
 	else cell.setAttr(attribute, ids.join(ID_SEPARATOR));
 }
 
-/** The cells of this table that show the entry at this address right now. */
+/** An entry below the track of a cell, as the cell names it: whose it is, and where it stands. */
+export interface NestedRef {
+	trackPath: string;
+	id: string;
+}
+
+/** The entries of the descendants a cell names, in the order the popup lists them. */
+export function nestedOf(cell: HTMLElement): NestedRef[] {
+	const tracks = idsIn(cell, NESTED_TRACK_ATTRIBUTE);
+	return idsIn(cell, NESTED_ATTRIBUTE).map((id, index) => ({ id, trackPath: tracks[index] ?? "" }));
+}
+
+/** The state of the track's own entries: what a click on the cell works with. */
+export function ownStateOf(cell: HTMLElement): CellState {
+	const state = cell.getAttribute(OWN_STATE_ATTRIBUTE) ?? cell.dataset.state ?? "empty";
+	return state as CellState;
+}
+
+/** The tracks below the track of a row; none for a row nothing stands under. */
+export function descendantsOfRow(row: HTMLElement | null): string[] {
+	return row === null ? [] : idsIn(row, DESCENDANTS_ATTRIBUTE);
+}
+
+/** The rows of this table that have tracks below their own, each with the list it carries. */
+export function rowsWithDescendants(root: HTMLElement): RowRef[] {
+	const rows = root.querySelectorAll<HTMLElement>(`${ROW_SELECTOR}[${DESCENDANTS_ATTRIBUTE}]`);
+	return Array.from(rows, (row) => ({
+		trackPath: row.dataset.track ?? "",
+		descendants: descendantsOfRow(row),
+	}));
+}
+
+/**
+ * The cells of this table that show the entry at this address right now — as an entry of
+ * their own track, or as one of a track below it.
+ */
 export function cellsShowing(root: HTMLElement, id: string): HTMLElement[] {
-	return cellsOf(root, "[data-entry]").filter((cell) => entryIdsOf(cell).includes(id));
+	const own = cellsOf(root, "[data-entry]").filter((cell) => entryIdsOf(cell).includes(id));
+	const above = cellsOf(root, `[${NESTED_ATTRIBUTE}]`).filter((cell) =>
+		idsIn(cell, NESTED_ATTRIBUTE).includes(id),
+	);
+	return [...own, ...above];
 }
 
 /**
  * The rows of this table the journal at this path can change: the rows of the tracks that
  * keep it — `keeps` answers that — and the rows whose cells show a record of it, which covers
  * a journal just deleted or no longer linked ([[entry#Журнал трека|entry]]).
+ *
+ * A record closes the cells of the tracks above its own, so the rows that have a keeper of
+ * the journal below them, or show a record of it as one from below, are among them
+ * ([[nested-tracks]]).
  */
 export function rowsOfJournal(
 	root: HTMLElement,
@@ -627,11 +742,14 @@ export function rowsOfJournal(
 ): HTMLElement[] {
 	const rows = new Set<HTMLElement>();
 	for (const row of Array.from(root.querySelectorAll<HTMLElement>(ROW_SELECTOR))) {
-		if (keeps(row.dataset.track ?? "")) rows.add(row);
+		if (keeps(row.dataset.track ?? "") || descendantsOfRow(row).some(keeps)) rows.add(row);
 	}
 	// Asked of the browser in one selector: the cells are many, the journals on them are few.
-	for (const cell of cellsOf(root, `[data-entry*=${quote(`${path}#`)}]`)) {
-		if (cell.parentElement !== null) rows.add(cell.parentElement);
+	const record = quote(`${path}#`);
+	for (const attribute of ["data-entry", NESTED_ATTRIBUTE]) {
+		for (const cell of cellsOf(root, `[${attribute}*=${record}]`)) {
+			if (cell.parentElement !== null) rows.add(cell.parentElement);
+		}
 	}
 	return Array.from(rows);
 }

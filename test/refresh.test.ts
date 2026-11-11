@@ -126,3 +126,34 @@ describe("sameCell", () => {
 		assert.equal(sameCell(day, { ...day, trackPath: "water.md" }), false);
 	});
 });
+
+describe("touchedDays with tracks above the entry", () => {
+	const home = { trackPath: "home.md", descendants: ["harmony.md", "cleaning.md"] };
+	const garden = { trackPath: "garden.md", descendants: ["watering.md"] };
+
+	it("names the day in the row of every track the entry stands below", () => {
+		assert.deepEqual(touchedDays([], [entry({ path: "a.md" })], [home, garden]), [
+			day,
+			{ ...day, trackPath: "home.md" },
+		]);
+	});
+
+	it("names both days of an entry closed on another day, in the rows above too", () => {
+		const closed = entry({ path: "a.md", created: "2026-09-10" });
+		assert.deepEqual(touchedDays([], [closed], [home]), [
+			{ ...day, date: "2026-09-10" },
+			{ trackPath: "home.md", date: "2026-09-10" },
+			day,
+			{ ...day, trackPath: "home.md" },
+		]);
+	});
+
+	it("leaves the rows alone when the entry stands below none of them", () => {
+		assert.deepEqual(touchedDays([], [entry({ path: "a.md" })], [garden]), [day]);
+	});
+
+	it("keeps the cells that showed an entry which is none any more", () => {
+		const above = { ...day, trackPath: "home.md" };
+		assert.deepEqual(touchedDays([day, above], [], [home]), [day, above]);
+	});
+});

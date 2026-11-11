@@ -3,7 +3,7 @@
 
 import type { App, CachedMetadata, TFile } from "obsidian";
 import type { Entry, PropertyNames } from "../model/types.ts";
-import { readRecords } from "./journal.ts";
+import { endsWithRule, readRecords } from "./journal.ts";
 import type { JournalRecord, Outline } from "./journal.ts";
 import { readDays, readEntryId, readMark, readTrackLinks } from "./state.ts";
 
@@ -130,6 +130,30 @@ function recordsIn(app: App, file: TFile, trackPath: string): Entry[] {
 	const cache = app.metadataCache.getFileCache(file);
 	if (cache === null) return [];
 	return readRecords(outlineOf(cache)).map((record) => toRecordEntry(file.path, trackPath, record));
+}
+
+/**
+ * Whether the text of an entry ends with a horizontal rule, as the metadata cache has it: the
+ * whole note for an entry note, and for a record the stretch from its heading to the next
+ * record or section — what a preview of it shows ([[nested-tracks#Одна черта|Одна черта]]).
+ * An entry the cache cannot find ends with none.
+ */
+export function entryEndsWithRule(app: App, entry: Entry): boolean {
+	const file = app.vault.getFileByPath(entry.path);
+	const cache = file === null ? null : app.metadataCache.getFileCache(file);
+	if (cache === null) return false;
+
+	const blocks = (cache.sections ?? []).map((section) => ({
+		type: section.type,
+		line: section.position.start.line,
+	}));
+	const address = entry.record;
+	if (address === null) return endsWithRule(blocks, 0, Number.POSITIVE_INFINITY);
+
+	const record = readRecords(outlineOf(cache)).find(
+		(found) => found.date === entry.created && found.nth === address.nth,
+	);
+	return record !== undefined && endsWithRule(blocks, record.line, record.end);
 }
 
 /** The headings and the boxes of a note, as the metadata cache lists them. */

@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	endsWithRule,
 	insertRecord,
 	readRecords,
 	recordLines,
@@ -332,5 +333,44 @@ describe("setRecordDone", () => {
 
 	it("says so when the record is gone", () => {
 		assert.throws(() => setRecordDone(journal, "2026-09-27", 0, true), /no longer in the journal/);
+	});
+});
+
+describe("endsWithRule", () => {
+	/** `## 2026-11-09`, a box, a paragraph, a rule; then the next record, which has none. */
+	const blocks = [
+		{ type: "heading", line: 0 },
+		{ type: "list", line: 1 },
+		{ type: "paragraph", line: 2 },
+		{ type: "thematicBreak", line: 4 },
+		{ type: "heading", line: 6 },
+		{ type: "list", line: 7 },
+	];
+
+	it("says yes when the last block of the stretch is a rule", () => {
+		assert.equal(endsWithRule(blocks, 0, 6), true);
+	});
+
+	it("says no when something stands after the rule", () => {
+		assert.equal(endsWithRule(blocks, 0, Number.POSITIVE_INFINITY), false);
+	});
+
+	it("looks at the stretch alone: a rule before it or after it is not its end", () => {
+		assert.equal(endsWithRule(blocks, 6, Number.POSITIVE_INFINITY), false);
+		assert.equal(endsWithRule(blocks, 0, 4), false);
+	});
+
+	it("says no for a stretch with nothing in it", () => {
+		assert.equal(endsWithRule([], 0, Number.POSITIVE_INFINITY), false);
+		assert.equal(endsWithRule(blocks, 20, 30), false);
+	});
+
+	it("passes over a comment after the rule, which a reader does not see", () => {
+		const commented = [...blocks.slice(0, 4), { type: "comment", line: 5 }];
+		assert.equal(endsWithRule(commented, 0, 6), true);
+	});
+
+	it("does not depend on the order the blocks come in", () => {
+		assert.equal(endsWithRule([blocks[3], blocks[0], blocks[2]], 0, 6), true);
 	});
 });
