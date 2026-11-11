@@ -45,6 +45,25 @@ export function buildDateColumns(spec: GridSpec): DateColumn[] {
 	return spec.order === "asc" ? columns : columns.reverse();
 }
 
+/**
+ * The day of a checklist ([[checklist-view]]): the day the block names in `start`, or the day
+ * the list is drawn on. A checklist is the one column of a table one day long.
+ */
+export function checklistDay(start: Date | null, today: Date): DateColumn {
+	return buildDateColumns({ start, today, days: 1, order: "asc" })[0];
+}
+
+/**
+ * Whether a checklist of "today" has outlived the day it was drawn on ([[expectation]] §8).
+ *
+ * A list with no `start` is drawn for the day of the render and stays on screen as long as the
+ * note does. Left open overnight, it would write the closing of a track into yesterday — so
+ * the day is asked again before every write. A list whose day the block names never moves.
+ */
+export function dayMoved(start: Date | null, drawn: string, now: Date): boolean {
+	return start === null && toIsoDate(now) !== drawn;
+}
+
 /** Column caption: day of month, always two digits. */
 export function formatDay(column: DateColumn): string {
 	return String(column.day).padStart(2, "0");

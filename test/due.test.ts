@@ -24,8 +24,12 @@ function entry(day: string, overrides: Partial<Entry> = {}): Entry {
 }
 
 /** The closed days of the tracks these entries belong to, with nothing below any of them. */
-function daysOf(entries: Entry[], descendants: Record<string, string[]> = {}): ClosedDays {
-	return closedDays(buildEntryIndex(entries), new Map(Object.entries(descendants)));
+function daysOf(
+	entries: Entry[],
+	descendants: Record<string, string[]> = {},
+	until: string | null = null,
+): ClosedDays {
+	return closedDays(buildEntryIndex(entries), new Map(Object.entries(descendants)), until);
 }
 
 describe("toPeriod", () => {
@@ -181,6 +185,23 @@ describe("closedDays", () => {
 		const days = daysOf([entry("2026-11-07"), entry("2026-11-20")]);
 		assert.equal(days.last("bedding.md"), "2026-11-20");
 	});
+
+	it("looks no later than the day it is told to stop at", () => {
+		const entries = [entry("2026-11-01"), entry("2026-11-07"), entry("2026-11-20")];
+		assert.equal(daysOf(entries, {}, "2026-11-12").last("bedding.md"), "2026-11-07");
+		assert.equal(daysOf(entries, {}, "2026-11-07").last("bedding.md"), "2026-11-07");
+		assert.equal(daysOf(entries, {}, "2026-11-06").last("bedding.md"), "2026-11-01");
+		assert.equal(daysOf(entries, {}, "2026-10-31").last("bedding.md"), null);
+	});
+
+	it("stops at that day below the track too", () => {
+		const days = daysOf(
+			[entry("2026-11-02", { trackPath: "harmony.md" }), entry("2026-11-09")],
+			{ "harmony.md": ["bedding.md"] },
+			"2026-11-05",
+		);
+		assert.equal(days.last("harmony.md"), "2026-11-02");
+	});
 });
 
 describe("isDue", () => {
@@ -234,5 +255,32 @@ describe("isDue", () => {
 		const below = { "harmony.md": ["bedding.md"] };
 		assert.equal(isDue("harmony.md", week, daysOf([entry("2026-11-10")], below), TODAY), false);
 		assert.equal(isDue("harmony.md", week, daysOf([entry("2026-11-05")], below), TODAY), true);
+	});
+});
+
+describe("isDue on the day of a checklist", () => {
+	const week = { months: 0, days: 7 };
+	const entries = [entry("2026-10-29"), entry("2026-11-10")];
+
+	it("shows what was due on a day gone by, whatever was closed since", () => {
+		// Closed on 29 October with a week to go: due again on 5 November, and the closing of
+		// the 10th had not happened yet.
+		assert.equal(isDue("bedding.md", week, daysOf(entries, {}, "2026-11-05"), "2026-11-05"), true);
+		assert.equal(isDue("bedding.md", week, daysOf(entries, {}, "2026-11-04"), "2026-11-04"), false);
+	});
+
+	it("keeps a track closed on the day of the list", () => {
+		assert.equal(isDue("bedding.md", week, daysOf(entries, {}, "2026-11-10"), "2026-11-10"), true);
+	});
+
+	it("hides it the day after, till the period runs out", () => {
+		assert.equal(isDue("bedding.md", week, daysOf(entries, {}, "2026-11-11"), "2026-11-11"), false);
+		assert.equal(isDue("bedding.md", week, daysOf(entries, {}, "2026-11-17"), "2026-11-17"), true);
+	});
+
+	it("does not count a closing ahead of the day, as a table does", () => {
+		const ahead = [entry("2026-11-01"), entry("2026-11-20")];
+		assert.equal(isDue("bedding.md", week, daysOf(ahead, {}, TODAY), TODAY), true);
+		assert.equal(isDue("bedding.md", week, daysOf(ahead), TODAY), false);
 	});
 });

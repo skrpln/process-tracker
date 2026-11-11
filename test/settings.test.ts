@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
 	DEFAULT_SETTINGS,
 	normalizeAlign,
+	normalizeClick,
 	normalizeEntriesMode,
 	normalizeEntryFolder,
 	normalizePropertyName,
@@ -46,6 +47,8 @@ describe("normalizeSettings", () => {
 			entryFolder: "entry",
 			entries: "notes",
 			align: "center",
+			tableClick: "open",
+			checklistClick: "open",
 			properties: DEFAULT_SETTINGS.properties,
 		});
 	});
@@ -101,6 +104,33 @@ describe("normalizeAlign", () => {
 	it("is read from data.json with the rest", () => {
 		assert.equal(normalizeSettings({ align: "left" }).align, "left");
 		assert.equal(normalizeSettings({ align: 1 }).align, "center");
+	});
+});
+
+describe("normalizeClick", () => {
+	it("keeps the two actions, in any case", () => {
+		assert.equal(normalizeClick("open"), "open");
+		assert.equal(normalizeClick("status"), "status");
+		assert.equal(normalizeClick(" Status "), "status");
+	});
+
+	it("answers open for an action it does not know", () => {
+		assert.equal(normalizeClick("toggle"), "open");
+		assert.equal(normalizeClick(undefined), "open");
+		assert.equal(normalizeClick(true), "open");
+	});
+
+	it("is read from data.json for the table and for the checklist apart", () => {
+		const settings = normalizeSettings({ checklistClick: "status" });
+		assert.equal(settings.tableClick, "open");
+		assert.equal(settings.checklistClick, "status");
+		assert.equal(normalizeSettings({ tableClick: "status" }).tableClick, "status");
+		assert.equal(normalizeSettings({ tableClick: 1 }).tableClick, "open");
+	});
+
+	it("leaves both gestures as they always were until the settings say otherwise", () => {
+		assert.equal(DEFAULT_SETTINGS.tableClick, "open");
+		assert.equal(DEFAULT_SETTINGS.checklistClick, "open");
 	});
 });
 

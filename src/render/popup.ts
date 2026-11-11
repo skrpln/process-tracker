@@ -7,6 +7,7 @@ import { HOVER_SOURCE } from "../constants.ts";
 import type { NestedBranch } from "../entry/nested.ts";
 import type { Entry } from "../model/types.ts";
 import { entryPreview, standingIn } from "../entry/state.ts";
+import { anchorOf } from "./table.ts";
 
 /** How long the list waits after the pointer left it, so a slow hand can still reach it. */
 const CLOSE_DELAY = 200;
@@ -174,7 +175,8 @@ export class DayPopup implements HoverParent {
 		const view = this.window;
 		if (view === null) return;
 
-		const cell = this.cell.getBoundingClientRect();
+		// A box of a checklist hidden behind its mark has no place; the mark stands for it.
+		const cell = anchorOf(this.cell).getBoundingClientRect();
 		const list = this.element.getBoundingClientRect();
 		const gap = WINDOW_GAP;
 
@@ -283,7 +285,7 @@ function renderNestedTree(
 }
 
 /** The classes Obsidian gives a list that holds tasks. */
-const TASK_LIST_CLASSES = "contains-task-list has-list-bullet";
+export const TASK_LIST_CLASSES = "contains-task-list has-list-bullet";
 
 /** A child with no record of its own for the day: a plain item, its name a link to its card. */
 function renderTrackItem(list: HTMLElement, trackPath: string, context: DayContext): HTMLElement {

@@ -136,8 +136,19 @@ const ID_SEPARATOR = "\n";
 /** The answer for a row with nothing below it; shared, so a row allocates nothing. */
 const NO_TRACKS: readonly string[] = Object.freeze([]);
 
-/** A row of the date cells, which names its track in `data-track`. */
-const ROW_SELECTOR = ".process-tracker__dates tr[data-track]";
+/**
+ * Class of the row of a track: a row of the date cells, or an item of a checklist
+ * ([[checklist-view]]). It names its track in `data-track`, and its cells are its children.
+ */
+export const ROW_CLASS = "process-tracker__row";
+
+const ROW_SELECTOR = `.${ROW_CLASS}`;
+
+/**
+ * Class of a cell: one day of one track. In a table it is a `td` with the box inside; in a
+ * checklist the box itself is the cell ([[checklist-view]]).
+ */
+export const CELL_CLASS = "process-tracker__cell";
 
 /** Everything the table needs; assembled by the plugin entry point. */
 export interface TrackerView {
@@ -277,7 +288,7 @@ function renderProbe(table: HTMLTableElement): ThemeProbe {
 	// The draft box is dressed exactly as a draft cell is, so the comparison answers the real
 	// question instead of a guess about it: the cell class and the state carry the rules.
 	const draftCell = probe.createDiv({
-		cls: "process-tracker__cell",
+		cls: CELL_CLASS,
 		attr: { "data-state": "draft" },
 	});
 	const draftBox = draftCell.createEl("input", {
@@ -396,10 +407,9 @@ export function dressDayCaption(cell: HTMLElement, dailyNote: string): void {
 function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 	const body = table.createEl("tbody");
 	for (const track of view.tracks) {
-		const row = body.createEl("tr", { attr: { "data-track": track.path } });
+		const row = body.createEl("tr");
 		const below = view.descendants.get(track.path) ?? NO_TRACKS;
-		writeIds(row, DESCENDANTS_ATTRIBUTE, below);
-		requestColor(row, resolveTrackColor(track.color, view.trackColor));
+		dressRow(row, track, below, view.trackColor);
 
 		const day = (date: string): Day => ({
 			own: findEntries(view.entries, track.path, date),
@@ -410,6 +420,23 @@ function renderDatesBody(table: HTMLTableElement, view: TrackerView): void {
 			renderCheckCell(row, track, column, day(column.iso), thread[index] ?? null);
 		});
 	}
+}
+
+/**
+ * Makes an element the row of a track, in a table or in a checklist: it names its track, the
+ * tracks below it and the colour the track asks for — the card first, the block after it
+ * ([[rendering]]).
+ */
+export function dressRow(
+	row: HTMLElement,
+	track: TrackCard,
+	below: readonly string[],
+	blockColor: string | null,
+): void {
+	row.addClass(ROW_CLASS);
+	row.setAttr("data-track", track.path);
+	writeIds(row, DESCENDANTS_ATTRIBUTE, below);
+	requestColor(row, resolveTrackColor(track.color, blockColor));
 }
 
 /**
@@ -465,7 +492,7 @@ export function paintRowStroke(row: HTMLElement): void {
 	const edges = strokeEdgesOf(row);
 	if (edges === null) return;
 
-	const cells = Array.from(row.querySelectorAll<HTMLElement>(".process-tracker__cell"));
+	const cells = cellsOfRow(row);
 	const marks = strokeMarks(cells.map((cell) => cell.dataset.state === "done"), edges);
 	cells.forEach((cell, index) => markStroke(cell, marks[index] ?? null));
 }
@@ -494,7 +521,7 @@ function markStroke(cell: HTMLElement, mark: StrokeMark | null): void {
  * paints is a question for the rendered table, so the row states its request and the render
  * child answers it ([[rendering#Пробник|Пробник]]); until then the row looks as it always did.
  */
-function requestColor(row: HTMLTableRowElement, color: string | null): void {
+function requestColor(row: HTMLElement, color: string | null): void {
 	if (color === null) return;
 	row.setAttr(TRACK_COLOR_ATTRIBUTE, color);
 }
@@ -574,7 +601,7 @@ function renderCheckCell(
 	stroke: StrokeMark | null,
 ): void {
 	const cell = row.createEl("td", {
-		cls: "process-tracker__cell",
+		cls: CELL_CLASS,
 		attr: { "data-date": column.iso, "data-track": track.path },
 	});
 	if (column.isToday) cell.addClass("is-today");
@@ -623,9 +650,30 @@ function showDay(cell: HTMLElement, own: readonly Entry[], nested: readonly Entr
 	writeIds(cell, NESTED_TRACK_ATTRIBUTE, nested.map((entry) => entry.trackPath));
 	setTooltip(cell, draftTooltip(state, countedEntries(own, date).length));
 
-	const box = cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
+	const box = boxOf(cell);
 	if (box !== null) box.checked = state === "done";
 	showMark(cell, cellMark(own, date, nested));
+	if (box === cell) showTask(cell.parentElement, state);
+}
+
+/**
+ * The checkbox of a cell: the one inside a cell of a table, and in a checklist the cell
+ * itself ([[checklist-view]]).
+ */
+function boxOf(cell: HTMLElement): HTMLInputElement | null {
+	if (cell.matches("input")) return cell as HTMLInputElement;
+	return cell.querySelector<HTMLInputElement>('input[type="checkbox"]');
+}
+
+/**
+ * The item of a checklist says what its box says, the way a task of a note does: Obsidian and
+ * the themes dress a done task by `data-task` and `is-checked`, so a track closed for the day
+ * looks like a task that is done ([[checklist-view]]).
+ */
+function showTask(item: HTMLElement | null, state: CellState): void {
+	if (item === null) return;
+	item.setAttr("data-task", state === "done" ? "x" : " ");
+	item.toggleClass("is-checked", state === "done");
 }
 
 /**
@@ -633,17 +681,41 @@ function showDay(cell: HTMLElement, own: readonly Entry[], nested: readonly Entr
  * has one, so a table without marks carries not a single extra element.
  */
 function showMark(cell: HTMLElement, mark: string | null): void {
-	const slot = cell.querySelector<HTMLElement>(`.${SLOT_CLASS}`);
-	const sign = slot?.querySelector<HTMLElement>(`.${MARK_CLASS}`) ?? null;
-	if (slot === null || mark === null) {
+	const box = boxOf(cell);
+	const sign = signOf(box);
+	if (box === null || mark === null) {
 		cell.removeAttribute(MARK_ATTRIBUTE);
 		sign?.remove();
 		return;
 	}
 
 	cell.setAttr(MARK_ATTRIBUTE, "");
-	if (sign === null) slot.createSpan({ cls: MARK_CLASS, text: mark });
-	else sign.setText(mark);
+	if (sign !== null) {
+		sign.setText(mark);
+		return;
+	}
+	// Right after the box, whatever else its parent holds: the name of a track follows the box
+	// of a checklist, and the sign takes the place of the box, not of the name. Made by the
+	// document of the box — a table in a popout window lives in another one.
+	const made = box.ownerDocument.createElement("span");
+	made.className = MARK_CLASS;
+	made.textContent = mark;
+	box.after(made);
+}
+
+/** The sign that stands in for a box: the element right after it, when it is one. */
+function signOf(box: HTMLElement | null): HTMLElement | null {
+	const next = box?.nextElementSibling ?? null;
+	return next !== null && next.matches(`.${MARK_CLASS}`) ? (next as HTMLElement) : null;
+}
+
+/**
+ * What a cell is seen as: the cell itself, or — in a checklist, where the box is the cell and
+ * the stylesheet hides a box behind its mark — the mark. A popup is placed by it, and a
+ * preview is hung on it: a hidden element has no place on screen ([[checklist-view]]).
+ */
+export function anchorOf(cell: HTMLElement): HTMLElement {
+	return (cell.matches("input") ? signOf(cell) : null) ?? cell;
 }
 
 /**
@@ -771,9 +843,7 @@ export function cellOf(root: HTMLElement, day: CellRef): HTMLElement | null {
 }
 
 function cellsOf(root: HTMLElement, attributes: string): HTMLElement[] {
-	return Array.from(
-		root.querySelectorAll<HTMLElement>(`.process-tracker__cell${attributes}`),
-	);
+	return Array.from(root.querySelectorAll<HTMLElement>(`.${CELL_CLASS}${attributes}`));
 }
 
 /** The day a cell stands for, read back from the attributes the renderer wrote. */
@@ -788,23 +858,40 @@ function quote(value: string): string {
 	return `"${value.replace(/["\\]/g, "\\$&")}"`;
 }
 
+/** What the empty state is told about a block that has no rows. */
+export interface EmptyBlock {
+	/** The tag the user has configured, named where no card carries it. */
+	trackTag: string;
+	/** Tells an empty vault from an empty filter. */
+	trackFilter: string | null;
+	/** How many tracks `show: due` left out: tells a day with nothing due from no tracks. */
+	notDue: number;
+	/** The day a checklist asked about, where its block names one; otherwise it is today. */
+	dueDay?: string;
+}
+
 /**
  * With a `track` filter in the block the tag is rarely what is missing, so the
  * message names the filter instead of asking for a tag that is probably there. A block of
  * `show: due` that had tracks to choose from and kept none is not missing anything at all.
  */
-function renderEmptyState(root: HTMLElement, view: TrackerView): void {
-	let text = `No track card matches "track: ${view.trackFilter}".`;
-	if (view.notDue > 0) text = "No track is due today.";
-	else if (view.trackFilter === null) {
-		text = `No track cards found. Tag a note with #${view.trackTag} to add a track.`;
+export function renderEmptyState(root: HTMLElement, block: EmptyBlock): void {
+	let text = `No track card matches "track: ${block.trackFilter}".`;
+	if (block.notDue > 0) {
+		text =
+			block.dueDay === undefined
+				? "No track is due today."
+				: `No track is due on ${block.dueDay}.`;
+	} else if (block.trackFilter === null) {
+		text = `No track cards found. Tag a note with #${block.trackTag} to add a track.`;
 	}
 	root.createDiv({ cls: "process-tracker__empty", text });
 }
 
 /**
  * Writes the corner caption: the title with the month and the year of `label` filled in.
- * Used by the render child too, which rewrites the caption as the table scrolls.
+ * Used by the render child too, which rewrites the caption as the table scrolls, and by the
+ * checklist for the line above it ([[checklist-view]]).
  *
  * A link of the title is the same `a.internal-link` a track name is: Obsidian opens it, and
  * the pointer child hands it to the preview ([[rendering]]).

@@ -12,6 +12,7 @@ import {
 	parseStartDate,
 	parseStroke,
 	parseTitle,
+	parseView,
 	parseWidth,
 } from "../src/codeblock/parse.ts";
 import { MAX_DAYS, MIN_WIDTH } from "../src/constants.ts";
@@ -29,10 +30,11 @@ describe("parseCodeBlock", () => {
 			stroke: false,
 			dailyNoteDir: null,
 			entries: null,
-			title: "{{month}} {{year}}",
+			title: null,
 			align: null,
 			width: null,
 			show: "all",
+			view: "table",
 		});
 		assert.deepEqual(warnings, []);
 	});
@@ -301,8 +303,8 @@ describe("entries", () => {
 });
 
 describe("title", () => {
-	it("is the month and the year by default", () => {
-		assert.equal(parseCodeBlock("").options.title, "{{month}} {{year}}");
+	it("is not set until the block names one", () => {
+		assert.equal(parseCodeBlock("").options.title, null);
 	});
 
 	it("is taken as written, colons included", () => {
@@ -323,9 +325,9 @@ describe("title", () => {
 		assert.deepEqual(warnings, []);
 	});
 
-	it("keeps the default for a line with nothing after the colon", () => {
+	it("stays unset for a line with nothing after the colon", () => {
 		const { options, warnings } = parseCodeBlock("title:");
-		assert.equal(options.title, "{{month}} {{year}}");
+		assert.equal(options.title, null);
 		assert.equal(warnings.length, 1);
 	});
 });
@@ -400,5 +402,75 @@ describe("show", () => {
 		const warnings: string[] = [];
 		assert.equal(parseShow("today", warnings), "all");
 		assert.equal(warnings.length, 1);
+	});
+});
+
+describe("view", () => {
+	it("is a table until the block asks otherwise", () => {
+		assert.equal(parseCodeBlock("days: 3").options.view, "table");
+	});
+
+	it("reads both words, in any case", () => {
+		assert.equal(parseCodeBlock("view: checklist").options.view, "checklist");
+		assert.equal(parseCodeBlock("view: Checklist").options.view, "checklist");
+		assert.equal(parseCodeBlock("view: table").options.view, "table");
+	});
+
+	it("warns about anything else and draws a table", () => {
+		const { options, warnings } = parseCodeBlock("view: list");
+		assert.equal(options.view, "table");
+		assert.equal(warnings.length, 1);
+		assert.match(warnings[0], /view: list/);
+	});
+
+	it("warns on its own, so the same value can be checked outside a block", () => {
+		const warnings: string[] = [];
+		assert.equal(parseView("line", warnings), "table");
+		assert.equal(warnings.length, 1);
+	});
+});
+
+describe("a checklist", () => {
+	it("reads the parameters a list has a use for", () => {
+		const { options, warnings } = parseCodeBlock(
+			'view: checklist\ntrack: FROM "Home"\nstart: 2026-11-05\nsort: priority desc\n' +
+				"show: due\nentries: journal\ntitle: Morning",
+		);
+		assert.equal(options.view, "checklist");
+		assert.equal(options.track, 'FROM "Home"');
+		assert.deepEqual(options.start, new Date(2026, 10, 5));
+		assert.deepEqual(options.sort, { field: "priority", direction: "desc" });
+		assert.equal(options.show, "due");
+		assert.equal(options.entries, "journal");
+		assert.equal(options.title, "Morning");
+		assert.deepEqual(warnings, []);
+	});
+
+	it("says nothing about the parameters of a table, whatever they hold", () => {
+		const { warnings } = parseCodeBlock(
+			"view: checklist\ndays: many\ndates: sideways\nstroke: maybe\nalign: middle\n" +
+				"width: wide\ndaily_note_dir:\ndays: 3",
+		);
+		assert.deepEqual(warnings, []);
+	});
+
+	it("is silent about them wherever in the block the view is named", () => {
+		assert.deepEqual(parseCodeBlock("days: many\nview: checklist").warnings, []);
+		assert.deepEqual(parseCodeBlock("width: 5\nview: checklist\nalign: up").warnings, []);
+	});
+
+	it("still warns about its own parameters, in the order they stand", () => {
+		const { warnings } = parseCodeBlock(
+			"show: sometimes\ndays: many\nview: checklist\nstart: tomorrow\ncolour: red",
+		);
+		assert.equal(warnings.length, 3);
+		assert.match(warnings[0], /show: sometimes/);
+		assert.match(warnings[1], /start: tomorrow/);
+		assert.match(warnings[2], /colour/);
+	});
+
+	it("leaves a table its warnings", () => {
+		assert.equal(parseCodeBlock("days: many\nview: table").warnings.length, 1);
+		assert.equal(parseCodeBlock("days: many\nview: list").warnings.length, 2);
 	});
 });

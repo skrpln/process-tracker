@@ -4,6 +4,7 @@
 import { Notice, Plugin, debounce } from "obsidian";
 import type { EventRef, Events, MarkdownPostProcessorContext, TFile } from "obsidian";
 import type {
+	ClickAction,
 	EntriesMode,
 	Entry,
 	EntryDays,
@@ -12,6 +13,7 @@ import type {
 	TrackerOptions,
 } from "./model/types.ts";
 import { parseCodeBlock } from "./codeblock/parse.ts";
+import { DEFAULT_TITLE, checklistCaption } from "./codeblock/title.ts";
 import { CODE_BLOCK_LANGUAGE, DEFAULT_DAYS, HOVER_SOURCE } from "./constants.ts";
 import { confirmDailyNote } from "./daily/confirm.ts";
 import {
@@ -21,8 +23,8 @@ import {
 	fillDayTemplate,
 	findDailyNotes,
 } from "./daily/notes.ts";
-import { buildDateColumns, toIsoDate } from "./dates/grid.ts";
-import { cellAction } from "./entry/actions.ts";
+import { buildDateColumns, checklistDay, dayMoved, toIsoDate } from "./dates/grid.ts";
+import { cellAction, clickAction } from "./entry/actions.ts";
 import { resolveEntriesMode } from "./entry/mode.ts";
 import { recountNested } from "./entry/nested.ts";
 import { belongsTo, recountDay, touchedDays } from "./entry/refresh.ts";
@@ -46,6 +48,7 @@ import {
 import type { EntryIndex } from "./entry/state.ts";
 import { createEntry, createRecord, setEntryDone } from "./entry/write.ts";
 import { TrackerBlock } from "./render/block.ts";
+import { ChecklistChild, renderChecklist } from "./render/checklist.ts";
 import { TrackerRenderChild } from "./render/child.ts";
 import { CellPointerChild } from "./render/pointer.ts";
 import type { CellTarget } from "./render/pointer.ts";
@@ -103,7 +106,10 @@ interface Write {
 export default class ProcessTrackerPlugin extends Plugin {
 	settings: ProcessTrackerSettings = { ...DEFAULT_SETTINGS };
 
-	/** Tables the reader has on screen; each one leaves when Obsidian unloads its block. */
+	/**
+	 * Tables and checklists the reader has on screen; each one leaves when Obsidian unloads its
+	 * block.
+	 */
 	private readonly tables = new Set<HTMLElement>();
 
 	async onload(): Promise<void> {
@@ -157,9 +163,14 @@ export default class ProcessTrackerPlugin extends Plugin {
 	}
 
 	/**
-	 * Draws the table of a block in place of whatever it showed. Answers with the rows it drew,
-	 * as a key, when the rows depend on Dataview — a `track` filter, the periods of `show: due`
-	 * — and `null` otherwise.
+	 * Draws a block in place of whatever it showed: as a table, or — for `view: checklist` — as
+	 * the checklist of one day ([[checklist-view]]). Answers with the rows it drew, as a key,
+	 * when the rows depend on Dataview — a `track` filter, the periods of `show: due` — and
+	 * `null` otherwise.
+	 *
+	 * The two views part only here. The rows are chosen and the entries gathered the same way
+	 * for both, and both hand a click to the same `runCellAction`: whatever closing a track
+	 * comes to mean, it will mean it in a table and in a checklist alike.
 	 */
 	private drawBlock(
 		source: string,
@@ -168,100 +179,189 @@ export default class ProcessTrackerPlugin extends Plugin {
 	): string | null {
 		block.clear();
 		const element = block.containerEl;
-		const sourcePath = context.sourcePath;
 		try {
 			const { options, warnings } = parseCodeBlock(source);
-
 			const today = new Date();
-			const { tracks, descendants, entries, notDue } = this.rowsFor(
-				options,
-				sourcePath,
-				today,
-				warnings,
-			);
-			const columns = buildDateColumns({
-				start: options.start,
-				today,
-				days: options.days ?? DEFAULT_DAYS,
-				order: options.dates,
-			});
+			const rows = this.rowsFor(options, context.sourcePath, today, warnings);
 
-			// The daily notes are looked up once per render, and a day that gets one elsewhere
-			// waits for the next render: a caption is dressed where it is drawn
-			// ([[daily-notes]]).
-			const place = dailyNotePlace(this.app, options.dailyNoteDir, warnings);
-			const days = columns.map((column) => column.iso);
-
-			const elements = renderTracker(element, {
-				tracks,
-				columns,
-				entries,
-				descendants,
-				dailyNotes: place === null ? new Map() : findDailyNotes(this.app, place, days),
-				dailyNotesCreatable: place !== null,
-				trackColor: options.trackColor,
-				stroke: options.stroke,
-				dates: options.dates,
-				title: options.title,
-				// The block decides for itself; where it says nothing, the settings do.
-				align: options.align ?? this.settings.align,
-				width: options.width,
-				trackTag: this.settings.trackTag,
-				trackFilter: options.track,
-				notDue,
-			});
-			renderWarnings(element, warnings);
-
-			if (elements !== null) {
-				// The day captions carry no month, so the corner caption follows the scroll.
-				block.hold(
-					new TrackerRenderChild(
-						element,
-						elements.frame,
-						elements.scroll,
-						elements.captionCell,
-						elements.probe,
-						columns,
-						options.title,
-						this.tables,
-					),
-				);
-				block.hold(
-					new CellPointerChild(
-						element,
-						elements.frame,
-						this.app,
-						sourcePath,
-						(target, mod) => {
-							void this.runCellAction(target, mod, options.entries);
-						},
-						{
-							toggle: (entry, done, date) => this.toggleEntry(entry, done, date),
-							open: (entry) => {
-								void this.openEntry(entryId(entry), entry.trackPath);
-							},
-						},
-						(caption, date) => {
-							void this.newDailyNote(caption, date, options.dailyNoteDir);
-						},
-						this.names,
-					),
-				);
-				block.hold(
-					new ColumnResizeChild(
-						element,
-						elements.frame,
-						elements.resizer,
-						options.width,
-						(width) => this.keepWidth(context, element, source, width),
-					),
-				);
+			if (options.view === "checklist") {
+				const redraw = (): void => {
+					this.drawBlock(source, block, context);
+				};
+				this.drawChecklist(block, options, rows, today, context.sourcePath, redraw);
+			} else {
+				this.drawTable(block, options, rows, today, context, source, warnings);
 			}
-			return options.track === null && options.show !== "due" ? null : rowKey(tracks);
+			renderWarnings(element, warnings);
+			return options.track === null && options.show !== "due" ? null : rowKey(rows.tracks);
 		} catch (error) {
 			renderError(element, error instanceof Error ? error.message : String(error));
 			return null;
 		}
+	}
+
+	/** Draws the block as a table: tracks down, days across ([[rendering]]). */
+	private drawTable(
+		block: TrackerBlock,
+		options: TrackerOptions,
+		rows: BlockRows,
+		today: Date,
+		context: MarkdownPostProcessorContext,
+		source: string,
+		warnings: string[],
+	): void {
+		const element = block.containerEl;
+		const sourcePath = context.sourcePath;
+		const title = options.title ?? DEFAULT_TITLE;
+		const columns = buildDateColumns({
+			start: options.start,
+			today,
+			days: options.days ?? DEFAULT_DAYS,
+			order: options.dates,
+		});
+
+		// The daily notes are looked up once per render, and a day that gets one elsewhere
+		// waits for the next render: a caption is dressed where it is drawn
+		// ([[daily-notes]]).
+		const place = dailyNotePlace(this.app, options.dailyNoteDir, warnings);
+		const days = columns.map((column) => column.iso);
+
+		const elements = renderTracker(element, {
+			tracks: rows.tracks,
+			columns,
+			entries: rows.entries,
+			descendants: rows.descendants,
+			dailyNotes: place === null ? new Map() : findDailyNotes(this.app, place, days),
+			dailyNotesCreatable: place !== null,
+			trackColor: options.trackColor,
+			stroke: options.stroke,
+			dates: options.dates,
+			title,
+			// The block decides for itself; where it says nothing, the settings do.
+			align: options.align ?? this.settings.align,
+			width: options.width,
+			trackTag: this.settings.trackTag,
+			trackFilter: options.track,
+			notDue: rows.notDue,
+		});
+		if (elements === null) return;
+
+		// The day captions carry no month, so the corner caption follows the scroll.
+		block.hold(
+			new TrackerRenderChild(
+				element,
+				elements.frame,
+				elements.scroll,
+				elements.captionCell,
+				elements.probe,
+				columns,
+				title,
+				this.tables,
+			),
+		);
+		block.hold(
+			new CellPointerChild(
+				element,
+				elements.frame,
+				this.app,
+				sourcePath,
+				(target, mod) => {
+					const action = clickAction(this.settings.tableClick, mod);
+					void this.runCellAction(target, action, options.entries);
+				},
+				{
+					toggle: (entry, done, date) => this.toggleEntry(entry, done, date),
+					open: (entry) => {
+						void this.openEntry(entryId(entry), entry.trackPath);
+					},
+				},
+				(caption, date) => {
+					void this.newDailyNote(caption, date, options.dailyNoteDir);
+				},
+				this.names,
+			),
+		);
+		block.hold(
+			new ColumnResizeChild(
+				element,
+				elements.frame,
+				elements.resizer,
+				options.width,
+				(width) => this.keepWidth(context, element, source, width),
+			),
+		);
+	}
+
+	/**
+	 * Draws the block as the checklist of one day: a row for a track, and its box the cell of
+	 * that day ([[checklist-view]]).
+	 *
+	 * Nothing of the table's geometry is set up — no measuring of rows, no scrolling, no line
+	 * to drag. What is left is the pointer, the same one a table has, and a child that
+	 * announces the list to the subscription to the vault.
+	 *
+	 * A list with no `start` is the list of the day it was drawn on, and it can outlive that
+	 * day: left open overnight, it would write a closing into yesterday. So before anything is
+	 * written the day is asked again; if it has moved, the block is drawn for the new day and
+	 * the click writes nothing — the list may have changed, and the next click lands on the
+	 * one the reader sees ([[expectation]] §8).
+	 */
+	private drawChecklist(
+		block: TrackerBlock,
+		options: TrackerOptions,
+		rows: BlockRows,
+		today: Date,
+		sourcePath: string,
+		redraw: () => void,
+	): void {
+		const element = block.containerEl;
+		const day = checklistDay(options.start, today);
+		const named = options.start !== null;
+
+		const elements = renderChecklist(element, {
+			tracks: rows.tracks,
+			day,
+			entries: rows.entries,
+			descendants: rows.descendants,
+			trackColor: options.trackColor,
+			caption: checklistCaption(options.title, named ? day.iso : null),
+			trackTag: this.settings.trackTag,
+			trackFilter: options.track,
+			notDue: rows.notDue,
+			dayNamed: named,
+		});
+		if (elements === null) return;
+
+		const outlived = (): boolean => {
+			if (!dayMoved(options.start, day.iso, new Date())) return false;
+			redraw();
+			return true;
+		};
+
+		block.hold(new ChecklistChild(element, elements.list, elements.probe, this.tables));
+		block.hold(
+			new CellPointerChild(
+				element,
+				elements.list,
+				this.app,
+				sourcePath,
+				(target, mod) => {
+					if (outlived()) return;
+					const action = clickAction(this.settings.checklistClick, mod);
+					void this.runCellAction(target, action, options.entries);
+				},
+				{
+					toggle: (entry, done, date) =>
+						outlived() ? Promise.resolve(false) : this.toggleEntry(entry, done, date),
+					open: (entry) => {
+						void this.openEntry(entryId(entry), entry.trackPath);
+					},
+				},
+				// A checklist has no day captions to make a daily note from.
+				() => undefined,
+				this.names,
+			),
+		);
 	}
 
 	/**
@@ -272,6 +372,9 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 * goes last: it asks when each track was last closed, so the entries have to be gathered by
 	 * then, the journals of the tracks it is about to leave out among them
 	 * ([[track-selection#Регулярность|Регулярность]]).
+	 *
+	 * A table asks what is due today, and counts every closing there is. A checklist asks what
+	 * was due on its own day, by what had been closed by then ([[checklist-view]]).
 	 */
 	private rowsFor(
 		options: TrackerOptions,
@@ -295,14 +398,16 @@ export default class ProcessTrackerPlugin extends Plugin {
 			...collectJournalEntries(this.app, Array.from(journals), this.names),
 		]);
 
+		const listDay =
+			options.view === "checklist" ? checklistDay(options.start, today).iso : null;
 		const tracks =
 			options.show === "due"
 				? applyDueFilter(
 						this.app,
 						filtered,
 						this.names.recurrence,
-						closedDays(entries, descendants),
-						toIsoDate(today),
+						closedDays(entries, descendants, listDay),
+						listDay ?? toIsoDate(today),
 						warnings,
 					)
 				: filtered;
@@ -411,7 +516,8 @@ export default class ProcessTrackerPlugin extends Plugin {
 	}
 
 	/**
-	 * Recounts the days of one changed note in every table on screen ([[expectation]] §9).
+	 * Recounts the days of one changed note in every table and checklist on screen
+	 * ([[expectation]] §9).
 	 *
 	 * This is the whole of the subscription to the vault: the handler reads the properties of
 	 * the one file that changed and hands them to the tables, which recount the days that note
@@ -700,13 +806,16 @@ export default class ProcessTrackerPlugin extends Plugin {
 	 * the cell clicked, and the other day of an entry closed or opened there. Only those: a
 	 * table redrawn on every click would lose its scroll position, and noticing changes made
 	 * elsewhere in the vault is the business of the subscription to `metadataCache`.
+	 *
+	 * `asked` is the action of the click — the entry, or its status — as the settings give it
+	 * to the gesture; a cell of a table and a box of a checklist both come here.
 	 */
 	private async runCellAction(
 		target: CellTarget,
-		mod: boolean,
+		asked: ClickAction,
 		blockMode: EntriesMode | null,
 	): Promise<void> {
-		const action = cellAction(target.state, target.entryIds.length, mod);
+		const action = cellAction(target.state, target.entryIds.length, asked);
 		if (action.kind === "nothing") return;
 
 		try {

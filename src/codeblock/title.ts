@@ -61,3 +61,17 @@ export function titleParts(title: string): TitlePart[] {
 	if (last < title.length) parts.push({ text: title.slice(last) });
 	return parts;
 }
+
+/**
+ * The line above a checklist, placeholders unfilled; `null` — the list stands without one
+ * ([[checklist-view]]).
+ *
+ * The title of the block comes first, and an emptied title means no line. A block that names
+ * no title shows the day it was given in `start` — `named`, as `YYYY-MM-DD` — because a list
+ * of a day gone by cannot be told from the list of today otherwise. A list of today with no
+ * title needs no line at all.
+ */
+export function checklistCaption(title: string | null, named: string | null): string | null {
+	const text = title ?? named;
+	return text === "" ? null : text;
+}

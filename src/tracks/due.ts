@@ -90,15 +90,22 @@ const NO_TRACKS: readonly string[] = Object.freeze([]);
  * The last closed day is looked for over the whole vault, not over the window of a table, and
  * only among the days something was closed in — the track's own entries and those below it —
  * from the latest back. The index is walked once, whatever the number of tracks asked about.
+ *
+ * `until` stops the search at a day: a checklist asks what was due on its own day, and what
+ * was closed after that day had not happened yet ([[checklist-view]]). A table gives none and
+ * counts every closing, the ones ahead of today among them.
  */
 export function closedDays(
 	index: EntryIndex,
 	descendants: ReadonlyMap<string, readonly string[]>,
+	until: string | null = null,
 ): ClosedDays {
 	const closings = new Map<string, Set<string>>();
 	for (const day of index.values()) {
 		for (const entry of day) {
 			if (entry.closed === null) continue;
+			// ISO dates sort as text.
+			if (until !== null && entry.closed > until) continue;
 			const known = closings.get(entry.trackPath);
 			if (known === undefined) closings.set(entry.trackPath, new Set([entry.closed]));
 			else known.add(entry.closed);
@@ -126,7 +133,8 @@ export function closedDays(
 }
 
 /**
- * Whether a regular track belongs in a table of `show: due` on this day ([[expectation]] §4):
+ * Whether a regular track belongs in a block of `show: due` on this day ([[expectation]] §4) —
+ * the day a table is drawn on, or the day of a checklist:
  *
  * - it is closed today — it stays till the day is over, so a track just checked does not
  *   vanish from under the pointer;

@@ -1,7 +1,13 @@
 // Unit tests for the corner title: placeholders and links.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_TITLE, fillTitle, followsScroll, titleParts } from "../src/codeblock/title.ts";
+import {
+	DEFAULT_TITLE,
+	checklistCaption,
+	fillTitle,
+	followsScroll,
+	titleParts,
+} from "../src/codeblock/title.ts";
 
 describe("followsScroll", () => {
 	it("follows the scroll with a placeholder", () => {
@@ -82,5 +88,25 @@ describe("titleParts", () => {
 
 	it("keeps the rest of markdown as written", () => {
 		assert.deepEqual(titleParts("**Morning**"), [{ text: "**Morning**" }]);
+	});
+});
+
+describe("checklistCaption", () => {
+	it("is the title of the block, as written", () => {
+		assert.equal(checklistCaption("Morning · {{month}}", null), "Morning · {{month}}");
+		assert.equal(checklistCaption("[[Home]]", "2026-11-05"), "[[Home]]");
+	});
+
+	it("is the day the block names, where it names no title", () => {
+		assert.equal(checklistCaption(null, "2026-11-05"), "2026-11-05");
+	});
+
+	it("is nothing for a list of today with no title", () => {
+		assert.equal(checklistCaption(null, null), null);
+	});
+
+	it("is nothing where the block empties the title", () => {
+		assert.equal(checklistCaption("", null), null);
+		assert.equal(checklistCaption("", "2026-11-05"), null);
 	});
 });

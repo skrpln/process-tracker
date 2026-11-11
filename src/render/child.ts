@@ -159,48 +159,6 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	}
 
 	/**
-	 * Paints the rows whose colour paints something, and only those ([[rendering]]).
-	 *
-	 * `CSS.supports` answers for the form of a value, and `var(--color-gren)` has the form of
-	 * a colour whatever it points at: a misspelt variable passes that check and then resolves
-	 * to nothing. A rule fed such a value paints nothing at all, so a done day would come out
-	 * with a transparent box — finished, and looking emptier than an empty one. Whether a
-	 * value paints is not a question about its text: only the document the table stands in
-	 * answers it, which is why the row arrives carrying a request and leaves carrying a
-	 * colour — or nothing, as an unreadable value deserves ([[expectation]] §5).
-	 *
-	 * The colours of a table are few, so each distinct one is tried once and the answer is
-	 * reused. Asked again — after a theme was changed under the table — the same requests are
-	 * answered afresh, so a colour the new theme understands comes back.
-	 */
-	private checkColors(): void {
-		const answers = new Map<string, boolean>();
-		const rows = this.frame.querySelectorAll<HTMLElement>(`[${TRACK_COLOR_ATTRIBUTE}]`);
-		for (const row of Array.from(rows)) {
-			const color = rowColorRequest(row);
-			const paints = answers.get(color) ?? this.paints(color);
-			answers.set(color, paints);
-			if (paints) paintRow(row, color);
-			else unpaintRow(row);
-		}
-	}
-
-	/**
-	 * Does this colour paint? The probe wears it and the browser is read back.
-	 *
-	 * The probe is not drawn — it is a hidden element, and only the computed value of its
-	 * background is ever taken from it, which costs no layout. A value that resolves to
-	 * nothing leaves the background transparent, and that is the answer. Where there is
-	 * nobody to ask — a table rendered outside the document, which computes to nothing at
-	 * all — the value stands as the reader wrote it.
-	 */
-	private paints(color: string): boolean {
-		this.probe.color.style.setProperty(TRACK_COLOR_PROPERTY, color);
-		const painted = this.win.getComputedStyle(this.probe.color).backgroundColor;
-		return painted === "" || painted !== TRANSPARENT;
-	}
-
-	/**
 	 * Gives the draft a second way to be seen, in a theme that leaves it none ([[rendering]]).
 	 *
 	 * A draft is an unchecked box in a colour of its own, and that colour goes on the outline.
@@ -296,7 +254,7 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 		// A table with a layout is a table in the document, and only there does a theme
 		// answer anything: asked in `onload`, before Obsidian has put the block in its note,
 		// every question about a colour came back empty ([[rendering#Пробник|Пробник]]).
-		this.checkColors();
+		paintColors(this.frame, this.probe.color);
 		this.checkDraft();
 		this.matchFrameShape(dates);
 		this.centreContent(dates);
@@ -550,6 +508,50 @@ export class TrackerRenderChild extends MarkdownRenderChild {
 	private get win(): typeof window {
 		return this.scroll.ownerDocument.defaultView ?? window;
 	}
+}
+
+/**
+ * Paints the rows whose colour paints something, and only those ([[rendering]]) — the rows of
+ * a table, or the items of a checklist.
+ *
+ * `CSS.supports` answers for the form of a value, and `var(--color-gren)` has the form of
+ * a colour whatever it points at: a misspelt variable passes that check and then resolves
+ * to nothing. A rule fed such a value paints nothing at all, so a done day would come out
+ * with a transparent box — finished, and looking emptier than an empty one. Whether a
+ * value paints is not a question about its text: only the document the rows stand in
+ * answers it, which is why a row arrives carrying a request and leaves carrying a
+ * colour — or nothing, as an unreadable value deserves ([[expectation]] §5).
+ *
+ * The colours of a block are few, so each distinct one is tried once and the answer is
+ * reused. Asked again — after a theme was changed under the table — the same requests are
+ * answered afresh, so a colour the new theme understands comes back.
+ */
+export function paintColors(root: HTMLElement, probe: HTMLElement): void {
+	const answers = new Map<string, boolean>();
+	const rows = root.querySelectorAll<HTMLElement>(`[${TRACK_COLOR_ATTRIBUTE}]`);
+	for (const row of Array.from(rows)) {
+		const color = rowColorRequest(row);
+		const paints = answers.get(color) ?? colorPaints(color, probe);
+		answers.set(color, paints);
+		if (paints) paintRow(row, color);
+		else unpaintRow(row);
+	}
+}
+
+/**
+ * Does this colour paint? The probe wears it and the browser is read back.
+ *
+ * The probe is not drawn — it is a hidden element, and only the computed value of its
+ * background is ever taken from it, which costs no layout. A value that resolves to
+ * nothing leaves the background transparent, and that is the answer. Where there is
+ * nobody to ask — a block rendered outside the document, which computes to nothing at
+ * all — the value stands as the reader wrote it.
+ */
+function colorPaints(color: string, probe: HTMLElement): boolean {
+	probe.style.setProperty(TRACK_COLOR_PROPERTY, color);
+	const view = probe.ownerDocument.defaultView ?? window;
+	const painted = view.getComputedStyle(probe).backgroundColor;
+	return painted === "" || painted !== TRANSPARENT;
 }
 
 /**

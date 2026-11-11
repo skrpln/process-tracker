@@ -445,11 +445,18 @@ body.theme-light .process-tracker {
  * for an unchecked box shows no draft either; that is its own decision about how a
  * checkbox looks, and the plugin does not argue with it.
  */
-.process-tracker .process-tracker__table .process-tracker__cell[data-state="draft"] {
+.process-tracker .process-tracker__table .process-tracker__cell[data-state="draft"],
+.process-tracker .process-tracker__checklist .process-tracker__row {
 	--pt-draft-border: color-mix(in srgb, var(--checkbox-border-color) 45%, var(--pt-draft-tint));
 }
 
-.process-tracker .process-tracker__table .process-tracker__cell[data-state="draft"] input[type="checkbox"] {
+/*
+ * In a checklist the box is the cell ([[checklist-view]]), so the mix above is stated a level
+ * up, on the row: a box that mixed its outline out of its own outline would be asking a
+ * variable for itself, and both would come out invalid.
+ */
+.process-tracker .process-tracker__table .process-tracker__cell[data-state="draft"] input[type="checkbox"],
+.process-tracker .process-tracker__checklist input.process-tracker__cell[data-state="draft"] {
 	--checkbox-border-color: var(--pt-draft-border);
 	border-color: var(--pt-draft-border);
 }
@@ -478,7 +485,8 @@ body.theme-light .process-tracker {
 	--pt-stroke-color: var(--pt-track-color);
 }
 
-.process-tracker .process-tracker__table .process-tracker--colored .process-tracker__cell[data-state="done"] input[type="checkbox"] {
+.process-tracker .process-tracker__table .process-tracker--colored .process-tracker__cell[data-state="done"] input[type="checkbox"],
+.process-tracker .process-tracker__checklist .process-tracker--colored input.process-tracker__cell[data-state="done"] {
 	--checkbox-color: var(--pt-track-color);
 	--checkbox-color-hover: var(--pt-track-color);
 	accent-color: var(--pt-track-color) !important;
@@ -572,6 +580,77 @@ body.theme-light .process-tracker {
  */
 .process-tracker .process-tracker--filled .process-tracker__table .process-tracker__cell[data-state="draft"] input[type="checkbox"] {
 	background-color: color-mix(in srgb, var(--pt-box-fill) 60%, var(--pt-draft-tint)) !important;
+}
+
+/*
+ * The checklist: a block drawn as the tasks of one day ([[checklist-view]]).
+ *
+ * The markup is the one Obsidian renders a task list of a note into — `ul.contains-task-list`,
+ * `li.task-list-item`, the box a child of its item — so the indent, the place of the box and
+ * the look of a done task are the theme's, as in every other checklist of the vault. Stated
+ * here is only what a list of a note does not have: the line above it, the mark, and the one
+ * thing Obsidian hangs on the reading view alone.
+ */
+
+/*
+ * The line above the list is set as the corner of the table is: the title of a block reads
+ * the same in both views.
+ */
+.process-tracker__checklist-title {
+	font-family: var(--pt-day-font);
+	font-size: var(--pt-caption-size);
+	font-weight: var(--font-normal);
+	letter-spacing: 0.02em;
+	line-height: 1.2;
+	text-transform: uppercase;
+	color: var(--table-header-color, var(--text-normal));
+	overflow-wrap: anywhere;
+}
+
+/* A link of that line keeps the colour a theme gives links and takes the face of the line. */
+.process-tracker .process-tracker__checklist-title a {
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: inherit;
+	font-style: inherit;
+	letter-spacing: inherit;
+}
+
+/*
+ * The place of a box on its line, in Live Preview. Obsidian states it for the reading view
+ * only (`.markdown-preview-view .task-list-item-checkbox`): `0.2em` down, `0.6em` before the
+ * text. A block in Live Preview is drawn outside that view, in the wrapper of a rendered code
+ * block, where the box is left with what every checkbox has — no shift and `6px` — and the
+ * same list would stand differently in the two modes. The rule reaches no further than that
+ * wrapper, so in the reading view the place of the box stays the theme's.
+ */
+.cm-preview-code-block .process-tracker__checklist .task-list-item-checkbox {
+	top: 0.2em;
+	margin-inline-end: 0.6em;
+}
+
+/*
+ * A mark in a checklist ([[expectation]] §7). The box is the cell here, so the sign cannot
+ * stand inside it: it stands right after, and takes the place of the hidden box — the same
+ * hanging indent Obsidian gives the box of a task, the same room before the name.
+ *
+ * The sign sits on the line as text does, so it is not moved down as a box is. It is an
+ * inline box of its own, and the line a theme strikes a done task through with stops at it.
+ */
+.process-tracker .process-tracker__checklist input.process-tracker__cell[data-mark] {
+	display: none;
+}
+
+.process-tracker .process-tracker__checklist .process-tracker__mark {
+	display: inline-block;
+	min-width: var(--checkbox-size, 1em);
+	margin-inline-start: calc(var(--checkbox-size, 1em) * -1.5);
+	margin-inline-end: 0.6em;
+	line-height: 1;
+	text-align: center;
+	color: var(--text-normal);
+	white-space: nowrap;
+	cursor: pointer;
 }
 
 .process-tracker__empty {

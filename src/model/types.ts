@@ -14,6 +14,19 @@ export type EntriesMode = "notes" | "journal";
  */
 export type ShowMode = "all" | "due";
 
+/**
+ * How a block is drawn ([[expectation]] §4): as a table of tracks over days, or as a checklist
+ * of the tracks of one day ([[checklist-view]]).
+ */
+export type ViewMode = "table" | "checklist";
+
+/**
+ * One of the two things a click on a cell asks for ([[expectation]] §8): the entry of the day
+ * — to make it or to open it — or its status, the checkmark set and taken back. Which gesture
+ * asks for which is a setting ([[entry#Жесты|entry]]).
+ */
+export type ClickAction = "open" | "status";
+
 /** Sort field: `name`, `ctime`, `mtime` or any frontmatter property of a track card. */
 export interface SortSpec {
 	field: string;
@@ -47,9 +60,10 @@ export interface TrackerOptions {
 	entries: EntriesMode | null;
 	/**
 	 * Text of the corner above the track names, with `{{month}}` and `{{year}}` filled in as
-	 * the columns scroll; `""` — an empty corner ([[codeblock-syntax]]).
+	 * the columns scroll; `""` — an empty corner ([[codeblock-syntax]]). `null` — the block
+	 * names none: a table shows the month and the year, a checklist the day it was given.
 	 */
-	title: string;
+	title: string | null;
 	/**
 	 * How the track names and the corner title stand in their column. `null` — as the settings
 	 * of the plugin say.
@@ -62,6 +76,8 @@ export interface TrackerOptions {
 	width: number | null;
 	/** Which of the tracks become rows: every one, or the ones that are due. */
 	show: ShowMode;
+	/** How the block is drawn: a table, or a checklist of one day. */
+	view: ViewMode;
 }
 
 /** Alignment of the first column: the track names and the corner title. */

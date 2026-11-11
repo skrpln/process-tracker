@@ -5,10 +5,11 @@ import { PluginSettingTab, Setting } from "obsidian";
 import type { App, SettingDefinitionItem } from "obsidian";
 import type ProcessTrackerPlugin from "./main.ts";
 import { DEFAULT_PROPERTY_NAMES } from "./constants.ts";
-import type { EntriesMode, NamesAlign, PropertyNames } from "./model/types.ts";
+import type { ClickAction, EntriesMode, NamesAlign, PropertyNames } from "./model/types.ts";
 import {
 	DEFAULT_SETTINGS,
 	normalizeAlign,
+	normalizeClick,
 	normalizeEntriesMode,
 	normalizeEntryFolder,
 	normalizePropertyName,
@@ -50,9 +51,16 @@ const ALIGN_OPTIONS: Record<NamesAlign, string> = {
 	right: "Right",
 };
 
+/** The words the dropdowns of the gestures show; the keys are what `data.json` stores. */
+const CLICK_OPTIONS: Record<ClickAction, string> = {
+	open: "Open the entry",
+	status: "Check and uncheck",
+};
+
 /**
  * The settings of [[expectation]] §10: the tag of a track card, the folder of entries, how new
- * entries are made, and how the first column stands.
+ * entries are made, how the first column stands, and what a plain click does in a table and in
+ * a checklist.
  */
 const FIELDS: readonly Field[] = [
 	{
@@ -94,6 +102,24 @@ const FIELDS: readonly Field[] = [
 			"parameter of a code block overrides it.",
 		options: ALIGN_OPTIONS,
 		normalize: normalizeAlign,
+	},
+	{
+		type: "dropdown",
+		key: "tableClick",
+		name: "Click in a table",
+		desc: "What a plain click on a cell does. Cmd/Ctrl+click does the other of the two.",
+		options: CLICK_OPTIONS,
+		normalize: normalizeClick,
+	},
+	{
+		type: "dropdown",
+		key: "checklistClick",
+		name: "Click in a checklist",
+		desc:
+			"What a plain click on a checkbox of a checklist does. Cmd/Ctrl+click does the " +
+			"other of the two.",
+		options: CLICK_OPTIONS,
+		normalize: normalizeClick,
 	},
 ];
 

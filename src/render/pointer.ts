@@ -1,5 +1,5 @@
-// Process Tracker — the pointer over the table: clicks, previews, the list of a day and the
-// tree of the entries below its track.
+// Process Tracker — the pointer over the table or the checklist: clicks, previews, the list of
+// a day and the tree of the entries below its track.
 
 import { Keymap, MarkdownRenderChild } from "obsidian";
 import type { App, HoverParent, HoverPopover } from "obsidian";
@@ -14,7 +14,10 @@ import { buildTrackTree } from "../tracks/tree.ts";
 import { DayPopup, growNestedTree } from "./popup.ts";
 import type { DayHandlers } from "./popup.ts";
 import {
+	CELL_CLASS,
 	CREATABLE_CLASS,
+	MARK_CLASS,
+	anchorOf,
 	countedIdsOf,
 	descendantsOfRow,
 	entryIdsOf,
@@ -29,9 +32,12 @@ const OPEN_DELAY = 300;
 /**
  * The links of the table: a track name, the caption of a day whose daily note is in the
  * vault ([[expectation]] §10), and a link of the corner title. Both are opened by Obsidian itself; what they need from here
- * is the preview on hover, which a link of a plugin does not get on its own.
+ * is the preview on hover, which a link of a plugin does not get on its own. A checklist holds
+ * no link but these: the names of its tracks and the links of the line above it.
  */
-const LINK_SELECTOR = ".process-tracker__track a, .process-tracker__date a, .process-tracker__period a";
+const LINK_SELECTOR =
+	".process-tracker__track a, .process-tracker__date a, .process-tracker__period a, " +
+	".process-tracker__checklist a";
 
 /** The cell a click landed on, read back from the DOM. */
 export interface CellTarget {
@@ -86,7 +92,10 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 
 	constructor(
 		containerEl: HTMLElement,
-		/** Both tables of the tracker: the cells scroll, the track names do not. */
+		/**
+		 * Both tables of the tracker: the cells scroll, the track names do not. For a
+		 * checklist, the list with the line above it.
+		 */
 		private readonly frame: HTMLElement,
 		private readonly app: App,
 		private readonly sourcePath: string,
@@ -185,7 +194,7 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	 * and alone — in the popup of the plugin — where it has none.
 	 */
 	private onHover(event: MouseEvent): void {
-		const cell = closestOf(event.target, ".process-tracker__cell");
+		const cell = cellUnder(event.target);
 		if (cell !== null) {
 			this.onCellHover(cell, event);
 			return;
@@ -261,7 +270,9 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 			event,
 			source: HOVER_SOURCE,
 			hoverParent: this,
-			targetEl: target.element,
+			// What the reader sees of a cell: Obsidian places the preview by it and watches the
+			// pointer leave it.
+			targetEl: anchorOf(target.element),
 			linktext: target.path,
 			sourcePath: this.sourcePath,
 		});
@@ -328,8 +339,21 @@ export class CellPointerChild extends MarkdownRenderChild implements HoverParent
 	}
 }
 
+/**
+ * The cell under the pointer. In a table everything a cell shows stands inside it. In a
+ * checklist the box is the cell, and the mark shown in its place stands after it, so a mark
+ * outside any cell answers for the box before it ([[checklist-view]]).
+ */
+function cellUnder(node: EventTarget | null): HTMLElement | null {
+	const cell = closestOf(node, `.${CELL_CLASS}`);
+	if (cell !== null) return cell;
+
+	const box = closestOf(node, `.${MARK_CLASS}`)?.previousElementSibling ?? null;
+	return box !== null && box.matches(`.${CELL_CLASS}`) ? (box as HTMLElement) : null;
+}
+
 function readCell(node: EventTarget | null): CellTarget | null {
-	const cell = closestOf(node, ".process-tracker__cell");
+	const cell = cellUnder(node);
 	if (cell === null) return null;
 
 	const trackPath = cell.dataset.track ?? "";

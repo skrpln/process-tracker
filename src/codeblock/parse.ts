@@ -11,9 +11,9 @@ import type {
 	SortDirection,
 	SortSpec,
 	TrackerOptions,
+	ViewMode,
 } from "../model/types.ts";
 import { readColor } from "../tracks/color.ts";
-import { DEFAULT_TITLE } from "./title.ts";
 
 export interface ParseResult {
 	options: TrackerOptions;
@@ -32,6 +32,9 @@ export const DEFAULT_STROKE = false;
 /** Every track is a row until the block asks for the ones that are due. */
 export const DEFAULT_SHOW: ShowMode = "all";
 
+/** A block is a table until it asks to be drawn another way. */
+export const DEFAULT_VIEW: ViewMode = "table";
+
 const ALIGNMENTS: readonly NamesAlign[] = ["left", "center", "right"];
 
 const KNOWN_KEYS = [
@@ -48,7 +51,15 @@ const KNOWN_KEYS = [
 	"align",
 	"width",
 	"show",
+	"view",
 ];
+
+/**
+ * The parameters only a table has a use for: its columns, its thread, its first column and the
+ * daily notes behind its day captions. A checklist passes them over without a word
+ * ([[checklist-view]]).
+ */
+const TABLE_ONLY_KEYS = ["days", "dates", "stroke", "align", "width", "daily_note_dir"];
 
 /** Parses `key: value` lines of a code block into tracker options. */
 export function parseCodeBlock(source: string): ParseResult {
@@ -63,12 +74,15 @@ export function parseCodeBlock(source: string): ParseResult {
 		stroke: DEFAULT_STROKE,
 		dailyNoteDir: null,
 		entries: null,
-		title: DEFAULT_TITLE,
+		title: null,
 		align: null,
 		width: null,
 		show: DEFAULT_SHOW,
+		view: DEFAULT_VIEW,
 	};
 	const seen = new Set<string>();
+	/** Which of the warnings are about a parameter only a table reads, by their place. */
+	const tableOnly = new Set<number>();
 
 	for (const rawLine of source.split("\n")) {
 		const line = rawLine.trim();
@@ -87,30 +101,43 @@ export function parseCodeBlock(source: string): ParseResult {
 			warnings.push(`Unknown parameter "${key}", ignored.`);
 			continue;
 		}
+		const said = warnings.length;
 		if (seen.has(key)) warnings.push(`Parameter "${key}" is repeated, the last value wins.`);
 		seen.add(key);
 
-		if (value === "") {
-			warnings.push(`Parameter "${key}" is empty, default is used.`);
-			continue;
-		}
+		if (value === "") warnings.push(`Parameter "${key}" is empty, default is used.`);
+		else applyParameter(options, key, value, warnings);
 
-		if (key === "track") options.track = value;
-		if (key === "start") options.start = parseStartDate(value, warnings);
-		if (key === "days") applyDays(options, value, warnings);
-		if (key === "dates") options.dates = parseDirection(value, DEFAULT_DATES, warnings);
-		if (key === "sort") options.sort = parseSort(value, warnings);
-		if (key === "track_color") options.trackColor = parseColor(value, warnings);
-		if (key === "stroke") options.stroke = parseStroke(value, warnings);
-		if (key === "daily_note_dir") options.dailyNoteDir = parseFolder(value);
-		if (key === "entries") options.entries = parseEntries(value, warnings);
-		if (key === "title") options.title = parseTitle(value);
-		if (key === "align") options.align = parseAlign(value, warnings);
-		if (key === "width") options.width = parseWidth(value, warnings);
-		if (key === "show") options.show = parseShow(value, warnings);
+		if (TABLE_ONLY_KEYS.includes(key)) {
+			for (let index = said; index < warnings.length; index++) tableOnly.add(index);
+		}
 	}
 
-	return { options, warnings };
+	// The view is known only once the whole block is read: it may be named on the last line.
+	if (options.view !== "checklist") return { options, warnings };
+	return { options, warnings: warnings.filter((_, index) => !tableOnly.has(index)) };
+}
+
+function applyParameter(
+	options: TrackerOptions,
+	key: string,
+	value: string,
+	warnings: string[],
+): void {
+	if (key === "track") options.track = value;
+	if (key === "start") options.start = parseStartDate(value, warnings);
+	if (key === "days") applyDays(options, value, warnings);
+	if (key === "dates") options.dates = parseDirection(value, DEFAULT_DATES, warnings);
+	if (key === "sort") options.sort = parseSort(value, warnings);
+	if (key === "track_color") options.trackColor = parseColor(value, warnings);
+	if (key === "stroke") options.stroke = parseStroke(value, warnings);
+	if (key === "daily_note_dir") options.dailyNoteDir = parseFolder(value);
+	if (key === "entries") options.entries = parseEntries(value, warnings);
+	if (key === "title") options.title = parseTitle(value);
+	if (key === "align") options.align = parseAlign(value, warnings);
+	if (key === "width") options.width = parseWidth(value, warnings);
+	if (key === "show") options.show = parseShow(value, warnings);
+	if (key === "view") options.view = parseView(value, warnings);
 }
 
 /**
@@ -154,9 +181,9 @@ export function parseEntries(value: string, warnings: string[] = []): EntriesMod
 }
 
 /**
- * `title: <text>` — the corner above the track names. The text is taken as written, quotes
- * around it dropped, so `title: ""` leaves the corner empty: a line with nothing after the
- * colon is an empty parameter and keeps the default, like any other.
+ * `title: <text>` — the corner above the track names, or the line above a checklist. The text
+ * is taken as written, quotes around it dropped, so `title: ""` leaves the corner empty: a line
+ * with nothing after the colon is an empty parameter and keeps the default, like any other.
  */
 export function parseTitle(value: string): string {
 	return value.replace(/^(["'])(.*)\1$/, "$2");
@@ -216,6 +243,18 @@ export function parseShow(value: string, warnings: string[] = []): ShowMode {
 
 	warnings.push(`Unknown value "show: ${value}", "${DEFAULT_SHOW}" is used.`);
 	return DEFAULT_SHOW;
+}
+
+/**
+ * `view: table | checklist` — how the block is drawn: a table of days, or a checklist of one
+ * day ([[checklist-view]]). Anything else is said out loud, and the block stays a table.
+ */
+export function parseView(value: string, warnings: string[] = []): ViewMode {
+	const word = value.toLowerCase();
+	if (word === "table" || word === "checklist") return word;
+
+	warnings.push(`Unknown value "view: ${value}", "${DEFAULT_VIEW}" is used.`);
+	return DEFAULT_VIEW;
 }
 
 /**

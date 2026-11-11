@@ -64,10 +64,11 @@ width: 180
 | `stroke`      | `true`, `false`                                              | `false`     | Threads a streak of checked days together. |
 | `daily_note_dir` | a folder, `/` for the vault root                          | your daily notes folder | Where this table looks for daily notes and creates them. |
 | `entries`     | `notes`, `journal`                                           | the setting | How a click makes an entry for the tracks of this table. |
-| `title`       | text, `{{month}}`, `{{year}}`, `[[links]]`                   | `{{month}} {{year}}` | The caption in the corner above the track names. |
+| `title`       | text, `{{month}}`, `{{year}}`, `[[links]]`                   | `{{month}} {{year}}` | The caption in the corner above the track names; in a checklist, the line above the list. |
 | `align`       | `left`, `center`, `right`                                    | the setting | Aligns the track names and the title. |
 | `width`       | a whole number of pixels, from `40`                          | `12em`      | Width of the column of track names. |
 | `show`        | `all`, `due`                                                 | `all`       | Every track, or only the regular tracks that are due. |
+| `view`        | `table`, `checklist`                                         | `table`     | A table of days, or a checklist of one day — see "A checklist for the day". |
 
 >[!tip] 
 > - the `track` option needs the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) community plugin, and takes what a Dataview query takes: `FROM #health or #sport`, `FROM "Health"`, `WHERE priority > 2`, or a source and a condition together;
@@ -98,6 +99,8 @@ width: 180
 | Empty box    | creates an entry note for that day | creates one and checks the box |
 | Outlined box | opens the note in a new tab        | checks the box                 |
 | Checked box  | opens the note in a new tab        | unchecks the box               |
+
+The two gestures can be swapped in the settings, for tables and for checklists apart.
 
 **Entry note example**:
 ```yaml
@@ -227,6 +230,31 @@ show: due
 > - The last checked day is looked for in the whole vault, not only in the days of the table, and a day checked by a track below counts — see "Tracks inside tracks".
 > - "Today" is the real today, wherever `start` and `days` put the window.
 
+### A checklist for the day
+
+A table shows many days. For an agenda one day is enough: `view: checklist` draws the block as a list of checkboxes — a line for each track, and its box is the cell of that track for one day.
+
+````markdown
+```process-tracker
+track: FROM "Home"
+view: checklist
+show: due
+```
+````
+
+- The day is today, or the day named in `start`. The list shows that day, and a click writes into it.
+- A box works as a cell does: the same three states, the same `mark`, the same colour, the same click and `Cmd`/`Ctrl` + click, the same preview on hover. The name of a track opens its note.
+- The list looks like any task list of your vault: your theme dresses it, and a checked track looks like a task that is done.
+- With `show: due` it lists the regular tracks that are due on that day. The period is counted to the day of the list, from what had been checked by then: a list for 5 November shows what was due on 5 November.
+- `title` puts a line above the list. Without it, a list with `start` shows its date, and a list of today shows no line.
+- `track`, `sort`, `show`, `entries` and `track_color` work as in a table. `days`, `dates`, `stroke`, `align`, `width` and `daily_note_dir` have nothing to change in a list and are ignored.
+
+> [!tip]
+> Want a click to check the box right away? **Click in a checklist** in the settings swaps the two gestures for checklists only: a plain click checks and unchecks, `Cmd`/`Ctrl` + click opens the entry.
+
+> [!note]
+> A list of today left open overnight does not write into yesterday: the first click after midnight draws it for the new day and changes nothing.
+
 ### 4. Click a date
 
 The caption above a column is a link when the daily note of that day is in your vault: a click opens it in this tab, `Cmd`/`Ctrl` + click in a new one, and hovering it gives the same preview a cell does.
@@ -252,6 +280,8 @@ A day without a daily note shows a plain number, so the caption itself tells you
 | Entry folder | Where new entry notes go.                                    | vault root        |
 | New entries  | Separate notes, or records in the journal of the track. The `entries` property of a track note and of a code block override it. | separate notes |
 | First column alignment | How the track names and the corner title stand. The `align` option of a code block overrides it. | center |
+| Click in a table | What a plain click on a cell does: opens the entry, or checks and unchecks the box. `Cmd`/`Ctrl` + click does the other of the two. | opens the entry |
+| Click in a checklist | The same for the boxes of a checklist, set apart from tables. | opens the entry |
 | Entry properties, Track properties | The names of the properties the plugin reads and writes, one field each: `track`, `done`, `created`, `closed`, `date`, `mark` of an entry note, `track_name`, `track_color`, `template`, `entries`, `journal`, `recurrence` of a track note. The link of a track to its parent goes by the same name as `track`. Rename one to match the properties your notes already use; an empty field means the default name. | the names above |
 
 ## Bugs and questions

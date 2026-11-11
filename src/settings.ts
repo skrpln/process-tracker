@@ -4,7 +4,7 @@
 import { readAlign } from "./codeblock/parse.ts";
 import { DEFAULT_PROPERTY_NAMES, DEFAULT_TRACK_TAG } from "./constants.ts";
 import { readEntriesMode } from "./entry/mode.ts";
-import type { EntriesMode, NamesAlign, PropertyNames } from "./model/types.ts";
+import type { ClickAction, EntriesMode, NamesAlign, PropertyNames } from "./model/types.ts";
 
 export interface ProcessTrackerSettings {
 	/** Tag that marks a track card, without the leading `#`. */
@@ -15,6 +15,13 @@ export interface ProcessTrackerSettings {
 	entries: EntriesMode;
 	/** How the first column stands in a table whose code block does not say. */
 	align: NamesAlign;
+	/**
+	 * What a plain click on a cell of a table asks for; the click with the modifier asks for
+	 * the other of the two ([[expectation]] §8).
+	 */
+	tableClick: ClickAction;
+	/** The same for a box of a checklist, set apart from the table. */
+	checklistClick: ClickAction;
 	/** What the properties the plugin reads and writes are called in this vault. */
 	properties: PropertyNames;
 }
@@ -24,6 +31,8 @@ export const DEFAULT_SETTINGS: ProcessTrackerSettings = {
 	entryFolder: "",
 	entries: "notes",
 	align: "center",
+	tableClick: "open",
+	checklistClick: "open",
 	properties: { ...DEFAULT_PROPERTY_NAMES },
 };
 
@@ -49,6 +58,15 @@ export function normalizeEntriesMode(value: unknown): EntriesMode {
 /** A stored alignment the plugin does not know is the centre, where the names always stood. */
 export function normalizeAlign(value: unknown): NamesAlign {
 	return readAlign(value) ?? DEFAULT_SETTINGS.align;
+}
+
+/**
+ * A stored action the plugin does not know is `open`: what a plain click did before the
+ * gestures could be set.
+ */
+export function normalizeClick(value: unknown): ClickAction {
+	const word = typeof value === "string" ? value.trim().toLowerCase() : "";
+	return word === "status" ? "status" : "open";
 }
 
 /**
@@ -88,6 +106,8 @@ export function normalizeSettings(data: unknown): ProcessTrackerSettings {
 		entryFolder: normalizeEntryFolder(stored.entryFolder ?? stored.evidenceFolder),
 		entries: normalizeEntriesMode(stored.entries),
 		align: normalizeAlign(stored.align),
+		tableClick: normalizeClick(stored.tableClick),
+		checklistClick: normalizeClick(stored.checklistClick),
 		properties: normalizePropertyNames(stored.properties),
 	};
 }

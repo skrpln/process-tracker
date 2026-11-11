@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	buildDateColumns,
+	checklistDay,
+	dayMoved,
 	formatDay,
 	formatMonthYear,
 	splitMonthYear,
@@ -147,5 +149,37 @@ describe("toDayTime", () => {
 
 	it("pads the hours and minutes", () => {
 		assert.equal(toDayTime("2026-11-10", new Date(2026, 10, 10, 7, 3)), "2026-11-10 07:03");
+	});
+});
+
+describe("checklistDay", () => {
+	it("is today when the block names no day", () => {
+		const day = checklistDay(null, new Date(2026, 10, 12, 23, 59));
+		assert.deepEqual(day, { iso: "2026-11-12", day: 12, month: 11, year: 2026, isToday: true });
+	});
+
+	it("is the day the block names", () => {
+		const day = checklistDay(new Date(2026, 10, 5), new Date(2026, 10, 12));
+		assert.deepEqual(day, { iso: "2026-11-05", day: 5, month: 11, year: 2026, isToday: false });
+	});
+
+	it("knows a named day that happens to be today", () => {
+		assert.equal(checklistDay(new Date(2026, 10, 12), new Date(2026, 10, 12, 8)).isToday, true);
+	});
+});
+
+describe("dayMoved", () => {
+	it("holds while the day the list was drawn on lasts", () => {
+		assert.equal(dayMoved(null, "2026-11-12", new Date(2026, 10, 12, 23, 59)), false);
+	});
+
+	it("says so once midnight has passed", () => {
+		assert.equal(dayMoved(null, "2026-11-12", new Date(2026, 10, 13, 0, 0)), true);
+	});
+
+	it("never moves a list whose day the block named", () => {
+		const start = new Date(2026, 10, 5);
+		assert.equal(dayMoved(start, "2026-11-05", new Date(2026, 10, 13)), false);
+		assert.equal(dayMoved(start, "2026-11-05", new Date(2027, 0, 1)), false);
 	});
 });
